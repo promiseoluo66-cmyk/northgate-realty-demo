@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northgate Realty | Enquiry Automation Demo</title>
+<meta name="description" content="Concept website for Northgate Realty, a fictional real-estate agency. Portfolio demo of a property enquiry form with automation.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B1F3A'/%3E%3Cpath d='M9 24V8l14 16V8' fill='none' stroke='%23C6A15B' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="logo" href="#home" aria-label="Northgate Realty home"><span class="mono" aria-hidden="true">N</span><span>Northgate Realty</span></a>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav"><span class="sr">Menu</span><span class="bars" aria-hidden="true"></span></button>
+    <nav id="nav" class="nav" aria-label="Main">
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#properties">Properties</a></li>
+        <li><a href="#about">Why Northgate</a></li>
+        <li><a href="#enquiry">Contact</a></li>
+      </ul>
+      <a class="btn btn-gold nav-cta" href="#enquiry">Make an Enquiry</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero" id="home">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <h1>Find a Place to Call Home.</h1>
+      <p class="lead">Browse a small selection of demo homes, then tell us what you are looking for. Every listing on this site is fictional.</p>
+      <div class="actions">
+        <a class="btn btn-gold" href="#enquiry">Make an Enquiry</a>
+        <a class="text-link" href="#properties">View demo listings</a>
+      </div>
+    </div>
+    <div class="hero-art" role="img" aria-label="Illustration of a modern house at dusk beside a row of apartment buildings">
+      <svg viewBox="0 0 480 360" aria-hidden="true" focusable="false">
+        <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0B1F3A"/><stop offset="1" stop-color="#27466e"/></linearGradient></defs>
+        <rect width="480" height="360" fill="url(#sky)"/>
+        <circle cx="400" cy="70" r="26" fill="#C6A15B" opacity=".9"/>
+        <g fill="#16304f"><rect x="20" y="150" width="70" height="170"/><rect x="100" y="110" width="60" height="210"/><rect x="380" y="140" width="80" height="180"/></g>
+        <g fill="#C6A15B" opacity=".75"><rect x="32" y="170" width="10" height="12"/><rect x="56" y="170" width="10" height="12"/><rect x="32" y="200" width="10" height="12"/><rect x="114" y="135" width="10" height="12"/><rect x="134" y="165" width="10" height="12"/><rect x="400" y="170" width="10" height="12"/><rect x="430" y="200" width="10" height="12"/></g>
+        <path d="M170 320V200l90-68 90 68v120z" fill="#FBF8F3"/>
+        <path d="M155 205l105-80 105 80" fill="none" stroke="#C6A15B" stroke-width="8" stroke-linejoin="round"/>
+        <rect x="235" y="240" width="50" height="80" fill="#0B1F3A"/>
+        <rect x="190" y="220" width="32" height="34" fill="#C6A15B"/><rect x="298" y="220" width="32" height="34" fill="#C6A15B"/>
+        <rect y="320" width="480" height="40" fill="#0a182c"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="properties">
+  <div class="wrap">
+    <h2>Demo listings</h2>
+    <p class="section-intro"><strong>Fictional examples only.</strong> These homes, places and prices do not exist and nothing here is for sale or rent.</p>
+    <div class="cards">
+      <article class="card">
+        <div class="ph ph1" role="img" aria-label="Illustration of a family house"><span class="tag">Demo listing</span></div>
+        <div class="card-body">
+          <h3>The Maple Court</h3>
+          <p class="meta">Fictional suburb &middot; 4 bed &middot; 3 bath</p>
+          <p>A bright family house with an open kitchen and a quiet garden.</p>
+          <p class="price">Sample price: $425,000 (fictional)</p>
+          <a href="#enquiry" data-interest="Demo listing: The Maple Court">Enquire about this listing</a>
+        </div>
+      </article>
+      <article class="card">
+        <div class="ph ph2" role="img" aria-label="Illustration of an apartment building"><span class="tag">Demo listing</span></div>
+        <div class="card-body">
+          <h3>Harbour View Flat</h3>
+          <p class="meta">Fictional waterfront &middot; 2 bed &middot; 2 bath</p>
+          <p>A modern flat with a balcony and a short walk to shops and cafes.</p>
+          <p class="price">Sample price: $310,000 (fictional)</p>
+          <a href="#enquiry" data-interest="Demo listing: Harbour View Flat">Enquire about this listing</a>
+        </div>
+      </article>
+      <article class="card">
+        <div class="ph ph3" role="img" aria-label="Illustration of a small cottage"><span class="tag">Demo listing</span></div>
+        <div class="card-body">
+          <h3>Elm Street Cottage</h3>
+          <p class="meta">Fictional village &middot; 2 bed &middot; 1 bath</p>
+          <p>A cosy starter home with original features and a small courtyard.</p>
+          <p class="price">Sample price: $185,000 (fictional)</p>
+          <a href="#enquiry" data-interest="Demo listing: Elm Street Cottage">Enquire about this listing</a>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="why" id="about">
+  <div class="wrap why-grid">
+    <div>
+      <h2>Why Northgate Realty</h2>
+      <p class="why-intro">Northgate Realty is a concept agency made for this portfolio demo, so these are the principles the site is designed around.</p>
+    </div>
+    <ul class="why-list">
+      <li><h3>Clear information</h3><p>Listings state what is known and what is not, with no hidden extras.</p></li>
+      <li><h3>A simple enquiry</h3><p>One short form, with only a name and an email required.</p></li>
+      <li><h3>Respect for your details</h3><p>Your information is used only to reply to your enquiry.</p></li>
+    </ul>
+  </div>
+</section>
+
+<section class="section" id="process">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><span class="step-n" aria-hidden="true">1</span><h3>Tell us what you want</h3><p>Send the enquiry form with the home or service you are interested in.</p></li>
+      <li><span class="step-n" aria-hidden="true">2</span><h3>We get in touch</h3><p>An agent replies by your chosen contact method.</p></li>
+      <li><span class="step-n" aria-hidden="true">3</span><h3>Plan a viewing</h3><p>Agree a time to see the property or talk through your plans.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section quote" id="enquiry">
+  <div class="wrap quote-grid">
+    <div class="quote-intro">
+      <h2>Make an enquiry</h2>
+      <p>Tell us what you are looking for and we will use these details to reply.</p>
+      <p class="note"><strong>Portfolio demo:</strong> until a backend is connected (see the README), this form only checks your answers and sends nothing.</p>
+    </div>
+    <form id="enquiryForm" class="form" novalidate>
+      <div class="field">
+        <label for="name">Full name</label>
+        <input id="name" name="name" type="text" autocomplete="name" required aria-describedby="e-name">
+        <p class="err" id="e-name"></p>
+      </div>
+      <div class="field">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" autocomplete="email" required aria-describedby="e-email">
+        <p class="err" id="e-email"></p>
+      </div>
+      <div class="field">
+        <label for="phone">Phone number <span class="opt">(optional)</span></label>
+        <input id="phone" name="phone" type="tel" autocomplete="tel" aria-describedby="e-phone">
+        <p class="err" id="e-phone"></p>
+      </div>
+      <div class="field">
+        <label for="interest">Property interest</label>
+        <select id="interest" name="interest" required aria-describedby="e-interest">
+          <option value="">Choose one</option>
+          <option>Demo listing: The Maple Court</option>
+          <option>Demo listing: Harbour View Flat</option>
+          <option>Demo listing: Elm Street Cottage</option>
+          <option>Buying a home (general)</option>
+          <option>Renting a home (general)</option>
+          <option>Selling or valuation</option>
+        </select>
+        <p class="err" id="e-interest"></p>
+      </div>
+      <div class="field">
+        <label for="budget">Budget range <span class="opt">(optional)</span></label>
+        <select id="budget" name="budget">
+          <option value="">Choose a range</option>
+          <option>Under $150,000</option>
+          <option>$150,000 to $300,000</option>
+          <option>$300,000 to $600,000</option>
+          <option>Over $600,000</option>
+          <option>Not sure yet</option>
+        </select>
+      </div>
+      <fieldset class="field radios">
+        <legend>Preferred contact method <span class="opt">(optional)</span></legend>
+        <label><input type="radio" name="contact" value="Email"> Email</label>
+        <label><input type="radio" name="contact" value="Phone"> Phone</label>
+        <label><input type="radio" name="contact" value="Either"> Either</label>
+      </fieldset>
+      <div class="field full">
+        <label for="message">Additional message <span class="opt">(optional)</span></label>
+        <textarea id="message" name="message" rows="4" maxlength="500" aria-describedby="count e-message"></textarea>
+        <p class="count" id="count">0 / 500</p>
+        <p class="err" id="e-message"></p>
+      </div>
+      <div class="hp" aria-hidden="true"><label for="website">Leave this field empty</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+      <div class="field full">
+        <label class="check-row"><input id="consent" name="consent" type="checkbox" required aria-describedby="e-consent"><span>I agree that Northgate Realty may use these details to reply to my enquiry.</span></label>
+        <p class="err" id="e-consent"></p>
+      </div>
+      <div class="full">
+        <button id="submitBtn" class="btn btn-navy btn-block" type="submit">Send enquiry</button>
+        <p class="privacy">Your details are only meant for handling this enquiry. This concept site has no privacy policy behind it, so do not enter real personal information.</p>
+        <div id="status" class="status" role="status" aria-live="polite" tabindex="-1"></div>
+      </div>
+    </form>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="logo logo-light" href="#home"><span class="mono" aria-hidden="true">N</span><span>Northgate Realty</span></a>
+      <p>A fictional real-estate agency for a portfolio demo.</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#properties">Properties</a></li>
+        <li><a href="#about">Why Northgate</a></li>
+        <li><a href="#enquiry">Contact</a></li>
+      </ul>
+    </nav>
+    <div>
+      <h2 class="foot-h">Contact</h2>
+      <p>This is a concept website with no real contact details. Use the <a href="#enquiry">enquiry form</a> to try the demo.</p>
+    </div>
+  </div>
+  <div class="wrap legal"><span>&copy; <span id="year">2026</span> Northgate Realty</span><span>Concept website — portfolio demo by RapidPixel</span></div>
+</footer>
+<script src="script.js"></script>
+</body>
+</html>
