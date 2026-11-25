@@ -392,7 +392,7 @@ async function internalCallback(request, env, id) {
 async function listProjects(request, env) {
   if (!authorized(request, env)) return json({ error: "Unauthorized." }, 401);
   const result = await env.DB.prepare(
-    "SELECT id,status,updated_at,project_revision,project_json FROM jobs WHERE project_json IS NOT NULL AND status='completed' ORDER BY updated_at DESC LIMIT 100"
+    "SELECT id,status,updated_at,project_revision,project_json FROM jobs WHERE project_json IS NOT NULL ORDER BY updated_at DESC LIMIT 100"
   ).all();
   const projects = [];
   for (const row of result.results || []) {
