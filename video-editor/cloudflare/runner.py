@@ -303,11 +303,10 @@ def _make_plan(
         plan = collaboration["plan"]
         video_analysis = collaboration["video_analysis"]
 
+    # Keep project mutation and video rendering as separate transactions.
+    # The caller checkpoints the edited project before starting the expensive export,
+    # so a render failure cannot discard the user's latest edit.
     calls = [call for call in plan["tool_calls"] if call["name"] != "render.export"]
-    # Undo/redo are deliberately single-operation transactions. Export is
-    # a second transaction after the history operation has updated the project.
-    if not any(call["name"] in {"history.undo", "history.redo"} for call in calls):
-        calls.append({"name": "render.export", "arguments": {"output_filename": "edited-video.mp4"}})
     return validate_tool_plan({"summary": plan["summary"], "tool_calls": calls}), video_analysis
 
 def main()->int:
@@ -321,6 +320,7 @@ def main()->int:
     metadata_request=urllib.request.Request(worker_url.rstrip("/")+"/api/internal/jobs/"+job_id,
         headers={"X-Callback-Secret":callback_secret,
                  "User-Agent":WORKER_USER_AGENT})
+    executor = None
     try:
         with urllib.request.urlopen(metadata_request,timeout=90) as response:
             job=json.loads(response.read().decode("utf-8"))
@@ -382,8 +382,36 @@ def main()->int:
             )
             if not result.get("ok"):
                 raise RuntimeError(result.get("error") or "The updated project could not be exported.")
-        execution=result["execution"]; project_document=execution["project"]
-        export=next((item["result"] for item in execution.get("results",[])
+        execution=result["execution"]
+        project_document=execution["project"]
+
+        # Durable autosave boundary: persist the fully validated edit transaction
+        # before rendering. If export or upload fails, this revision remains recoverable.
+        callback(worker_url,callback_secret,job_id,"running",
+            "Edit applied and saved as revision "+str(project_document["revision"])+
+            ". Rendering the saved checkpoint now.",
+            project_json=project_document,
+            project_revision=project_document["revision"],
+            history_state=executor.get_history_state(),
+            ai_status="applied",pending_plan=None)
+
+        export_plan = {
+            "summary": "Render the latest saved project checkpoint.",
+            "tool_calls": [{
+                "name": "render.export",
+                "arguments": {"output_filename": "edited-video.mp4"}
+            }]
+        }
+        export_result = run_ai_edit(
+            "Render the saved project checkpoint.",
+            executor,
+            expected_revision=executor.revision,
+            confirmed_tools={"render.export"},
+            preferred_plan=export_plan,
+        )
+        if not export_result.get("ok"):
+            raise RuntimeError(export_result.get("error") or "The saved project could not be rendered.")
+        export=next((item["result"] for item in export_result["execution"].get("results",[])
                      if item.get("name")=="render.export"),None)
         output_path=Path(export["output_path"]) if export else edited
         if not output_path.is_file(): raise RuntimeError("The MLT export tool did not create the requested MP4.")
@@ -418,8 +446,18 @@ def main()->int:
         print(json.dumps(report)); return 0
     except Exception as exc:
         try:
+            checkpoint = {}
+            if executor is not None:
+                checkpoint = {
+                    "project_json": executor.get_project(),
+                    "project_revision": executor.revision,
+                    "history_state": executor.get_history_state(),
+                    "ai_status": "error",
+                    "pending_plan": None,
+                }
             callback(worker_url,callback_secret,job_id,"failed",
-                "AI/MLT render failed: "+(str(exc)[:350] or type(exc).__name__),ai_status="error")
+                "AI/MLT render failed: "+(str(exc)[:350] or type(exc).__name__),
+                **checkpoint)
         except Exception as callback_error:
             print("Could not report failure to Cloudflare: "+str(callback_error),file=sys.stderr)
         raise
