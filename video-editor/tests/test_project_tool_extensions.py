@@ -106,6 +106,22 @@ class EditorToolExpansionTests(unittest.TestCase):
             confirmed_tools=confirmed_tools,
         )
 
+    def add_audio_track(self):
+        project = self.executor.get_project()
+        project["tracks"].append({
+            "id": "music-track",
+            "type": "audio",
+            "name": "Music",
+            "order": 3,
+            "enabled": True,
+            "locked": False,
+            "muted": False,
+            "solo": False,
+            "visible": True,
+            "clips": [],
+        })
+        self.executor = ProjectToolExecutor(project)
+
     def test_new_tools_are_exposed_to_the_ai_catalogue(self):
         names = {item["name"] for item in get_tool_catalog()}
         self.assertTrue({
