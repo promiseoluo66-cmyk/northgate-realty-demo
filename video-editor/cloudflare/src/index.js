@@ -693,7 +693,7 @@ async function queueManualEdit(request, env, id) {
     tool_calls: calls
   };
   const update = await env.DB.prepare(
-    "UPDATE jobs SET status='queued',message='Direct Studio edit queued.',instruction='Apply the manually selected Studio operations.',ai_status='queued',pending_plan_json=?,confirmed_tools_json=?,updated_at=? WHERE id=? AND status='completed' AND project_revision=? AND pending_plan_json IS NULL"
+    "UPDATE jobs SET status='queued',message='Direct Studio edit queued.',instruction='Apply the manually selected Studio operations.',ai_status='queued',pending_plan_json=?,confirmed_tools_json=?,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
   ).bind(
     JSON.stringify(pending), JSON.stringify(supplied), new Date().toISOString(), id, expectedRevision
   ).run();
