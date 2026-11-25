@@ -361,3 +361,41 @@ test("saved-project rename rejects a stale project revision", async () => {
   );
   assert.equal(response.status, 409);
 });
+
+
+test("saved project list includes recoverable checkpoints from in-progress jobs", async () => {
+  const project = {
+    name: "Recoverable edit",
+    revision: 4,
+    video_profile: { width: 720, height: 1280 },
+    assets: [{ id: "source-video" }],
+    tracks: [{ id: "video", clips: [{ id: "clip-1", start_us: 0, duration_us: 5000000 }] }]
+  };
+  let query = "";
+  const env = {
+    APP_API_TOKEN: "test-app-token",
+    DB: {
+      prepare(sql) {
+        query = sql;
+        return { bind: () => ({
+          all: async () => ({ results: [{
+            id: "e".repeat(32), status: "running", updated_at: "2026-11-25T10:00:00.000Z",
+            project_revision: 4, project_json: JSON.stringify(project)
+          }] })
+        }) };
+      }
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://studio.test/api/v1/projects", {
+      headers: { Authorization: "Bearer test-app-token" }
+    }), env
+  );
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(query, /status='completed'/);
+  const payload = await response.json();
+  assert.equal(payload.projects.length, 1);
+  assert.equal(payload.projects[0].status, "running");
+  assert.equal(payload.projects[0].revision, 4);
+  assert.equal(payload.projects[0].clip_count, 1);
+});
