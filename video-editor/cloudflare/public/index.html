@@ -356,7 +356,7 @@ async function refreshJob(){
   try{
     const data=await api("/api/v1/jobs/"+activeJobId);
     $("job-card").classList.remove("hidden");
-    $("job-details").textContent="Job ID: "+data.job_id+"\nStatus: "+data.status+"\nRevision: "+(data.project_revision||"not initialized")+"\n"+data.message;
+    $("job-details").textContent="Job ID: "+data.job_id+"\nStatus: "+data.status+"\nRevision: "+(data.project_revision||"not initialized")+"\n"+data.message+((data.status==="failed"&&data.project_revision)?"\nRecovery checkpoint available. You can continue editing from the last saved revision.":"");
     if(data.download_url)$("download-link").classList.remove("hidden");
     if(data.run_url){$("run-link").href=data.run_url;$("run-link").classList.remove("hidden");}
     const awaitingApproval=data.status==="awaiting_confirmation"&&data.pending_plan;
@@ -366,7 +366,7 @@ async function refreshJob(){
       $("project-tools").classList.add("hidden");
     }else{
       $("approval-panel").classList.add("hidden");
-      if(data.status==="completed"&&data.project_revision)$("project-tools").classList.remove("hidden");
+      if((data.status==="completed"||data.status==="failed")&&data.project_revision)$("project-tools").classList.remove("hidden");
       else $("project-tools").classList.add("hidden");
     }
     // A saved checkpoint can be reopened while a cloud edit is still running.
@@ -398,14 +398,15 @@ async function openSavedProject(){
 }
 function renderSavedProjects(projects){
   const host=$("saved-project-list");host.replaceChildren();
-  if(!projects.length){$("saved-project-status").textContent="No completed saved projects were found.";return;}
+  if(!projects.length){$("saved-project-status").textContent="No saved projects with recovery checkpoints were found.";return;}
   $("saved-project-status").textContent=projects.length+" saved project(s) available.";
   projects.forEach(project=>{
     const button=document.createElement("button");
     button.type="button";button.className="saved-project-item";
     const name=document.createElement("strong");name.textContent=project.name||"Untitled project";
     const details=document.createElement("span");
-    details.textContent="Revision "+project.revision+" · "+(project.width||"?")+"×"+(project.height||"?")+
+    details.textContent="Revision "+project.revision+" · "+(project.status||"saved")+
+      " · "+(project.width||"?")+"×"+(project.height||"?")+
       " · "+project.track_count+" tracks · "+project.clip_count+" clips · "+project.asset_count+" media";
     const updated=document.createElement("span");updated.textContent="Updated "+project.updated_at;
     button.append(name,details,updated);
