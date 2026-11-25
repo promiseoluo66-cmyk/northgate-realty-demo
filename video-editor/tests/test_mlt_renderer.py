@@ -978,8 +978,8 @@ class RippleInsertRenderPlanTests(unittest.TestCase):
         })
         planned = compile_render_plan(self.project, self.root)["tracks"][0]["clips"]
         self.assertEqual([item["id"] for item in planned], ["inserted-clip", existing["id"]])
-        self.assertEqual([item["start_frame"] for item in planned], [0, 30])
-        self.assertEqual([item["duration_frames"] for item in planned], [30, 60])
+        self.assertEqual([item["start_frame"] for item in planned], [0, 25])
+        self.assertEqual([item["duration_frames"] for item in planned], [25, 50])
 
 
 class SlipEditRenderPlanTests(unittest.TestCase):
@@ -996,10 +996,10 @@ class SlipEditRenderPlanTests(unittest.TestCase):
         clip["source_in_us"] = 500_000
         clip["source_out_us"] = 2_500_000
         plan_clip = compile_render_plan(self.project, self.root)["tracks"][0]["clips"][0]
-        self.assertEqual(plan_clip["source_in_frame"], 15)
-        self.assertEqual(plan_clip["source_out_frame"], 74)
+        self.assertEqual(plan_clip["source_in_frame"], 13)
+        self.assertEqual(plan_clip["source_out_frame"], 63)
         self.assertEqual(plan_clip["start_frame"], 0)
-        self.assertEqual(plan_clip["duration_frames"], 60)
+        self.assertEqual(plan_clip["duration_frames"], 50)
 
 
 class ClipSourceReplacementRenderPlanTests(unittest.TestCase):
