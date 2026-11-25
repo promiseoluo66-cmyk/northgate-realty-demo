@@ -8,11 +8,15 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 import math
+import re
 from typing import Any
 
 
 class ToolValidationError(ValueError):
     """Raised when an AI tool call is outside the approved contract."""
+
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 @dataclass(frozen=True)
@@ -605,6 +609,22 @@ def _validate_value(value: Any, definition: dict[str, Any], path: str) -> None:
         raise ToolValidationError(f"{path} is not one of the allowed choices.")
 
 
+def _validate_identifier_values(value: Any, path: str = "arguments") -> None:
+    """Reject path-like or malformed identifiers before executor lookup."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            item_path = f"{path}.{key}"
+            if key.endswith("_id") and isinstance(item, str):
+                if not _IDENTIFIER_RE.fullmatch(item):
+                    raise ToolValidationError(
+                        f"{item_path} must be a valid project identifier."
+                    )
+            _validate_identifier_values(item, item_path)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_identifier_values(item, f"{path}[{index}]")
+
+
 def get_tool_catalog() -> list[dict[str, Any]]:
     """Return only tools that have an execution handler."""
     return [
@@ -634,6 +654,7 @@ def validate_tool_call(name: str, arguments: Any) -> dict[str, Any]:
         raise ToolValidationError("Tool arguments must be an object.")
     clean = deepcopy(arguments)
     _validate_value(clean, definition.input_schema, name)
+    _validate_identifier_values(clean)
 
     if name in {"timeline.trim_clip", "timeline.add_clip"}:
         source_in = clean.get("source_in_us", 0)
