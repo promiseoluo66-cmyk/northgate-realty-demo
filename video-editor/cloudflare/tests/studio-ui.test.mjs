@@ -1,0 +1,185 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const htmlUrl = new URL("../public/index.html", import.meta.url);
+const scriptUrl = new URL("../public/studio.js", import.meta.url);
+const [html, studioScript] = await Promise.all([
+  readFile(htmlUrl, "utf8"),
+  readFile(scriptUrl, "utf8")
+]);
+
+test("Studio loads the separate mobile editor script", () => {
+  assert.match(html, /<script src="\/studio\.js" defer><\/script>/);
+});
+
+test("Studio controls have unique element IDs", () => {
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(ids.includes("studio-editor"));
+  assert.ok(ids.includes("timeline-canvas"));
+  assert.ok(ids.includes("studio-media-bin"));
+  assert.ok(ids.includes("studio-clip-inspector"));
+  assert.match(html, /aria-controls="studio-timeline-view"/);
+  assert.match(html, /aria-controls="studio-media-view"/);
+  assert.match(html, /aria-labelledby="studio-tab-timeline"/);
+  assert.match(html, /aria-labelledby="studio-tab-media"/);
+  assert.equal(ids.length, new Set(ids).size, "HTML element IDs must not be duplicated");
+});
+
+test("Timeline, media bin, zoom and clip selection are wired", () => {
+  assert.match(studioScript, /project\.tracks/);
+  assert.match(studioScript, /track\.clips/);
+  assert.match(studioScript, /currentProject\.assets/);
+  assert.match(studioScript, /timeline-zoom/);
+  assert.match(studioScript, /selectedClipId/);
+  assert.match(studioScript, /studioSelectedClipInstruction/);
+});
+
+test("Project strings are inserted as text, not executable HTML", () => {
+  assert.match(studioScript, /textContent/);
+  assert.doesNotMatch(studioScript, /\.innerHTML\s*=/);
+});
+
+test("Current approval-aware project and AI edit routes remain connected", () => {
+  assert.match(html, /\/api\/v1\/jobs\/\x22\+activeJobId\+\x22\/project/);
+  assert.match(html, /\/api\/v1\/jobs\/\x22\+activeJobId\+\x22\/ai-edit/);
+  assert.match(html, /ai-edit\/confirm/);
+});
+
+test("Studio exposes real source preview, playhead and direct editing controls", () => {
+  for (const id of [
+    "studio-preview", "timeline-seek", "playhead-time",
+    "studio-media-files", "studio-import-media", "studio-import-status", "media-bin-search", "media-bin-folder-filter",
+    "studio-safe-guides-toggle", "studio-safe-guides", "open-project-id", "studio-open-project",
+    "studio-move-clip", "studio-trim-clip", "studio-slip-clip", "clip-slip-offset", "studio-apply-speed",
+    "studio-split-clip", "studio-duplicate-clip", "studio-delete-clip",
+    "studio-apply-framing", "studio-apply-transform", "studio-add-keyframe",
+    "studio-add-track", "studio-rename-track", "studio-lock-track",
+    "studio-remove-track", "studio-set-profile", "studio-reorder-track", "track-order", "studio-undo", "studio-redo",
+    "studio-toggle-track-visible",
+    "clip-crop-x", "clip-crop-y", "clip-crop-width", "clip-crop-height",
+    "studio-apply-crop", "studio-reset-crop",
+    "clip-flip-horizontal", "clip-flip-vertical", "clip-anchor-x", "clip-anchor-y",
+    "keyframe-graph", "keyframe-graph-zoom", "keyframe-graph-pan",
+    "studio-remove-keyframe", "studio-reset-keyframes", "studio-reset-all-keyframes",
+    "rename-project-name", "studio-rename-project", "saved-project-list",
+    "refresh-saved-projects", "saved-project-status", "studio-copy-keyframes", "studio-paste-keyframes",
+    "studio-apply-motion-preset"
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.match(studioScript, /setPlayhead/);
+  assert.match(studioScript, /setPointerCapture/);
+  assert.match(studioScript, /timeline\.move_clip/);
+  assert.match(studioScript, /timeline\.trim_clip/);
+  assert.match(studioScript, /animation\.set_keyframe/);
+  assert.match(studioScript, /animation\.clear_keyframes/);
+  assert.match(studioScript, /dataset.nextTime/);
+  assert.match(studioScript, /window\.applyStudioOperations/);
+});
+
+test("Direct Studio editing uses authenticated manual operation and source preview routes", () => {
+  assert.match(html, /\/manual-edit/);
+  assert.match(html, /\/source-url/);
+  assert.match(html, /expected_revision/);
+  assert.match(html, /confirmed_tools/);
+  assert.match(studioScript, /studio-preview/);
+  assert.match(studioScript, /studioSelectedClipInstruction/);
+});
+
+test("Keyframe graph supports editing, clipboard and motion presets", () => {
+  assert.match(studioScript, /renderKeyframeGraph/);
+  assert.match(studioScript, /setPointerCapture/);
+  assert.match(studioScript, /animation\.remove_keyframe/);
+  assert.match(studioScript, /keyframeClipboard/);
+  assert.match(studioScript, /fade_in/);
+  assert.match(studioScript, /speed_ramp/);
+});
+
+test("Track reorder is wired to a registered editor operation", () => {
+  assert.match(html, /id="studio-reorder-track"/);
+  assert.match(studioScript, /track\.reorder/);
+});
+
+test("Project media import and searchable media-bin placement are wired", () => {
+  assert.match(html, /multiple accept="video/);
+  assert.match(html, /\/assets/);
+  assert.match(html, /200 MB total/);
+  assert.match(studioScript, /studioAddMediaAtPlayhead/);
+  assert.match(studioScript, /media-bin-search/);
+  assert.match(studioScript, /timeline\.add_clip/);
+});
+
+test("Track solo control is connected to registered track state", () => {
+  assert.match(html, /id="studio-toggle-track-solo"/);
+  assert.match(studioScript, /solo:!Boolean\(track\.solo\)/);
+  assert.match(studioScript, /track\.type === "text"/);
+});
+
+test("Saved-project manager lists, reopens and revision-safely renames projects", () => {
+  assert.match(html, /\/api\/v1\/projects/);
+  assert.match(html, /method:"PATCH"/);
+  assert.match(html, /expected_revision/);
+  assert.match(html, /openProjectById/);
+  assert.match(html, /renderSavedProjects/);
+  assert.match(html, /saved-project-list/);
+});
+
+test("Media bin supports persisted folders, searchable tags and folder filtering", () => {
+  assert.match(studioScript, /media\\.organize_asset/);
+  assert.match(studioScript, /asset\.folder/);
+  assert.match(studioScript, /asset\.tags/);
+  assert.match(studioScript, /media-bin-folder-filter/);
+  assert.match(studioScript, /Save folder and tags/);
+});
+
+test("Manual source crop is wired to the registered crop operation", () => {
+  assert.match(studioScript, /clip\\.set_crop/);
+  assert.match(studioScript, /studio-apply-crop/);
+  assert.match(studioScript, /studio-reset-crop/);
+  assert.match(studioScript, /clip-crop-width/);
+  assert.match(studioScript, /Clear automatic framing before applying a manual crop/);
+  assert.match(html, /Manual crop uses percentages of the original source frame/);
+});
+
+test("Clip flip controls are persisted and rendered with MLT flip filters", () => {
+  assert.match(html, /id="clip-flip-horizontal"/);
+  assert.match(html, /id="clip-flip-vertical"/);
+  assert.match(studioScript, /flip_horizontal:Boolean/);
+  assert.match(studioScript, /flip_vertical:Boolean/);
+});
+
+test("Custom rotation pivot controls are bound to persisted transform fields", () => {
+  assert.match(html, /id="clip-anchor-x"/);
+  assert.match(html, /id="clip-anchor-y"/);
+  assert.match(studioScript, /anchor_x:numeric\("clip-anchor-x"\)\/100/);
+  assert.match(studioScript, /anchor_y:numeric\("clip-anchor-y"\)\/100/);
+});
+
+test("Track visibility is independent from mute and connected to render state", () => {
+  assert.match(html, /id="studio-toggle-track-visible"/);
+  assert.match(studioScript, /visible:track\.visible===false/);
+  assert.match(studioScript, /HIDDEN/);
+  assert.match(studioScript, /Audio tracks do not have a visual layer/);
+});
+
+test("Media-bin source replacement is guarded and uses the registered operation", () => {
+  assert.match(studioScript, /Replace selected clip source/);
+  assert.match(studioScript, /timeline\\.replace_clip_media/);
+  assert.match(studioScript, /selected\.clip\.kind !== asset\.media_type/);
+  assert.match(studioScript, /selected\.track\.locked/);
+  assert.match(studioScript, /preserving its timeline position/);
+});
+
+test("Studio slip control sends signed source-window offsets", () => {
+  assert.match(studioScript, /timeline\\.slip_clip/);
+  assert.match(studioScript, /clip-slip-offset/);
+  assert.match(studioScript, /delta_us:deltaUs/);
+  assert.match(studioScript, /non-zero slip offset/);
+});
+
+test("Media-bin ripple insert is wired to the current playhead and selected compatible track", () => {
+  assert.match(studioScript, /Insert & ripple/);
+  assert.match(studioScript, /timeline\\.ripple_insert_clip/);
+  assert.match(studioScript, /start_us:Math\.max\(0, Math\.round\(playheadUs\)\)/);
+  assert.match(studioScript, /targetTrack\.id/);
+  assert.match(studioScript, /renderMediaBin\(\);/);
+});
