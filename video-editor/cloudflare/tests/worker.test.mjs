@@ -255,7 +255,6 @@ test("saved-project listing returns safe project summaries", async () => {
     DB: {
       prepare(sql) {
         assert.match(sql, /SELECT id,status,updated_at,project_revision,project_json/);
-        assert.match(sql, /status='completed'/);
         return { all: async () => ({ results: [{
           id: "f".repeat(32), status: "completed",
           updated_at: "2026-11-24T12:00:00.000Z",
@@ -377,12 +376,12 @@ test("saved project list includes recoverable checkpoints from in-progress jobs"
     DB: {
       prepare(sql) {
         query = sql;
-        return { bind: () => ({
+        return {
           all: async () => ({ results: [{
             id: "e".repeat(32), status: "running", updated_at: "2026-11-25T10:00:00.000Z",
             project_revision: 4, project_json: JSON.stringify(project)
           }] })
-        }) };
+        };
       }
     }
   };
