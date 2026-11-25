@@ -191,3 +191,10 @@ test("Studio restores the latest saved project checkpoint while a cloud edit is 
   assert.match(html, /if\(data\.project_revision&&Number\(data\.project_revision\)!==loadedProjectRevision\)/);
   assert.match(html, /A saved checkpoint can be reopened while a cloud edit is still running/);
 });
+
+
+test("Failed renders with saved checkpoints remain editable for recovery", () => {
+  assert.match(html, /data\.status==="failed"\)\&\&data\.project_revision/);
+  assert.match(html, /Recovery checkpoint available/);
+  assert.match(html, /project\.status\|\|"saved"/);
+});
