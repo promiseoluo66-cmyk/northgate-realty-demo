@@ -1,0 +1,752 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-11-23",
+  "purpose": "Planning catalogue and current coverage audit. This is not a runtime capability manifest and does not claim that every feature is exposed through the Studio UI.",
+  "benchmark": "Public CapCut feature families across mobile, desktop and web. Exact availability varies by platform, region, account, rollout and subscription.",
+  "implementation_rule": "Independent implementations only. Do not copy CapCut source code, private APIs, binaries, model weights, templates, music, fonts, stickers or protected assets.",
+  "status_vocabulary": [
+    "prototype_verified",
+    "partially_implemented",
+    "under_test",
+    "planned",
+    "gated_optional"
+  ],
+  "categories": [
+    {
+      "id": "project_timeline",
+      "label": "Project, media library and timeline",
+      "priority": "P0",
+      "features": [
+        [
+          "project_save_reopen",
+          "Canonical project JSON, revisions and D1-backed project/history APIs exist; full project manager, recovery UX and cross-device lifecycle remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "autosave_history",
+          "Bounded undo/redo snapshots and revision persistence exist; automatic autosave and user-facing history/recovery UI remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "media_import_probe",
+          "Single-video upload and technical probing paths exist; multi-file video/audio/image/subtitle import and a full searchable media bin remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "media_bin",
+          "Searchable media bin, folders, labels, thumbnails and relinking",
+          "planned"
+        ],
+        [
+          "multitrack_timeline",
+          "Multiple video, overlay, image, text, caption and audio tracks",
+          "prototype_verified"
+        ],
+        [
+          "clip_operations",
+          "Add, move, trim, split, delete and duplicate operations exist; slip, replace, group, linked-clip and broader reorder workflows remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "ripple_editing",
+          "Same-track ripple delete is implemented with overlap rejection; ripple insert/overwrite, cross-track ripple, snapping and timeline markers remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "track_controls",
+          "Track rename, lock, enabled state and mute controls exist; solo, hide, reorder and full track-level audio controls remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "audio_extract_freeze",
+          "Detach audio, capture frame and freeze frame",
+          "planned"
+        ],
+        [
+          "proxy_preview",
+          "Proxy media and low-resolution previews",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "transform_animation",
+      "label": "Clip transforms, framing and animation",
+      "priority": "P1",
+      "features": [
+        [
+          "clip_transform",
+          "Static position, scale, rotation and opacity plus fit/fill/stretch framing exist; manual crop rectangles, flip/mirror and anchor/pivot controls remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "canvas_aspect",
+          "Custom project dimensions/frame rate and layered overlays are supported; a guided canvas/preset/background workflow is not complete.",
+          "partially_implemented"
+        ],
+        [
+          "keyframes",
+          "Rendered position, scale, rotation and opacity keyframes with hold, linear, ease-in, ease-out, ease-in-out and cubic Bezier interpolation; crop/effect keyframes remain pending.",
+          "prototype_verified"
+        ],
+        [
+          "keyframe_graphs",
+          "Easing, graph editor, interpolation and reusable animation presets",
+          "planned"
+        ],
+        [
+          "motion_presets",
+          "Animated pan, zoom, rotate, scale, fade, slide and motion paths",
+          "planned"
+        ],
+        [
+          "keyframe_clipboard",
+          "Copy, paste, remove and reset keyframes",
+          "planned"
+        ],
+        [
+          "safe_area_guides",
+          "Social format guides and safe-area overlays",
+          "planned"
+        ],
+        [
+          "graph_viewport_controls",
+          "Keyframe and speed graph zoom in/out, panning, fit-all and reset-view controls; touch-friendly as well as mouse-friendly",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "speed_time",
+      "label": "Speed and time effects",
+      "priority": "P1",
+      "features": [
+        [
+          "constant_speed",
+          "Constant speed changes and reverse playback",
+          "prototype_verified"
+        ],
+        [
+          "speed_curves",
+          "Constant video playback speed and keyframed variable-speed ramps with real-render source-time verification; interactive graph editor and presets remain pending.",
+          "prototype_verified"
+        ],
+        [
+          "freeze_hold",
+          "Freeze and hold frame sections",
+          "planned"
+        ],
+        [
+          "smooth_slow_motion",
+          "Frame-blend or optical-flow slow motion",
+          "gated_optional"
+        ],
+        [
+          "time_remapping",
+          "Constant speed and keyframed speed-curve source-time remapping are render-tested; fully coordinated audio, animation and retiming workflows remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "pitch_preserve",
+          "Audio pitch controls when speed changes",
+          "planned"
+        ],
+        [
+          "speed_curve_graph_editor",
+          "Dedicated editable speed-curve graph with draggable/addable/removable control points, zoom in/out, pan, fit-to-clip, reset view and precise numeric speed/time editing",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "transitions_effects",
+      "label": "Transitions, effects and compositing",
+      "priority": "P1",
+      "features": [
+        [
+          "transition_dissolve",
+          "Dissolve transition",
+          "prototype_verified"
+        ],
+        [
+          "transition_horizontal_wipe",
+          "Horizontal luma-map wipes in both directions with softness control and decoded-pixel verification; other wipe patterns remain pending.",
+          "prototype_verified"
+        ],
+        [
+          "transition_library",
+          "Dissolve and horizontal luma wipe are render-tested; slide, push, split, blur, zoom, mask and dip transitions remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "video_effects",
+          "Basic brightness, chroma-key, contrast and saturation filters with rendered-pixel checks; advanced effect stacks and subject/body effects remain pending.",
+          "prototype_verified"
+        ],
+        [
+          "blend_modes",
+          "Blend modes, transparency and cross-track compositing",
+          "planned"
+        ],
+        [
+          "shape_masks",
+          "Shape masks, feathering and mask animation",
+          "planned"
+        ],
+        [
+          "chroma_key",
+          "A basic chroma-key effect path exists; advanced green-screen edge, spill and matte controls are not complete.",
+          "partially_implemented"
+        ],
+        [
+          "background_cutout",
+          "AI subject cutout and background removal",
+          "gated_optional"
+        ],
+        [
+          "stabilization",
+          "Video stabilisation and motion effects",
+          "gated_optional"
+        ]
+      ]
+    },
+    {
+      "id": "color_image",
+      "label": "Colour, lighting and image quality",
+      "priority": "P1",
+      "features": [
+        [
+          "basic_colour",
+          "Brightness, contrast and saturation are supported; full exposure, temperature, tint, gamma and white-balance controls remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "hsl_curves_wheels",
+          "HSL, curves and colour wheels",
+          "planned"
+        ],
+        [
+          "lut_support",
+          "Import and apply LUTs",
+          "planned"
+        ],
+        [
+          "selective_colour",
+          "Selective corrections and skin-tone-aware adjustment",
+          "planned"
+        ],
+        [
+          "advanced_colour",
+          "Highlights, shadows, grain, vignette and sharpen",
+          "planned"
+        ],
+        [
+          "auto_relight",
+          "Auto enhancement and relighting",
+          "gated_optional"
+        ]
+      ]
+    },
+    {
+      "id": "text_graphics",
+      "label": "Text, titles, stickers and graphics",
+      "priority": "P1",
+      "features": [
+        [
+          "text_titles",
+          "Basic timed text/title/caption overlays with RGBA transparency and decoded-frame verification; advanced text animation, typography and templates remain pending.",
+          "prototype_verified"
+        ],
+        [
+          "text_style",
+          "Basic font, size, weight, colour, outline, alignment and placement are supported; full typographic spacing, shadow, background and template controls remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "text_animation",
+          "Text entrance, exit, loop and per-word animation",
+          "planned"
+        ],
+        [
+          "title_templates",
+          "Editable title templates and reusable brand styles",
+          "planned"
+        ],
+        [
+          "stickers_graphics",
+          "Stickers, emoji, shapes, arrows, frames and overlays",
+          "planned"
+        ],
+        [
+          "ai_stickers",
+          "AI-generated stickers and graphics",
+          "gated_optional"
+        ]
+      ]
+    },
+    {
+      "id": "captions_localization",
+      "label": "Captions, transcription and localisation",
+      "priority": "P1",
+      "features": [
+        [
+          "manual_subtitles",
+          "Timed text clips can be authored and updated, including word-timed caption clips; a dedicated subtitle editing/import/export workflow and full Studio controls remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "auto_captions",
+          "Speech-to-text auto captions",
+          "gated_optional"
+        ],
+        [
+          "word_timing",
+          "A tool creates sequential caption clips from supplied verified word timestamps; automatic speech recognition and timestamp generation are not included.",
+          "partially_implemented"
+        ],
+        [
+          "bilingual_captions",
+          "Bilingual captions and translation",
+          "gated_optional"
+        ],
+        [
+          "caption_animations",
+          "Caption templates, keyword highlights and animated captions",
+          "planned"
+        ],
+        [
+          "karaoke_lyrics",
+          "Karaoke/lyric captions when timing data exists",
+          "planned"
+        ],
+        [
+          "subtitle_import_export",
+          "Subtitle sidecar import/export such as SRT",
+          "planned"
+        ],
+        [
+          "tts_dubbing",
+          "Text-to-speech and multilingual dubbing",
+          "gated_optional"
+        ],
+        [
+          "transcript_driven_editing",
+          "Edit by transcript: search spoken words, select/delete timed word ranges, remove filler words and pauses, and assemble a cut from a corrected script.",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "audio",
+      "label": "Audio and voice production",
+      "priority": "P1",
+      "features": [
+        [
+          "audio_track_mix",
+          "Multiple audio tracks mixed with video audio",
+          "prototype_verified"
+        ],
+        [
+          "audio_gain_fades",
+          "Audio gain, fade-in/fade-out and mute support with decoded-audio verification; solo and pan remain pending.",
+          "prototype_verified"
+        ],
+        [
+          "audio_keyframes",
+          "Clip-level volume_db keyframes with decoded-audio verification; advanced track automation remains pending.",
+          "prototype_verified"
+        ],
+        [
+          "audio_waveforms_beats",
+          "Audio analysis measures streams, silence and loudness; waveform display, beat-grid extraction and beat-aware timeline editing are not implemented.",
+          "partially_implemented"
+        ],
+        [
+          "voiceover_record",
+          "Record, import and synchronize voiceovers",
+          "planned"
+        ],
+        [
+          "music_sfx_library",
+          "Music and sound-effect library with licence metadata",
+          "planned"
+        ],
+        [
+          "voice_effects",
+          "Voice effects and voice changer",
+          "planned"
+        ],
+        [
+          "noise_reduction",
+          "Noise reduction and voice enhancement",
+          "gated_optional"
+        ],
+        [
+          "vocal_separation",
+          "Vocal/instrumental separation",
+          "gated_optional"
+        ],
+        [
+          "speech_cleanup",
+          "Speech cleanup, silence and filler-word removal",
+          "gated_optional"
+        ],
+        [
+          "tts_audio",
+          "Text-to-speech and dubbing",
+          "gated_optional"
+        ],
+        [
+          "audio_sync",
+          "Align separate camera, dialogue or recording clips by matching their audio waveforms.",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "ai_assistance",
+      "label": "AI editing assistants",
+      "priority": "P2",
+      "features": [
+        [
+          "natural_language_edit",
+          "Gemini structured JSON planning and safe execution are wired to the 34-operation registry and covered by offline integration tests; a live account-backed Gemini-to-render acceptance test remains pending.",
+          "under_test"
+        ],
+        [
+          "auto_cut",
+          "Auto cut by beats, speech pauses or instruction",
+          "gated_optional"
+        ],
+        [
+          "silence_filler_detect",
+          "Technical silence intervals are measured; filler-word recognition, reviewed cut lists and automatic transcript-aware cleanup are not implemented.",
+          "partially_implemented"
+        ],
+        [
+          "scene_detection",
+          "FFmpeg returns candidate scene-change timestamps; semantic shot labels and visual confirmation are not provided.",
+          "partially_implemented"
+        ],
+        [
+          "beat_detection",
+          "Automatic beat detection",
+          "gated_optional"
+        ],
+        [
+          "smart_media_search",
+          "Search media using names, transcripts or supported metadata",
+          "planned"
+        ],
+        [
+          "auto_reframe",
+          "Subject-aware reframing for different aspect ratios",
+          "gated_optional"
+        ],
+        [
+          "motion_tracking",
+          "Face, body, hand and object tracking",
+          "gated_optional"
+        ],
+        [
+          "ai_polish",
+          "Background removal, stabilisation and relighting",
+          "gated_optional"
+        ],
+        [
+          "ai_suggestions",
+          "AI title, caption, thumbnail and colour suggestions",
+          "gated_optional"
+        ]
+      ]
+    },
+    {
+      "id": "generative_ai",
+      "label": "Generative AI creation",
+      "priority": "P3",
+      "features": [
+        [
+          "script_storyboard",
+          "Script/idea assistance and storyboarding",
+          "gated_optional"
+        ],
+        [
+          "text_to_video",
+          "Text-to-video generation",
+          "gated_optional"
+        ],
+        [
+          "image_to_video",
+          "Image-to-video and guided frame generation",
+          "gated_optional"
+        ],
+        [
+          "image_generation",
+          "AI image generation and editing",
+          "gated_optional"
+        ],
+        [
+          "avatar_presenter",
+          "AI presenter/avatar and talking-photo features",
+          "gated_optional"
+        ],
+        [
+          "style_transfer",
+          "Image/video style transfer and animation looks",
+          "gated_optional"
+        ],
+        [
+          "generative_expand",
+          "Generative expand, outpainting and object removal",
+          "gated_optional"
+        ],
+        [
+          "ai_upscale",
+          "Image/video upscaling and enhancement",
+          "gated_optional"
+        ]
+      ]
+    },
+    {
+      "id": "photo_design",
+      "label": "Photo and thumbnail design",
+      "priority": "P2",
+      "features": [
+        [
+          "image_edit",
+          "Image clips support transforms and fit/fill/stretch framing; a standalone image-editing canvas and complete photo tools are missing.",
+          "partially_implemented"
+        ],
+        [
+          "image_background",
+          "Image background removal/replacement",
+          "gated_optional"
+        ],
+        [
+          "image_cleanup",
+          "Object cleanup/removal",
+          "gated_optional"
+        ],
+        [
+          "portrait_enhance",
+          "Portrait retouching and enhancement",
+          "gated_optional"
+        ],
+        [
+          "photo_restore",
+          "Upscale, low-light enhancement, restoration and colourisation",
+          "gated_optional"
+        ],
+        [
+          "thumbnail_canvas",
+          "Thumbnail, cover, poster and social graphic canvas",
+          "planned"
+        ],
+        [
+          "image_export",
+          "Export images separately from video projects",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "assets_templates",
+      "label": "Templates, stock media and creative assets",
+      "priority": "P2",
+      "features": [
+        [
+          "template_library",
+          "Searchable intro, outro, short-form, promo and slideshow templates",
+          "planned"
+        ],
+        [
+          "editable_templates",
+          "Editable templates with replaceable media slots",
+          "planned"
+        ],
+        [
+          "user_templates",
+          "Save and reuse user-created templates",
+          "planned"
+        ],
+        [
+          "licensed_asset_packs",
+          "Effects, transitions, filters, titles, stickers, fonts, stock, music and SFX packs",
+          "planned"
+        ],
+        [
+          "brand_kit",
+          "Brand kit with logos, colours and approved fonts",
+          "planned"
+        ],
+        [
+          "asset_licence_metadata",
+          "Asset attribution and licence/redistribution metadata",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "export_delivery",
+      "label": "Export, delivery and sharing",
+      "priority": "P0",
+      "features": [
+        [
+          "mp4_export",
+          "Standard MP4 export",
+          "prototype_verified"
+        ],
+        [
+          "export_controls",
+          "Project dimensions and frame rate can be set and MP4 export is available; complete codec, bitrate, quality and audio export controls remain missing.",
+          "partially_implemented"
+        ],
+        [
+          "audio_export_controls",
+          "Audio codec, sample rate and channel controls",
+          "planned"
+        ],
+        [
+          "export_queue",
+          "Cloud render jobs expose status and result information; full cancellation, retry, queue controls and robust job lifecycle UX remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "caption_export",
+          "Burned-in captions and separate subtitle files",
+          "planned"
+        ],
+        [
+          "project_vs_video",
+          "Editable canonical project data is kept separately from rendered MP4 output; portable project package import/export remains missing.",
+          "partially_implemented"
+        ],
+        [
+          "still_audio_export",
+          "Thumbnail/still frame and audio-only export",
+          "planned"
+        ],
+        [
+          "social_share",
+          "Platform presets and optional direct sharing integrations",
+          "planned"
+        ],
+        [
+          "high_resolution_export",
+          "2K/4K and above, subject to benchmark and quota gates",
+          "gated_optional"
+        ]
+      ]
+    },
+    {
+      "id": "cloud_collaboration",
+      "label": "Cloud workspace and collaboration",
+      "priority": "P4",
+      "features": [
+        [
+          "cloud_projects",
+          "D1-backed project/job metadata and revisions exist; multi-user ownership, asset storage, quota/retention controls and cross-device sync remain incomplete.",
+          "partially_implemented"
+        ],
+        [
+          "cross_device_sync",
+          "Cross-device project sync, backup and restore",
+          "planned"
+        ],
+        [
+          "review_links",
+          "Share-for-review links and timestamped comments",
+          "planned"
+        ],
+        [
+          "team_workspaces",
+          "Team workspaces, invitations, roles and permissions",
+          "planned"
+        ],
+        [
+          "shared_brand_assets",
+          "Shared folders, asset libraries and brand kits",
+          "planned"
+        ],
+        [
+          "version_conflicts",
+          "Project versions, activity history and conflict-safe editing",
+          "planned"
+        ],
+        [
+          "presentation_links",
+          "Presentation links and controlled download permissions",
+          "planned"
+        ]
+      ]
+    },
+    {
+      "id": "quality_review",
+      "label": "Quality inspection, visual review and provenance",
+      "priority": "P0",
+      "features": [
+        [
+          "technical_quality_inspection",
+          "Measure source streams, black intervals, silence, loudness and candidate scene changes. Current implementation is technical/signal-level only; it does not approve semantic or artistic quality.",
+          "partially_implemented"
+        ],
+        [
+          "visual_review_evidence",
+          "Generate contact sheets, sampled frames and playable review segments; record what a human or vision model actually inspected.",
+          "planned"
+        ],
+        [
+          "reference_matching",
+          "Compare source/reference and edited output for shot timing, composition, typography, motion and colour, with reviewable differences.",
+          "planned"
+        ],
+        [
+          "workflow_quality_receipts",
+          "Record render inputs, tool actions, output hashes, quality findings and explicit review/approval checkpoints; add bounded retry/re-render loops.",
+          "partially_implemented"
+        ]
+      ]
+    }
+  ],
+  "release_policy": {
+    "mark_available_only_after": [
+      "licence and dependency review",
+      "runtime and resource tier documented",
+      "Studio controls connected to the canonical project model",
+      "input validation and error handling",
+      "generated-media end-to-end output test",
+      "save/reopen and regression tests where relevant",
+      "quota, timeout, cancellation and cleanup checks"
+    ],
+    "zero_budget": "No paid billing, paid fallback or hidden credit use. Optional AI stays disabled until a genuinely free and licensed route is verified.",
+    "production_warning": "This catalogue is not evidence that all listed capabilities exist in the current app."
+  },
+  "audit": {
+    "audited_on": "2026-11-23",
+    "repository": "promiseoluo66-cmyk/northgate-realty-demo",
+    "branch": "video-editor-lab",
+    "base_branch": "main",
+    "base_commit": "38bb9f5bde89191bda1a48a27aa99b4e47d0e6da",
+    "registered_tool_count": 34,
+    "registered_tool_names_are_unique": true,
+    "scope_note": "The 112 CapCut-style entries were retained and six missing cross-repository capabilities were added: transcript-driven editing, audio synchronisation, technical quality inspection, visual review evidence, reference matching and workflow quality receipts. The Stage 1 Studio implementation extends the 34-tool Stable baseline to 42 unique registered operations.",
+    "status_definitions": {
+      "prototype_verified": "A limited supported subset has passed the relevant generated-media/render or integration assertions. This is not full feature-family parity.",
+      "partially_implemented": "A real tool, API or engine path exists, but important parts of the broader capability are still absent.",
+      "under_test": "Repository integration and offline tests exist; required live provider/account-backed acceptance remains outstanding.",
+      "planned": "No usable implementation is currently verified.",
+      "gated_optional": "The capability depends on optional models, services, licences or compute and remains disabled until the route and cost are approved."
+    },
+    "capability_entry_count": 118,
+    "status_counts": {
+      "partially_implemented": 25,
+      "planned": 49,
+      "prototype_verified": 12,
+      "gated_optional": 31,
+      "under_test": 1
+    },
+    "duplicate_feature_ids": [],
+    "stage1_registered_tool_count": 42,
+    "stage1_registered_tool_names_are_unique": true
+  }
+}
