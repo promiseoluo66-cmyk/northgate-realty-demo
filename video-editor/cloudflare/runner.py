@@ -367,21 +367,6 @@ def main()->int:
             return 0
         if not result.get("ok"):
             raise RuntimeError(result.get("error") or "The AI edit could not be applied safely.")
-        if any(call["name"] in {"history.undo","history.redo"} for call in plan["tool_calls"]):
-            history_export = {
-                "summary": "Export the project after the requested undo/redo operation.",
-                "tool_calls": [{"name": "render.export",
-                                "arguments": {"output_filename": "edited-video.mp4"}}],
-            }
-            result = run_ai_edit(
-                "Export the updated project.",
-                executor,
-                expected_revision=executor.revision,
-                confirmed_tools={"render.export"},
-                preferred_plan=history_export,
-            )
-            if not result.get("ok"):
-                raise RuntimeError(result.get("error") or "The updated project could not be exported.")
         execution=result["execution"]
         project_document=execution["project"]
 
