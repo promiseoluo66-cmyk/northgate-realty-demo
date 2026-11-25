@@ -341,6 +341,7 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
 <script>
 let apiToken="";
 let activeJobId="";
+let loadedProjectRevision=0;
 let pollHandle=null;
 const $=id=>document.getElementById(id);
 function message(id,text,type){$(id).textContent=text;$(id).className="status"+(type?" "+type:"");}
@@ -350,11 +351,38 @@ async function connect(){apiToken=$("api-token").value.trim();if(apiToken.length
 function renderSkills(skills){const select=$("skill");select.innerHTML="";for(const skill of skills){const option=document.createElement("option");option.value=skill.id;option.textContent=skill.name+" — "+skill.description;select.append(option);}}
 function showFilename(input){$("filename").textContent=input.files[0]?input.files[0].name:"No video selected";}
 async function submitVideo(event){event.preventDefault();const file=$("video-file").files[0];if(!file)return message("render-status","Choose a video first.","error");if(file.size>50*1024*1024)return message("render-status","This editor accepts files up to 50 MB.","error");const button=$("render-button");button.disabled=true;button.textContent="Uploading and queuing…";message("render-status","Uploading your video to the private processing queue…");try{const data=await api("/api/v1/jobs",{method:"POST",headers:{"Content-Type":file.type||"application/octet-stream","X-File-Name":encodeURIComponent(file.name),"X-File-Size":String(file.size),"X-Edit-Instruction":encodeURIComponent($("instruction").value),"X-Edit-Skill-Id":$("skill").value},body:file});activeJobId=data.job_id;localStorage.setItem("video-editor-last-job",activeJobId);$("job-card").classList.remove("hidden");$("download-link").classList.add("hidden");$("run-link").classList.add("hidden");message("render-status","Upload complete. The cloud job has started.","success");$("job-details").textContent="Job ID: "+activeJobId+" · "+data.status;pollJob();}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Submit cloud render";}}
-async function refreshJob(){if(!activeJobId)return;try{const data=await api("/api/v1/jobs/"+activeJobId);$("job-card").classList.remove("hidden");$("job-details").textContent="Job ID: "+data.job_id+"\nStatus: "+data.status+"\nRevision: "+(data.project_revision||"not initialized")+"\n"+data.message;if(data.download_url){$("download-link").classList.remove("hidden");}if(data.run_url){$("run-link").href=data.run_url;$("run-link").classList.remove("hidden");}if(data.status==="awaiting_confirmation"&&data.pending_plan){$("approval-panel").classList.remove("hidden");$("approval-details").textContent=data.pending_plan.summary+"\nApproval required for: "+(data.pending_plan.required_confirmations||[]).join(", ");$("project-tools").classList.add("hidden");}else{$("approval-panel").classList.add("hidden");if(data.status==="completed"&&data.project_revision){$("project-tools").classList.remove("hidden");await loadProject(false);await loadSavedProjects();}}if(data.status==="queued"||data.status==="running")pollJob();else if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}}catch(e){message("render-status",e.message,"error");}}
+async function refreshJob(){
+  if(!activeJobId)return;
+  try{
+    const data=await api("/api/v1/jobs/"+activeJobId);
+    $("job-card").classList.remove("hidden");
+    $("job-details").textContent="Job ID: "+data.job_id+"\nStatus: "+data.status+"\nRevision: "+(data.project_revision||"not initialized")+"\n"+data.message;
+    if(data.download_url)$("download-link").classList.remove("hidden");
+    if(data.run_url){$("run-link").href=data.run_url;$("run-link").classList.remove("hidden");}
+    const awaitingApproval=data.status==="awaiting_confirmation"&&data.pending_plan;
+    if(awaitingApproval){
+      $("approval-panel").classList.remove("hidden");
+      $("approval-details").textContent=data.pending_plan.summary+"\nApproval required for: "+(data.pending_plan.required_confirmations||[]).join(", ");
+      $("project-tools").classList.add("hidden");
+    }else{
+      $("approval-panel").classList.add("hidden");
+      if(data.status==="completed"&&data.project_revision)$("project-tools").classList.remove("hidden");
+      else $("project-tools").classList.add("hidden");
+    }
+    // A saved checkpoint can be reopened while a cloud edit is still running.
+    // Keep the editor read-only until the worker reports a completed revision.
+    if(data.project_revision&&Number(data.project_revision)!==loadedProjectRevision){
+      await loadProject(false);
+    }
+    if(data.status==="queued"||data.status==="running")pollJob();
+    else if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}
+  }catch(e){message("render-status",e.message,"error");}
+}
 async function loadSourcePreview(){if(!activeJobId)return;const video=$("studio-preview");if(!video||video.dataset.jobId===activeJobId)return;try{const data=await api("/api/v1/jobs/"+activeJobId+"/source-url");if(!data.source_url)throw new Error("The source preview URL was not returned.");video.src=data.source_url;video.dataset.jobId=activeJobId;video.load();}catch(e){message("render-status","Source preview: "+e.message,"error");}}
 async function openProjectById(id){
   if(!/^[a-f0-9]{32}$/.test(id))throw new Error("Enter a valid 32-character project ID.");
   activeJobId=id;
+  loadedProjectRevision=0;
   localStorage.setItem("video-editor-last-job",id);
   $("open-project-id").value=id;
   $("job-card").classList.remove("hidden");
@@ -410,6 +438,7 @@ async function loadProject(showRaw=false){
   if(!activeJobId)return;
   try{
     const data=await api("/api/v1/jobs/"+activeJobId+"/project");
+    loadedProjectRevision=Number(data.revision);
     if(window.renderStudioProject)window.renderStudioProject(data.project,data.revision);
     if($("rename-project-name"))$("rename-project-name").value=data.project.name||"";
     if($("open-project-id"))$("open-project-id").value=activeJobId;
