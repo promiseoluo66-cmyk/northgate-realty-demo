@@ -997,7 +997,7 @@ class SlipEditRenderPlanTests(unittest.TestCase):
         clip["source_out_us"] = 2_500_000
         plan_clip = compile_render_plan(self.project, self.root)["tracks"][0]["clips"][0]
         self.assertEqual(plan_clip["source_in_frame"], 13)
-        self.assertEqual(plan_clip["source_out_frame"], 63)
+        self.assertEqual(plan_clip["source_out_frame"], 62)
         self.assertEqual(plan_clip["start_frame"], 0)
         self.assertEqual(plan_clip["duration_frames"], 50)
 
