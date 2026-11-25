@@ -377,10 +377,16 @@ test("saved project list includes recoverable checkpoints from in-progress jobs"
       prepare(sql) {
         query = sql;
         return {
-          all: async () => ({ results: [{
-            id: "e".repeat(32), status: "running", updated_at: "2026-11-25T10:00:00.000Z",
-            project_revision: 4, project_json: JSON.stringify(project)
-          }] })
+          all: async () => ({ results: [
+            {
+              id: "e".repeat(32), status: "running", updated_at: "2026-11-25T10:00:00.000Z",
+              project_revision: 4, project_json: JSON.stringify(project)
+            },
+            {
+              id: "d".repeat(32), status: "failed", updated_at: "2026-11-25T11:00:00.000Z",
+              project_revision: 5, project_json: JSON.stringify({ ...project, revision: 5 })
+            }
+          ] })
         };
       }
     }
@@ -393,10 +399,12 @@ test("saved project list includes recoverable checkpoints from in-progress jobs"
   assert.equal(response.status, 200);
   assert.doesNotMatch(query, /status='completed'/);
   const payload = await response.json();
-  assert.equal(payload.projects.length, 1);
+  assert.equal(payload.projects.length, 2);
   assert.equal(payload.projects[0].status, "running");
   assert.equal(payload.projects[0].revision, 4);
   assert.equal(payload.projects[0].clip_count, 1);
+  assert.equal(payload.projects[1].status, "failed");
+  assert.equal(payload.projects[1].revision, 5);
 });
 
 
