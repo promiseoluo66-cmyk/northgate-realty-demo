@@ -398,3 +398,95 @@ test("saved project list includes recoverable checkpoints from in-progress jobs"
   assert.equal(payload.projects[0].revision, 4);
   assert.equal(payload.projects[0].clip_count, 1);
 });
+
+
+test("failed runner callback persists its latest project checkpoint and history", async () => {
+  const project = {
+    schema_version: 1, id: "project-recovery", name: "Recovered edit", revision: 7,
+    timeline_timebase: "microseconds",
+    video_profile: { width: 720, height: 1280, frame_rate: { numerator: 30, denominator: 1 } },
+    assets: [], tracks: [], transitions: []
+  };
+  let values = null;
+  const env = {
+    CALLBACK_SECRET: "test-callback-secret",
+    DB: {
+      prepare(sql) {
+        assert.match(sql, /UPDATE jobs SET status=/);
+        return { bind(...args) {
+          values = args;
+          return { run: async () => ({ meta: { changes: 1 } }) };
+        }};
+      }
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://studio.test/api/internal/jobs/" + "9".repeat(32), {
+      method: "POST",
+      headers: { "X-Callback-Secret": "test-callback-secret", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "failed", message: "Render failed after edit",
+        project_json: project, project_revision: 7,
+        history_state: { undo: [], redo: [] }, ai_status: "error", pending_plan: null
+      })
+    }), env
+  );
+  assert.equal(response.status, 200);
+  assert.equal(values[0], "failed");
+  assert.equal(JSON.parse(values[6]).revision, 7);
+  assert.equal(values[7], 7);
+  assert.deepEqual(JSON.parse(values[9]), { undo: [], redo: [] });
+  assert.equal(values[10], 1);
+  assert.equal(values[11], null);
+});
+
+test("manual Studio edits can resume from a failed project's saved checkpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  let updateSql = "";
+  let updateValues = null;
+  const env = {
+    APP_API_TOKEN: "test-app-token", GITHUB_TOKEN: "github-test-token",
+    GITHUB_OWNER: "owner", GITHUB_REPO: "repo", GITHUB_WORKFLOW: "render.yml",
+    GITHUB_REF: "video-editor-lab",
+    DB: {
+      prepare(sql) {
+        if (sql.startsWith("SELECT status,project_json,project_revision,pending_plan_json")) {
+          return { bind: () => ({ first: async () => ({
+            status: "failed", project_json: JSON.stringify({ revision: 3 }),
+            project_revision: 3, pending_plan_json: null
+          }) }) };
+        }
+        updateSql = sql;
+        return { bind(...args) {
+          updateValues = args;
+          return { run: async () => ({ meta: { changes: 1 } }) };
+        }};
+      }
+    }
+  };
+  globalThis.fetch = async (url, options) => {
+    assert.match(String(url), /api\.github\.com\/repos\/owner\/repo\/actions\/workflows\/render\.yml\/dispatches/);
+    assert.equal(options.method, "POST");
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://studio.test/api/v1/jobs/" + "8".repeat(32) + "/manual-edit", {
+        method: "POST",
+        headers: { Authorization: "Bearer test-app-token", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: 3,
+          tool_calls: [{ name: "clip.set_speed", arguments: { clip_id: "main-clip", playback_rate: 1.5 } }]
+        })
+      }), env
+    );
+    assert.equal(response.status, 202);
+    assert.match(updateSql, /status IN \('completed','failed'\)/);
+    assert.equal(updateValues[0], JSON.stringify({
+      mode: "manual", summary: "Apply direct Studio editing operations.",
+      tool_calls: [{ name: "clip.set_speed", arguments: { clip_id: "main-clip", playback_rate: 1.5 } }]
+    }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
