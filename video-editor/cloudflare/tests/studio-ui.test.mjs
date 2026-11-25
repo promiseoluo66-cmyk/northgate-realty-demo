@@ -136,7 +136,7 @@ test("Manual source crop is wired to the registered crop operation", () => {
   assert.match(studioScript, /studio-apply-crop/);
   assert.match(studioScript, /studio-reset-crop/);
   assert.match(studioScript, /clip-crop-width/);
-  assert.match(studioScript, /Clear automatic framing before applying a manual crop/);
+  assert.match(html, /Applying a crop clears automatic Fit\/Fill\/Stretch framing first/);
   assert.match(html, /Manual crop uses percentages of the original source frame/);
 });
 
