@@ -124,7 +124,7 @@ test("Saved-project manager lists, reopens and revision-safely renames projects"
 });
 
 test("Media bin supports persisted folders, searchable tags and folder filtering", () => {
-  assert.match(studioScript, /media\\.organize_asset/);
+  assert.match(studioScript, /media\.organize_asset/);
   assert.match(studioScript, /asset\.folder/);
   assert.match(studioScript, /asset\.tags/);
   assert.match(studioScript, /media-bin-folder-filter/);
@@ -132,7 +132,7 @@ test("Media bin supports persisted folders, searchable tags and folder filtering
 });
 
 test("Manual source crop is wired to the registered crop operation", () => {
-  assert.match(studioScript, /clip\\.set_crop/);
+  assert.match(studioScript, /clip\.set_crop/);
   assert.match(studioScript, /studio-apply-crop/);
   assert.match(studioScript, /studio-reset-crop/);
   assert.match(studioScript, /clip-crop-width/);
@@ -163,14 +163,14 @@ test("Track visibility is independent from mute and connected to render state", 
 
 test("Media-bin source replacement is guarded and uses the registered operation", () => {
   assert.match(studioScript, /Replace selected clip source/);
-  assert.match(studioScript, /timeline\\.replace_clip_media/);
+  assert.match(studioScript, /timeline\.replace_clip_media/);
   assert.match(studioScript, /selected\.clip\.kind !== asset\.media_type/);
   assert.match(studioScript, /selected\.track\.locked/);
   assert.match(studioScript, /preserving its timeline position/);
 });
 
 test("Studio slip control sends signed source-window offsets", () => {
-  assert.match(studioScript, /timeline\\.slip_clip/);
+  assert.match(studioScript, /timeline\.slip_clip/);
   assert.match(studioScript, /clip-slip-offset/);
   assert.match(studioScript, /delta_us:deltaUs/);
   assert.match(studioScript, /non-zero slip offset/);
@@ -178,7 +178,7 @@ test("Studio slip control sends signed source-window offsets", () => {
 
 test("Media-bin ripple insert is wired to the current playhead and selected compatible track", () => {
   assert.match(studioScript, /Insert & ripple/);
-  assert.match(studioScript, /timeline\\.ripple_insert_clip/);
+  assert.match(studioScript, /timeline\.ripple_insert_clip/);
   assert.match(studioScript, /start_us:Math\.max\(0, Math\.round\(playheadUs\)\)/);
   assert.match(studioScript, /targetTrack\.id/);
   assert.match(studioScript, /renderMediaBin\(\);/);
