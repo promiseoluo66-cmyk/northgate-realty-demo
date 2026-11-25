@@ -153,7 +153,7 @@ def test_manual_studio_plan_is_validated_without_requesting_ai(tmp_path):
     plan, analysis = _make_plan("Apply the selected speed control.", executor, manual,
                                 tmp_path / "input-video")
     assert [item["name"] for item in plan["tool_calls"]] == [
-        "clip.set_speed", "render.export"
+        "clip.set_speed"
     ]
     assert analysis["analysis_provider"] == "not_run_manual_registered_operation"
     assert analysis["analysis_status"] == "not_run"
