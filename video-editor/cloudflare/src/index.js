@@ -441,8 +441,8 @@ async function renameProject(request, env, id) {
     "SELECT status,project_json,project_revision,history_state_json,pending_plan_json FROM jobs WHERE id=?"
   ).bind(id).first();
   if (!row) return json({ error: "Project not found." }, 404);
-  if (row.status !== "completed" || !row.project_json) {
-    return json({ error: "Only a completed saved project can be renamed." }, 409);
+  if (!["completed", "failed"].includes(row.status) || !row.project_json) {
+    return json({ error: "This project has no recoverable saved checkpoint to rename." }, 409);
   }
   if (row.pending_plan_json) return json({ error: "Resolve the pending edit before renaming this project." }, 409);
   const revision = Number(row.project_revision || 1);
@@ -476,7 +476,7 @@ async function renameProject(request, env, id) {
   }
   const now = new Date().toISOString();
   const update = await env.DB.prepare(
-    "UPDATE jobs SET project_json=?,project_revision=?,history_state_json=?,updated_at=? WHERE id=? AND status='completed' AND project_revision=? AND pending_plan_json IS NULL"
+    "UPDATE jobs SET project_json=?,project_revision=?,history_state_json=?,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
   ).bind(projectJson, project.revision, historyJson, now, id, revision).run();
   if (!update.meta?.changes) {
     return json({ error: "The project changed while renaming. Reload and try again." }, 409);
@@ -533,8 +533,8 @@ async function importMediaAsset(request, env, id) {
     "SELECT status,release_id,project_json,project_revision,history_state_json,pending_plan_json FROM jobs WHERE id=?"
   ).bind(id).first();
   if (!row) return json({ error: "Job not found." }, 404);
-  if (row.status !== "completed" || !row.project_json) {
-    return json({ error: "Wait for the saved project render to finish before importing media." }, 409);
+  if (!["completed", "failed"].includes(row.status) || !row.project_json) {
+    return json({ error: "Wait for the current edit to stop before importing media into its saved checkpoint." }, 409);
   }
   if (row.pending_plan_json) return json({ error: "Resolve the pending edit before importing media." }, 409);
   let project, history;
@@ -589,7 +589,7 @@ async function importMediaAsset(request, env, id) {
     project.assets.push(asset);
     project.revision = revision + 1;
     const update = await env.DB.prepare(
-      "UPDATE jobs SET project_json=?,project_revision=?,history_state_json=?,updated_at=? WHERE id=? AND status='completed' AND project_revision=? AND pending_plan_json IS NULL"
+      "UPDATE jobs SET project_json=?,project_revision=?,history_state_json=?,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
     ).bind(
       JSON.stringify(project), project.revision, JSON.stringify(history),
       new Date().toISOString(), id, revision
@@ -680,8 +680,8 @@ async function queueManualEdit(request, env, id) {
     "SELECT status,project_json,project_revision,pending_plan_json FROM jobs WHERE id=?"
   ).bind(id).first();
   if (!row) return json({ error: "Job not found." }, 404);
-  if (row.status !== "completed" || !row.project_json) {
-    return json({ error: "Wait for the current render to finish and load the saved project before editing." }, 409);
+  if (!["completed", "failed"].includes(row.status) || !row.project_json) {
+    return json({ error: "Wait for the current edit to stop and load a saved project checkpoint before editing." }, 409);
   }
   if (row.pending_plan_json) return json({ error: "Resolve the pending edit before starting a manual operation." }, 409);
   if (Number(row.project_revision) !== expectedRevision) {
@@ -719,7 +719,7 @@ async function requestAiEdit(request, env, id) {
   const row = await env.DB.prepare("SELECT status,project_json,project_revision,ai_status,pending_plan_json FROM jobs WHERE id=?").bind(id).first();
   if (!row) return json({ error: "Job not found." }, 404);
   if (!row.project_json) return json({ error: "The project is not ready for another AI edit." }, 409);
-  if (row.status !== "completed") return json({ error: "Wait for the current render to finish before starting another edit." }, 409);
+  if (!["completed", "failed"].includes(row.status)) return json({ error: "Wait for the current edit to stop before starting another edit." }, 409);
   if (row.ai_status === "awaiting_confirmation" || row.pending_plan_json) return json({ error: "Approve or reject the pending AI plan before requesting another edit." }, 409);
   if (Number(row.project_revision) !== expectedRevision) return json({ error: "Project revision conflict. Reload the project before editing.", current_revision: row.project_revision }, 409);
   await env.DB.prepare("UPDATE jobs SET status='queued',message=?,instruction=?,ai_status='queued',pending_plan_json=NULL,confirmed_tools_json='[]',updated_at=? WHERE id=?")
