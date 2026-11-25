@@ -346,6 +346,16 @@ def main()->int:
         executor=ProjectToolExecutor(project,asset_root=output_dir,output_dir=output_dir,
                                      render_timeout_seconds=1200,
                                      history_state=job.get("history_state"))
+
+        # Save the initialized/base project before AI planning or any render work.
+        # This gives recovery a valid revision even if planning or rendering stops early.
+        callback(worker_url,callback_secret,job_id,"running",
+            "Project initialized and autosaved as revision "+str(executor.revision)+".",
+            project_json=executor.get_project(),
+            project_revision=executor.revision,
+            history_state=executor.get_history_state(),
+            ai_status="planning",pending_plan=None)
+
         plan,video_analysis=_make_plan(
             str(job.get("instruction") or ""),executor,pending_plan,source
         )
