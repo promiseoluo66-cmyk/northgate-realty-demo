@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10172b">
+<title>Studio — Independent Video Editor</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--line:#293650;--muted:#9eabc2;--ink:#f4f7ff;--accent:#98aaff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#1c2850 0,#0b1020 48%);color:var(--ink);font:16px/1.5 system-ui,-apple-system,sans-serif;min-height:100vh}
+main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:flex;align-items:center;gap:12px;margin-bottom:27px}.logo{width:43px;height:43px;border-radius:14px;background:linear-gradient(135deg,#91a4ff,#6e62d9);display:grid;place-items:center;font-weight:900;color:#10162a}.small{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#bdc9ff}.brand h1{font-size:20px;margin:0}.hero h2{font-size:clamp(28px,7vw,39px);line-height:1.1;margin:0 0 10px}.hero p,.hint{color:var(--muted)}.hero p{margin:0}.panel{margin-top:22px;padding:19px;border:1px solid var(--line);border-radius:20px;background:rgba(20,28,48,.94);box-shadow:0 18px 55px #0004}.field{margin-bottom:18px}.field label{display:block;font-weight:700;margin-bottom:8px}input,textarea,select{width:100%;font:inherit;color:var(--ink);background:#0d1528;border:1px solid #3b4b6b;border-radius:12px;padding:12px}input[type=file]{padding:12px}textarea{min-height:100px;resize:vertical}select{min-height:48px}.hint{font-size:13px;margin-top:6px}.upload{display:block;padding:21px 12px;text-align:center;border:1px dashed #6478a6;border-radius:14px;background:#19243b;cursor:pointer}.upload input{display:none}.btn{width:100%;border:0;border-radius:13px;padding:14px;background:linear-gradient(90deg,#8298ff,#b1a0ff);font:700 16px system-ui;color:#10172b;cursor:pointer}.btn.secondary{background:#24314d;color:#e2e9ff;border:1px solid #43557a}.btn:disabled{opacity:.55;cursor:wait}.status{font-size:14px;color:#c8d3ee;margin-top:12px;overflow-wrap:anywhere;white-space:pre-wrap}.error{color:#ff9baa}.success{color:#9be5bd}.divider{height:1px;background:var(--line);margin:19px 0}.file{font-size:13px;color:#b9c5ff;overflow-wrap:anywhere}.tag{display:inline-block;border:1px solid #425277;border-radius:99px;padding:3px 9px;color:#c4ceff;font-size:12px;margin-top:12px}.row{display:flex;gap:10px;align-items:center}.row>*{flex:1}.link{display:inline-block;color:#c3ceff;font-weight:700;margin-top:8px}.job-card{border:1px solid #3d4d70;background:#0e172b;border-radius:13px;padding:14px;margin-top:14px}.hidden{display:none!important}.foot{font-size:12px;color:#8491a9;text-align:center;margin-top:18px}
+
+.studio-editor{margin:16px 0 20px;padding:14px;border:1px solid #354566;border-radius:16px;background:#0c1427}
+.studio-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.studio-head strong{display:block}.studio-head .hint{margin:2px 0 0}
+.studio-refresh{width:auto;padding:9px 12px;font-size:13px;white-space:nowrap}
+.studio-tabs{display:flex;gap:8px;margin:12px 0}
+.studio-tab{flex:1;border:1px solid #425277;border-radius:10px;padding:10px;background:#18243b;color:#dce5ff;font:600 14px system-ui}
+.studio-tab[aria-pressed="true"]{background:#34456d;border-color:#8fa6ff;color:#fff}
+.studio-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0;color:#aebcda;font-size:13px}
+.studio-controls label{display:flex;align-items:center;gap:8px;min-width:0}
+.studio-controls input{width:112px;padding:0;accent-color:#a7b6ff}
+.timeline-scroll{overflow:auto;max-width:100%;border:1px solid #33415f;border-radius:12px;background:#0a1120;overscroll-behavior-x:contain;touch-action:pan-x pan-y}
+.timeline-canvas{padding:8px 8px 12px;min-width:792px}
+.timeline-ruler,.timeline-track-row{display:grid;grid-template-columns:104px var(--lane-width);gap:0 8px}
+.timeline-label-cell{position:sticky;left:0;z-index:3;display:flex;flex-direction:column;justify-content:center;min-width:0;padding:5px 8px;background:#111b30;border-right:1px solid #34425f;color:#e5ebff;font-size:11px;overflow-wrap:anywhere}
+.timeline-ruler .timeline-label-cell{color:#8594b6;font-weight:800;letter-spacing:.08em}
+.timeline-ruler-lane{position:relative;height:31px;border-bottom:1px solid #405071;color:#aab8d7}
+.timeline-tick{position:absolute;top:5px;transform:translateX(-2px);font-size:10px;white-space:nowrap}
+.timeline-track-row{margin-top:5px}
+.track-label{height:62px;border-radius:7px 0 0 7px}
+.track-label strong{font-size:11px;line-height:1.2}
+.track-type{margin-top:4px;font-size:9px;color:#8192b5;letter-spacing:.09em}
+.timeline-lane{position:relative;height:62px;border-top:1px solid #25334d;border-bottom:1px solid #25334d;background-color:#101a2d;background-image:linear-gradient(to right,#25344d 1px,transparent 1px);background-size:46px 100%;overflow:hidden}
+.timeline-clip{position:absolute;top:8px;height:44px;min-width:38px;overflow:hidden;border:1px solid #8297d2;border-radius:8px;padding:4px 7px;background:#354d83;color:#fff;text-align:left;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1.4 system-ui;cursor:pointer}
+.timeline-clip.kind-audio{background:#315a53;border-color:#72b5a1}
+.timeline-clip.kind-image{background:#655184;border-color:#b49adf}
+.timeline-clip.kind-text{background:#795a32;border-color:#d7ad73}
+.timeline-clip.selected{outline:2px solid #f5d58a;outline-offset:1px;z-index:2;box-shadow:0 0 0 2px #0a1120}
+.timeline-clip{touch-action:none;user-select:none}
+.clip-handle{position:absolute;top:0;bottom:0;width:8px;background:#e5edff88;z-index:4;touch-action:none}
+.clip-handle-left{left:0;cursor:ew-resize;border-radius:7px 0 0 7px}
+.clip-handle-right{right:0;cursor:ew-resize;border-radius:0 7px 7px 0}
+.timeline-playhead{position:absolute;top:0;bottom:0;width:2px;left:0;background:#ffcf70;z-index:5;pointer-events:none;box-shadow:0 0 4px #000}
+.timeline-lane .timeline-playhead{background:#ffcf70}
+
+.lane-empty{display:block;padding:18px 10px;color:#71809d;font-size:11px}
+#studio-timeline-empty{margin:8px 0;color:#a5b4d2;font-size:12px}
+.inspector{margin-top:14px;padding:12px;border:1px solid #2e3d5b;border-radius:12px;background:#111a2d}
+.inspector h3{margin:0 0 8px;font-size:15px}
+.inspector-grid{display:grid;grid-template-columns:104px minmax(0,1fr);gap:5px 10px;margin:0;font-size:12px}
+.inspector-grid dt{color:#93a3c4}.inspector-grid dd{margin:0;color:#edf1ff;overflow-wrap:anywhere}
+.media-bin{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}
+.media-bin-item{padding:12px;border:1px solid #344562;border-radius:11px;background:#111c31;min-width:0}
+.media-bin-item strong{display:block;overflow-wrap:anywhere;font-size:13px}
+.media-bin-item p{margin:5px 0 0;font-size:11px}
+.media-organize-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+.media-organize-controls label{font-size:10px;color:#9eafd0}
+.media-organize-controls input{font-size:12px;padding:7px;margin-top:3px}
+.media-organize-controls button{grid-column:1/-1;width:100%;padding:8px;font-size:11px}
+
+.studio-note{margin:12px 0 0;color:#91a1c1;font-size:12px}
+.preview-panel{margin:12px 0;padding:10px;border:1px solid #344562;border-radius:12px;background:#101a2d}
+.preview-stage{position:relative;width:100%;max-width:560px;margin:0 auto;background:#050912;aspect-ratio:9/16;max-height:65vh;overflow:hidden;border-radius:9px}
+.preview-stage video{display:block;width:100%;height:100%;max-height:65vh;background:#050912;object-fit:contain;border-radius:9px}
+.safe-guides{position:absolute;inset:8% 7%;border:1px solid #fff9;pointer-events:none;z-index:3}
+.safe-guides span{position:absolute;inset:12%;border:1px dashed #fff9}
+.safe-guides i,.safe-guides b{position:absolute;display:block;background:#fff7}
+.safe-guides i{top:50%;left:0;right:0;height:1px}
+.safe-guides b{left:50%;top:0;bottom:0;width:1px}
+.guide-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:#aebcda;margin-top:8px}
+.guide-toggle input{width:auto;accent-color:#a7b6ff}
+.preview-panel video{display:block;width:100%;max-height:320px;background:#050912;border-radius:9px}
+.preview-caption{margin:7px 0 0;color:#91a1c1;font-size:11px}
+.seek-panel{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center;margin:10px 0;padding:10px;border:1px solid #344562;border-radius:10px;background:#101a2d;font-size:12px}
+.seek-panel input{padding:0;accent-color:#a7b6ff}
+.edit-panel{margin-top:14px;padding:12px;border:1px solid #344562;border-radius:12px;background:#101a2d}
+.edit-panel h3{font-size:14px;margin:0 0 10px}
+.saved-project-list{display:grid;grid-template-columns:1fr;gap:7px;margin-top:9px}
+.saved-project-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;width:100%;gap:4px;padding:10px;border:1px solid #344562;border-radius:9px;background:#121d31;color:#e8eeff}
+.saved-project-item strong{font-size:12px}
+.saved-project-item span{font-size:11px;color:#9baccc}
+
+.edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.edit-grid label{display:block;color:#aebcda;font-size:11px;min-width:0}
+.edit-grid label.check-label{display:flex;align-items:center;gap:8px;min-height:36px}
+.edit-grid label.check-label input{width:auto;margin:0;accent-color:#a7b6ff}
+
+.edit-grid input,.edit-grid select{padding:9px;font-size:13px;margin-top:4px}
+.edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.edit-actions .btn{width:auto;flex:1 1 115px;padding:10px;font-size:12px}
+.edit-section{padding:10px 0;border-top:1px solid #2b3956;margin-top:10px}
+.edit-section:first-of-type{border-top:0;margin-top:0}
+.graph-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center;margin-top:12px}
+.graph-tools label{display:block;color:#aebcda;font-size:11px}
+.graph-tools input{width:100%;padding:0;margin-top:7px}
+.graph-tools .btn{width:100%;padding:9px;font-size:11px}
+.keyframe-graph{margin-top:10px;border:1px solid #354566;border-radius:10px;background:#090f1d;overflow:hidden;touch-action:pan-y}
+.keyframe-graph svg{display:block;width:100%;height:auto;min-height:170px;touch-action:none}
+.keyframe-graph .graph-grid{stroke:#283652;stroke-width:1}
+.keyframe-graph .graph-line{fill:none;stroke:#a8bbff;stroke-width:2.5}
+.keyframe-graph .graph-point{fill:#ffd178;stroke:#fff1d0;stroke-width:2;cursor:ns-resize;touch-action:none}
+.keyframe-graph .graph-label{fill:#a8b7d5;font:10px system-ui}
+.keyframe-graph .graph-hint{padding:10px;color:#93a3c4;font-size:11px;margin:0}
+
+@media(max-width:480px){.edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.seek-panel{grid-template-columns:1fr}.seek-panel input{width:100%}}
+
+@media(max-width:480px){.studio-editor{padding:10px;margin-left:-4px;margin-right:-4px}.studio-head{align-items:flex-start}.studio-controls{align-items:flex-start;flex-direction:column}.studio-controls input{width:150px}.timeline-canvas{min-width:792px}.studio-refresh{padding:8px 10px}.inspector-grid{grid-template-columns:90px minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<main>
+<header class="brand"><div class="logo">S</div><div><div class="small">Independent video editor</div><h1>Studio</h1></div></header>
+<section class="hero"><h2>Make your footage work harder.</h2><p>Upload a clip, choose a reusable skill, describe your edit, and let the cloud render it. After submission, you can close the page.</p><span class="tag">Private prototype · Cloud rendering</span></section>
+<section class="panel">
+<div class="field">
+<label for="api-token">Secure app/API token</label>
+<input id="api-token" type="password" autocomplete="off" placeholder="Enter your APP_API_TOKEN">
+<div class="hint">This token is configured in your Cloudflare Worker settings. It stays in this page's memory and is not saved.</div>
+</div>
+<button class="btn secondary" id="connect">Connect to editor</button>
+<div class="status" id="connection-status" role="status"></div>
+<div id="workspace" class="hidden">
+<div class="divider"></div>
+<form id="render-form">
+<div class="field"><label>1. Choose a video</label><label class="upload"><strong>＋ Tap to select a video</strong><div class="hint">MP4, MOV, M4V, WEBM or MKV · maximum 50 MB</div><input id="video-file" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mkv" required onchange="showFilename(this)"></label><div class="file" id="filename">No video selected</div></div>
+<div class="field"><label for="skill">2. Editing skill</label><select id="skill"><option value="clean-shorts">Clean Shorts</option></select><div class="hint">Upload a JSON skill or create a reusable skill below.</div></div>
+<div class="field"><label for="instruction">3. Describe your edit</label><textarea id="instruction" maxlength="1500">Make this a clean vertical YouTube Short.</textarea><div class="hint">Example: “Trim from 3 to 18 seconds, use 1.5x speed and make it vertical.”</div></div>
+<button class="btn" id="render-button" type="submit">Submit cloud render</button>
+</form>
+<div class="status" id="render-status" role="status"></div>
+<div class="job-card hidden" id="job-card"><strong>Current render job</strong><div class="status" id="job-details"></div><button class="btn secondary" id="refresh-job" type="button">Refresh status</button><button class="btn secondary hidden" id="download-link" type="button">Download edited MP4</button><a class="link hidden" id="run-link" target="_blank" rel="noopener">Open GitHub render log</a>
+<div class="job-card hidden" id="approval-panel"><strong>AI approval required</strong><div class="status" id="approval-details"></div><button class="btn" id="approve-edit" type="button">Approve these changes</button></div>
+<div class="job-card hidden" id="project-tools"><strong>Continue editing this project with AI</strong><div class="hint">Ask the AI to edit the saved timeline. Destructive changes pause for approval.</div>
+<div id="studio-editor" class="studio-editor hidden">
+<div class="studio-head">
+  <div><strong>Project workspace</strong><p id="studio-project-meta" class="hint">Load the saved project to inspect its timeline.</p></div>
+  <button class="btn secondary studio-refresh" id="refresh-studio-project" type="button">Refresh</button>
+</div>
+<div class="preview-panel">
+  <div id="studio-preview-stage" class="preview-stage">
+    <video id="studio-preview" controls playsinline preload="metadata" aria-label="Source footage preview"></video>
+    <div id="studio-safe-guides" class="safe-guides hidden" aria-hidden="true"><span></span><i></i><b></b></div>
+  </div>
+  <label class="guide-toggle"><input id="studio-safe-guides-toggle" type="checkbox"> Show canvas safe-area guides</label>
+  <p class="preview-caption">Source-footage preview. The final edited composition is produced by the cloud render after you apply operations.</p>
+</div>
+<div class="studio-tabs" role="tablist" aria-label="Project panels">
+  <button class="studio-tab" id="studio-tab-timeline" type="button" role="tab" aria-controls="studio-timeline-view" aria-selected="true" aria-pressed="true">Timeline</button>
+  <button class="studio-tab" id="studio-tab-media" type="button" role="tab" aria-controls="studio-media-view" aria-selected="false" aria-pressed="false">Media bin</button>
+</div>
+<section id="studio-timeline-view" role="tabpanel" aria-labelledby="studio-tab-timeline">
+  <div class="studio-controls">
+    <label for="timeline-zoom">Timeline zoom <input id="timeline-zoom" type="range" min="50" max="200" step="10" value="100"></label>
+    <span id="studio-duration">Timeline length —</span>
+  </div>
+  <div id="studio-timeline-empty">Waiting for project data…</div>
+  <div class="timeline-scroll" aria-label="Scrollable multitrack timeline">
+    <div class="timeline-canvas" id="timeline-canvas">
+      <div class="timeline-ruler" id="timeline-ruler"></div>
+      <div id="timeline-tracks"></div>
+    </div>
+  </div>
+  <div class="seek-panel">
+    <label for="timeline-seek">Playhead</label>
+    <input id="timeline-seek" type="range" min="0" max="1000000" step="1000" value="0">
+    <output id="playhead-time">00:00</output>
+  </div>
+</section>
+<section id="studio-media-view" class="hidden" role="tabpanel" aria-labelledby="studio-tab-media">
+  <div class="edit-panel">
+    <h3>Import media into this project</h3>
+    <p class="hint">Choose multiple video, audio or image files. Each file is limited to 50 MB and the project media library to 200 MB total. Imports are stored privately with this project.</p>
+    <input id="studio-media-files" type="file" multiple accept="video/mp4,video/quicktime,video/webm,video/x-matroska,audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/ogg,audio/flac,image/jpeg,image/png,image/webp,image/gif">
+    <div class="edit-actions"><button class="btn secondary" id="studio-import-media" type="button">Import selected media</button></div>
+    <p id="studio-import-status" class="hint" aria-live="polite">No files selected.</p>
+  </div>
+  <label for="media-bin-search" class="hint">Search project media<input id="media-bin-search" type="search" placeholder="Search filename, type, folder or tag"></label>
+  <label for="media-bin-folder-filter" class="hint">Filter folder<select id="media-bin-folder-filter"><option value="">All folders</option></select></label>
+  <div id="studio-media-bin" class="media-bin"></div>
+</section>
+<section class="inspector" aria-live="polite">
+  <h3>Clip inspector</h3>
+  <div id="studio-clip-inspector"><p class="hint">Select a clip on the timeline.</p></div>
+  <button class="btn secondary studio-refresh" id="studio-clear-selection" type="button">Clear selection</button>
+</section>
+
+<section class="edit-panel" aria-label="Direct clip editing">
+  <h3>Direct editing controls</h3>
+  <div class="hint">These controls call the registered editor operations. Each accepted change is saved as a new project revision and rendered by the cloud editor.</div>
+  <div class="edit-section">
+    <h3>Clip timing</h3>
+    <div class="edit-grid">
+      <label for="clip-start-seconds">Timeline start (seconds)<input id="clip-start-seconds" type="number" min="0" step="0.01"></label>
+      <label for="clip-speed">Playback speed<input id="clip-speed" type="number" min="0.05" max="16" step="0.05"></label>
+      <label for="clip-source-in">Source in (seconds)<input id="clip-source-in" type="number" min="0" step="0.01"></label>
+      <label for="clip-source-out">Source out (seconds)<input id="clip-source-out" type="number" min="0.01" step="0.01"></label>
+      <label for="clip-slip-offset">Slip source offset (seconds, + or −)<input id="clip-slip-offset" type="number" step="0.01" value="0.5"></label>
+    </div>
+    <div class="edit-actions">
+      <button class="btn secondary" id="studio-move-clip" type="button">Move clip</button>
+      <button class="btn secondary" id="studio-trim-clip" type="button">Apply trim</button>
+      <button class="btn secondary" id="studio-slip-clip" type="button">Slip source window</button>
+      <button class="btn secondary" id="studio-apply-speed" type="button">Apply speed</button>
+      <button class="btn secondary" id="studio-split-clip" type="button">Split at playhead</button>
+      <button class="btn secondary" id="studio-duplicate-clip" type="button">Duplicate</button>
+      <button class="btn secondary" id="studio-delete-clip" type="button">Delete clip</button>
+    </div>
+  </div>
+  <div class="edit-section">
+    <h3>Frame and transform</h3>
+    <p class="hint">Manual crop uses percentages of the original source frame. Applying a crop clears automatic Fit/Fill/Stretch framing first. The player above remains a source preview; the crop is applied by the final cloud render.</p>
+    <div class="edit-grid">
+      <label for="clip-framing">Framing mode<select id="clip-framing"><option value="none">Default</option><option value="fit">Fit</option><option value="fill">Fill / crop overflow</option><option value="stretch">Stretch</option></select></label>
+      <label for="clip-horizontal">Horizontal alignment<select id="clip-horizontal"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label>
+      <label for="clip-vertical">Vertical alignment<select id="clip-vertical"><option value="middle">Middle</option><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
+      <label for="clip-crop-x">Crop left (%)<input id="clip-crop-x" type="number" min="0" max="99.9" step="0.1"></label>
+      <label for="clip-crop-y">Crop top (%)<input id="clip-crop-y" type="number" min="0" max="99.9" step="0.1"></label>
+      <label for="clip-crop-width">Crop width (%)<input id="clip-crop-width" type="number" min="0.1" max="100" step="0.1"></label>
+      <label for="clip-crop-height">Crop height (%)<input id="clip-crop-height" type="number" min="0.1" max="100" step="0.1"></label>
+      <label for="clip-position-x">Position X<input id="clip-position-x" type="number" step="1"></label>
+      <label for="clip-position-y">Position Y<input id="clip-position-y" type="number" step="1"></label>
+      <label for="clip-scale-x">Scale X<input id="clip-scale-x" type="number" min="0.001" max="100" step="0.05"></label>
+      <label for="clip-scale-y">Scale Y<input id="clip-scale-y" type="number" min="0.001" max="100" step="0.05"></label>
+      <label for="clip-rotation">Rotation (degrees)<input id="clip-rotation" type="number" min="-360000" max="360000" step="1"></label>
+      <label for="clip-opacity">Opacity (0–1)<input id="clip-opacity" type="number" min="0" max="1" step="0.05"></label>
+      <label for="clip-anchor-x">Pivot X (%)<input id="clip-anchor-x" type="number" min="0" max="100" step="0.1"></label>
+      <label for="clip-anchor-y">Pivot Y (%)<input id="clip-anchor-y" type="number" min="0" max="100" step="0.1"></label>
+      <label class="check-label" for="clip-flip-horizontal"><input id="clip-flip-horizontal" type="checkbox"> Flip horizontally</label>
+      <label class="check-label" for="clip-flip-vertical"><input id="clip-flip-vertical" type="checkbox"> Flip vertically</label>
+    </div>
+    <div class="edit-actions">
+      <button class="btn secondary" id="studio-apply-framing" type="button">Apply framing</button>
+      <button class="btn secondary" id="studio-apply-crop" type="button">Apply manual crop</button>
+      <button class="btn secondary" id="studio-reset-crop" type="button">Reset manual crop</button>
+      <button class="btn secondary" id="studio-apply-transform" type="button">Apply transform</button>
+    </div>
+  </div>
+  <div class="edit-section">
+    <h3>Animation keyframe</h3>
+    <div class="edit-grid">
+      <label for="keyframe-property">Property<select id="keyframe-property">
+        <option value="position_x">Position X</option><option value="position_y">Position Y</option>
+        <option value="scale_x">Scale X</option><option value="scale_y">Scale Y</option>
+        <option value="rotation_deg">Rotation</option><option value="opacity">Opacity</option>
+        <option value="playback_rate">Playback speed</option><option value="volume_db">Audio volume (dB)</option>
+      </select></label>
+      <label for="keyframe-value">Value<input id="keyframe-value" type="number" step="0.01"></label>
+      <label for="keyframe-interpolation">Interpolation<select id="keyframe-interpolation"><option value="linear">Linear</option><option value="hold">Hold</option><option value="ease_in">Ease in</option><option value="ease_out">Ease out</option><option value="ease_in_out">Ease in/out</option></select></label>
+      <label for="keyframe-time">Local clip time (seconds)<input id="keyframe-time" type="number" min="0" step="0.01"></label>
+    </div>
+    <div class="edit-actions">
+      <button class="btn secondary" id="studio-add-keyframe" type="button">Add / replace keyframe</button>
+      <button class="btn secondary" id="studio-remove-keyframe" type="button">Remove point at keyframe time</button>
+      <button class="btn secondary" id="studio-reset-keyframes" type="button">Reset selected property</button>
+      <button class="btn secondary" id="studio-reset-all-keyframes" type="button">Clear all keyframes</button>
+      <button class="btn secondary" id="studio-copy-keyframes" type="button">Copy keyframes</button>
+      <button class="btn secondary" id="studio-paste-keyframes" type="button">Paste keyframes</button>
+    </div>
+    <div class="edit-grid" style="margin-top:10px">
+      <label for="motion-preset">Motion preset<select id="motion-preset">
+        <option value="fade_in">Fade in</option><option value="fade_out">Fade out</option>
+        <option value="zoom_in">Zoom in</option><option value="speed_ramp">Speed ramp</option>
+      </select></label>
+      <button class="btn secondary" id="studio-apply-motion-preset" type="button">Apply motion preset</button>
+    </div>
+    <div class="graph-tools">
+      <label for="keyframe-graph-zoom">Graph zoom <input id="keyframe-graph-zoom" type="range" min="100" max="400" step="25" value="100"></label>
+      <label for="keyframe-graph-pan">Graph pan <input id="keyframe-graph-pan" type="range" min="0" max="100" step="1" value="0"></label>
+      <button class="btn secondary" id="keyframe-graph-reset" type="button">Fit / reset graph</button>
+    </div>
+    <div id="keyframe-graph" class="keyframe-graph" aria-label="Touch keyframe and speed curve graph">
+      <p class="hint">Select a clip and property to view its keyframe curve. Tap the graph to add a point or drag a point vertically to adjust it.</p>
+    </div>
+  </div>
+  <div class="edit-section">
+    <h3>Tracks and project</h3>
+    <div class="edit-grid">
+      <label for="new-track-type">New track type<select id="new-track-type"><option value="video">Video</option><option value="overlay">Overlay</option><option value="text">Text</option><option value="audio">Audio</option></select></label>
+      <label for="new-track-name">New track name<input id="new-track-name" maxlength="80" value="New track"></label>
+      <label for="manage-track">Manage track<select id="manage-track"></select></label>
+      <label for="rename-track">Rename track<input id="rename-track" maxlength="80"></label>
+      <label for="track-order">Track position (top to bottom)<input id="track-order" type="number" min="0" step="1" value="0"></label>
+      <label for="profile-preset">Canvas preset<select id="profile-preset">
+        <option value="custom">Custom current size</option><option value="9:16">Portrait 9:16</option>
+        <option value="16:9">Landscape 16:9</option><option value="1:1">Square 1:1</option>
+        <option value="4:5">Portrait 4:5</option>
+      </select></label>
+      <label for="profile-width">Project width<input id="profile-width" type="number" min="144" max="8192" step="1"></label>
+      <label for="profile-height">Project height<input id="profile-height" type="number" min="144" max="8192" step="1"></label>
+      <label for="profile-fps-num">Frame rate numerator<input id="profile-fps-num" type="number" min="1" max="240000" step="1"></label>
+      <label for="profile-fps-den">Frame rate denominator<input id="profile-fps-den" type="number" min="1" max="100000" step="1"></label>
+    </div>
+    <div class="edit-actions">
+      <button class="btn secondary" id="studio-add-track" type="button">Add track</button>
+      <button class="btn secondary" id="studio-rename-track" type="button">Rename track</button>
+      <button class="btn secondary" id="studio-reorder-track" type="button">Reorder track</button>
+      <button class="btn secondary" id="studio-lock-track" type="button">Lock / unlock track</button>
+      <button class="btn secondary" id="studio-toggle-track-enabled" type="button">Disable track</button>
+      <button class="btn secondary" id="studio-toggle-track-visible" type="button">Hide visuals</button>
+      <button class="btn secondary" id="studio-toggle-track-muted" type="button">Mute track</button>
+      <button class="btn secondary" id="studio-toggle-track-solo" type="button">Solo track</button>
+      <button class="btn secondary" id="studio-remove-track" type="button">Remove track</button>
+      <button class="btn secondary" id="studio-set-profile" type="button">Update project profile</button>
+      <button class="btn secondary" id="studio-undo" type="button">Undo</button>
+      <button class="btn secondary" id="studio-redo" type="button">Redo</button>
+    </div>
+  </div>
+</section>
+<p class="studio-note">Project edits are revision-checked and saved after a successful cloud render. The source preview is not a live composite preview. Unsupported combinations are rejected by the editor instead of being silently approximated.</p>
+</div>
+
+<div class="field"><label for="next-instruction">Next editing instruction</label><div class="hint" id="edit-scope">No clip selected. Your next AI request will apply to the project generally.</div><textarea id="next-instruction" maxlength="4000" placeholder="Add a title, make the opening faster, add a smooth zoom, adjust brightness…"></textarea></div>
+<button class="btn" id="apply-ai-edit" type="button">Ask AI to edit this project</button><button class="btn secondary" id="show-project" type="button">View saved project details</button>
+<pre class="status hidden" id="project-details" style="max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-word"></pre></div></div>
+<section class="edit-panel" aria-label="Saved project management">
+  <h3>Saved project</h3>
+  <div class="hint">A new project is created when you submit a new source video. Completed edits are saved as the next project revision.</div>
+  <div class="edit-grid">
+    <label for="open-project-id">Open saved project ID<input id="open-project-id" maxlength="32" autocapitalize="off" spellcheck="false" placeholder="32-character job ID"></label>
+    <button class="btn secondary" id="studio-open-project" type="button">Open saved project</button>
+    <label for="rename-project-name">Current project name<input id="rename-project-name" maxlength="120" placeholder="Project name"></label>
+    <button class="btn secondary" id="studio-rename-project" type="button">Save project name</button>
+  </div>
+  <div class="edit-actions">
+    <button class="btn secondary" id="refresh-saved-projects" type="button">Refresh saved projects</button>
+  </div>
+  <p id="saved-project-status" class="hint" aria-live="polite">Saved projects will appear here.</p>
+  <div id="saved-project-list" class="saved-project-list" aria-label="Saved projects"></div>
+</section>
+
+<div class="divider"></div>
+<div class="field"><label for="skill-file">Import an editing skill (JSON)</label><input id="skill-file" type="file" accept="application/json,.json"><div class="hint">Use a skill JSON file with the supported format.</div><button class="btn secondary" id="import-skill" type="button">Import and save skill</button></div>
+<div class="divider"></div>
+<div class="field"><label for="skill-description">Create a reusable skill with AI</label><textarea id="skill-description" placeholder="Describe a reusable editing style, such as fast-paced gaming highlights with vertical framing and 1.2x speed."></textarea><button class="btn secondary" id="generate-skill" type="button">Create and save skill</button><div class="hint">Only the written style description is sent to Gemini. Your video is not sent to Gemini.</div></div>
+<div class="status" id="skill-status"></div>
+</div>
+</section>
+<p class="foot">The app and API share one job system, skill library and FFmpeg editing engine. The phone does not need to stay open after a job is submitted.</p>
+</main>
+<script>
+let apiToken="";
+let activeJobId="";
+let pollHandle=null;
+const $=id=>document.getElementById(id);
+function message(id,text,type){$(id).textContent=text;$(id).className="status"+(type?" "+type:"");}
+function headers(extra={}){return {Authorization:"Bearer "+apiToken,...extra};}
+async function api(path,options={}){const response=await fetch(path,{...options,headers:headers(options.headers||{})});let data={};try{data=await response.json();}catch{}if(!response.ok)throw new Error(data.error||"Request failed ("+response.status+")");return data;}
+async function connect(){apiToken=$("api-token").value.trim();if(apiToken.length<24){message("connection-status","Enter the app/API token configured in the Worker secrets.","error");apiToken="";return;}try{const data=await api("/api/v1/skills");$("workspace").classList.remove("hidden");message("connection-status","Connected. "+data.skills.length+" editing skill(s) loaded.","success");renderSkills(data.skills);await loadSavedProjects();const last=localStorage.getItem("video-editor-last-job");if(last){activeJobId=last;$("job-card").classList.remove("hidden");$("job-details").textContent="Restoring last job: "+last;await refreshJob();}}catch(e){apiToken="";$("workspace").classList.add("hidden");message("connection-status",e.message,"error");}}
+function renderSkills(skills){const select=$("skill");select.innerHTML="";for(const skill of skills){const option=document.createElement("option");option.value=skill.id;option.textContent=skill.name+" — "+skill.description;select.append(option);}}
+function showFilename(input){$("filename").textContent=input.files[0]?input.files[0].name:"No video selected";}
+async function submitVideo(event){event.preventDefault();const file=$("video-file").files[0];if(!file)return message("render-status","Choose a video first.","error");if(file.size>50*1024*1024)return message("render-status","This editor accepts files up to 50 MB.","error");const button=$("render-button");button.disabled=true;button.textContent="Uploading and queuing…";message("render-status","Uploading your video to the private processing queue…");try{const data=await api("/api/v1/jobs",{method:"POST",headers:{"Content-Type":file.type||"application/octet-stream","X-File-Name":encodeURIComponent(file.name),"X-File-Size":String(file.size),"X-Edit-Instruction":encodeURIComponent($("instruction").value),"X-Edit-Skill-Id":$("skill").value},body:file});activeJobId=data.job_id;localStorage.setItem("video-editor-last-job",activeJobId);$("job-card").classList.remove("hidden");$("download-link").classList.add("hidden");$("run-link").classList.add("hidden");message("render-status","Upload complete. The cloud job has started.","success");$("job-details").textContent="Job ID: "+activeJobId+" · "+data.status;pollJob();}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Submit cloud render";}}
+async function refreshJob(){if(!activeJobId)return;try{const data=await api("/api/v1/jobs/"+activeJobId);$("job-card").classList.remove("hidden");$("job-details").textContent="Job ID: "+data.job_id+"\nStatus: "+data.status+"\nRevision: "+(data.project_revision||"not initialized")+"\n"+data.message;if(data.download_url){$("download-link").classList.remove("hidden");}if(data.run_url){$("run-link").href=data.run_url;$("run-link").classList.remove("hidden");}if(data.status==="awaiting_confirmation"&&data.pending_plan){$("approval-panel").classList.remove("hidden");$("approval-details").textContent=data.pending_plan.summary+"\nApproval required for: "+(data.pending_plan.required_confirmations||[]).join(", ");$("project-tools").classList.add("hidden");}else{$("approval-panel").classList.add("hidden");if(data.status==="completed"&&data.project_revision){$("project-tools").classList.remove("hidden");await loadProject(false);await loadSavedProjects();}}if(data.status==="queued"||data.status==="running")pollJob();else if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}}catch(e){message("render-status",e.message,"error");}}
+async function loadSourcePreview(){if(!activeJobId)return;const video=$("studio-preview");if(!video||video.dataset.jobId===activeJobId)return;try{const data=await api("/api/v1/jobs/"+activeJobId+"/source-url");if(!data.source_url)throw new Error("The source preview URL was not returned.");video.src=data.source_url;video.dataset.jobId=activeJobId;video.load();}catch(e){message("render-status","Source preview: "+e.message,"error");}}
+async function openProjectById(id){
+  if(!/^[a-f0-9]{32}$/.test(id))throw new Error("Enter a valid 32-character project ID.");
+  activeJobId=id;
+  localStorage.setItem("video-editor-last-job",id);
+  $("open-project-id").value=id;
+  $("job-card").classList.remove("hidden");
+  $("download-link").classList.add("hidden");
+  $("run-link").classList.add("hidden");
+  $("project-details").classList.add("hidden");
+  message("render-status","Opening saved project…");
+  await refreshJob();
+}
+async function openSavedProject(){
+  try{await openProjectById($("open-project-id").value.trim().toLowerCase());}
+  catch(e){message("render-status",e.message,"error");}
+}
+function renderSavedProjects(projects){
+  const host=$("saved-project-list");host.replaceChildren();
+  if(!projects.length){$("saved-project-status").textContent="No completed saved projects were found.";return;}
+  $("saved-project-status").textContent=projects.length+" saved project(s) available.";
+  projects.forEach(project=>{
+    const button=document.createElement("button");
+    button.type="button";button.className="saved-project-item";
+    const name=document.createElement("strong");name.textContent=project.name||"Untitled project";
+    const details=document.createElement("span");
+    details.textContent="Revision "+project.revision+" · "+(project.width||"?")+"×"+(project.height||"?")+
+      " · "+project.track_count+" tracks · "+project.clip_count+" clips · "+project.asset_count+" media";
+    const updated=document.createElement("span");updated.textContent="Updated "+project.updated_at;
+    button.append(name,details,updated);
+    button.addEventListener("click",()=>openProjectById(project.id).catch(e=>message("saved-project-status",e.message,"error")));
+    host.append(button);
+  });
+}
+async function loadSavedProjects(){
+  try{const data=await api("/api/v1/projects");renderSavedProjects(data.projects||[]);}
+  catch(e){message("saved-project-status",e.message,"error");}
+}
+async function renameCurrentProject(){
+  if(!activeJobId) return message("saved-project-status","Open a saved project first.","error");
+  const name=$("rename-project-name").value.trim();
+  if(!name)return message("saved-project-status","Enter a project name.","error");
+  const button=$("studio-rename-project");button.disabled=true;
+  try{
+    const current=await api("/api/v1/jobs/"+activeJobId+"/project");
+    const result=await api("/api/v1/projects/"+activeJobId,{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,expected_revision:current.revision})
+    });
+    message("saved-project-status",result.message,"success");
+    await loadProject(false);
+    await loadSavedProjects();
+  }catch(e){message("saved-project-status",e.message,"error");}
+  finally{button.disabled=false;}
+}
+async function loadProject(showRaw=false){
+  if(!activeJobId)return;
+  try{
+    const data=await api("/api/v1/jobs/"+activeJobId+"/project");
+    if(window.renderStudioProject)window.renderStudioProject(data.project,data.revision);
+    if($("rename-project-name"))$("rename-project-name").value=data.project.name||"";
+    if($("open-project-id"))$("open-project-id").value=activeJobId;
+    await loadSourcePreview();
+    if(showRaw){$("project-details").textContent=JSON.stringify(data.project,null,2);$("project-details").classList.remove("hidden");}
+  }catch(e){message("render-status",e.message,"error");}
+}
+const VIDEO_EXTENSIONS=new Set(["mp4","mov","m4v","webm","mkv"]);
+const AUDIO_EXTENSIONS=new Set(["mp3","wav","m4a","aac","ogg","flac"]);
+const IMAGE_EXTENSIONS=new Set(["jpg","jpeg","png","webp","gif"]);
+async function readBrowserMediaDuration(file,mediaType){
+  if(mediaType==="image")return null;
+  const url=URL.createObjectURL(file);
+  const element=document.createElement(mediaType==="audio"?"audio":"video");
+  element.preload="metadata";element.muted=true;
+  try{
+    const duration=await new Promise((resolve,reject)=>{
+      element.onloadedmetadata=()=>resolve(element.duration);
+      element.onerror=()=>reject(new Error("The browser could not read the media duration."));
+      element.src=url;
+      element.load();
+    });
+    if(!Number.isFinite(duration)||duration<=0)throw new Error("The selected file has no readable duration.");
+    return Math.round(duration*1000000);
+  }finally{URL.revokeObjectURL(url);element.removeAttribute("src");}
+}
+async function importStudioMedia(){
+  const files=Array.from($("studio-media-files").files||[]);
+  if(!files.length)return message("studio-import-status","Choose one or more media files first.","error");
+  if(!activeJobId)return message("studio-import-status","Open a saved project before importing media.","error");
+  if(files.length>20)return message("studio-import-status","Import up to 20 files in one batch.","error");
+  const button=$("studio-import-media");button.disabled=true;
+  let imported=0;const failures=[];
+  try{
+    for(let index=0;index<files.length;index++){
+      const file=files[index];const extension=(file.name.split(".").pop()||"").toLowerCase();
+      const mediaType=VIDEO_EXTENSIONS.has(extension)?"video":AUDIO_EXTENSIONS.has(extension)?"audio":IMAGE_EXTENSIONS.has(extension)?"image":"";
+      if(!mediaType){failures.push(file.name+": unsupported file type");continue;}
+      if(file.size<1||file.size>50*1024*1024){failures.push(file.name+": file must be 1 byte to 50 MB");continue;}
+      const status="Importing "+(index+1)+" of "+files.length+": "+file.name;
+      message("studio-import-status",status);
+      try{
+        const duration=await readBrowserMediaDuration(file,mediaType);
+        const headers={
+          "Content-Type":file.type||"application/octet-stream",
+          "X-File-Name":encodeURIComponent(file.name),
+          "X-File-Size":String(file.size),
+          "X-Media-Type":mediaType
+        };
+        if(duration)headers["X-Media-Duration-Us"]=String(duration);
+        const result=await api("/api/v1/jobs/"+activeJobId+"/assets",{
+          method:"POST",headers,body:file
+        });
+        imported++;
+        message("studio-import-status",result.message+" ("+imported+"/"+files.length+")","success");
+      }catch(error){failures.push(file.name+": "+error.message);}
+    }
+    await loadProject(false);
+    $("studio-media-files").value="";
+    if(failures.length)message("studio-import-status",imported+" file(s) imported. "+failures.join(" | "),"error");
+    else message("studio-import-status",imported+" file(s) imported and saved to the project.","success");
+  }finally{button.disabled=false;}
+}
+async function applyStudioOperations(tool_calls,confirmed_tools=[]){if(!activeJobId)throw new Error("Connect to a saved project first.");const project=await api("/api/v1/jobs/"+activeJobId+"/project");const result=await api("/api/v1/jobs/"+activeJobId+"/manual-edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:project.revision,tool_calls,confirmed_tools})});message("render-status",result.message||"Studio edit queued.","success");await refreshJob();pollJob();return result;}
+window.applyStudioOperations=applyStudioOperations;
+
+async function applyAIEdit(){const rawInstruction=$("next-instruction").value.trim();if(!rawInstruction)return message("render-status","Describe the next edit first.","error");const selectedContext=window.studioSelectedClipInstruction?window.studioSelectedClipInstruction():"";const instruction=selectedContext+"User request: "+rawInstruction;const button=$("apply-ai-edit");button.disabled=true;button.textContent="Queuing AI edit…";try{const project=await api("/api/v1/jobs/"+activeJobId+"/project");const data=await api("/api/v1/jobs/"+activeJobId+"/ai-edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({instruction,expected_revision:project.revision})});$("next-instruction").value="";message("render-status",data.message,"success");await refreshJob();pollJob();}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Ask AI to edit this project";}}
+async function approveAIEdit(){const button=$("approve-edit");button.disabled=true;button.textContent="Queuing approved changes…";try{const job=await api("/api/v1/jobs/"+activeJobId);const project=await api("/api/v1/jobs/"+activeJobId+"/project");const tools=job.pending_plan?.required_confirmations||[];const data=await api("/api/v1/jobs/"+activeJobId+"/ai-edit/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:project.revision,confirmed_tools:tools})});message("render-status",data.message,"success");await refreshJob();pollJob();}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Approve these changes";}}
+async function downloadJob(){if(!activeJobId)return;const button=$("download-link");button.disabled=true;button.textContent="Preparing download…";try{const response=await fetch("/api/v1/jobs/"+activeJobId+"/download",{headers:headers()});if(!response.ok){let detail="Download failed ("+response.status+")";try{const body=await response.json();detail=body.error||detail;}catch{}throw new Error(detail);}const type=response.headers.get("content-type")||"";if(type.includes("application/json")){const data=await response.json();if(!data.download_url)throw new Error("The secure download link was not returned.");window.location.assign(data.download_url);}else{const blob=await response.blob();const url=URL.createObjectURL(blob);const anchor=document.createElement("a");anchor.href=url;anchor.download="edited-video.mp4";document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Download edited MP4";}}
+function pollJob(){if(pollHandle)clearTimeout(pollHandle);pollHandle=setTimeout(async()=>{await refreshJob();},8000);}
+async function importSkill(){const file=$("skill-file").files[0];if(!file)return message("skill-status","Choose a JSON skill file first.","error");try{const skill=JSON.parse(await file.text());const data=await api("/api/v1/skills/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({skill})});message("skill-status","Imported and saved: "+data.skill.name,"success");await connectSkills();}catch(e){message("skill-status",e.message,"error");}}
+async function connectSkills(){const data=await api("/api/v1/skills");renderSkills(data.skills);}
+async function generateSkill(){const description=$("skill-description").value.trim();if(!description)return message("skill-status","Describe the editing style first.","error");const button=$("generate-skill");button.disabled=true;button.textContent="Creating skill…";try{const data=await api("/api/v1/skills/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description})});message("skill-status","AI created and saved: "+data.skill.name,"success");await connectSkills();$("skill").value=data.skill.id;}catch(e){message("skill-status",e.message,"error");}finally{button.disabled=false;button.textContent="Create and save skill";}}
+$("connect").addEventListener("click",connect);
+$("render-form").addEventListener("submit",submitVideo);
+$("refresh-job").addEventListener("click",refreshJob);
+$("download-link").addEventListener("click",downloadJob);
+$("import-skill").addEventListener("click",importSkill);
+$("generate-skill").addEventListener("click",generateSkill);
+$("apply-ai-edit").addEventListener("click",applyAIEdit);
+$("approve-edit").addEventListener("click",approveAIEdit);
+$("show-project").addEventListener("click",()=>loadProject(true));
+$("studio-open-project").addEventListener("click",openSavedProject);
+$("studio-rename-project").addEventListener("click",renameCurrentProject);
+$("refresh-saved-projects").addEventListener("click",loadSavedProjects);
+$("studio-import-media").addEventListener("click",importStudioMedia);
+$("studio-media-files").addEventListener("change",()=>{
+  const files=Array.from($("studio-media-files").files||[]);
+  message("studio-import-status",files.length?files.length+" file(s) selected.":"No files selected.");
+});
+$("studio-safe-guides-toggle").addEventListener("change",event=>{
+  $("studio-safe-guides").classList.toggle("hidden",!event.target.checked);
+});
+</script>
+<script src="/studio.js" defer></script>
+</body>
+</html>
