@@ -183,3 +183,11 @@ test("Media-bin ripple insert is wired to the current playhead and selected comp
   assert.match(studioScript, /targetTrack\.id/);
   assert.match(studioScript, /renderMediaBin\(\);/);
 });
+
+
+test("Studio restores the latest saved project checkpoint while a cloud edit is running", () => {
+  assert.match(html, /let loadedProjectRevision=0/);
+  assert.match(html, /loadedProjectRevision=Number\(data\.revision\)/);
+  assert.match(html, /if\(data\.project_revision&&Number\(data\.project_revision\)!==loadedProjectRevision\)/);
+  assert.match(html, /A saved checkpoint can be reopened while a cloud edit is still running/);
+});
