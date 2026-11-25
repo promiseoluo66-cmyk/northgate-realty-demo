@@ -1,0 +1,64 @@
+name: Video Editor Stage 1 Lab
+
+on:
+  push:
+    branches: [video-editor-lab]
+    paths:
+      - "video-editor/**"
+      - ".github/workflows/video-editor-lab.yml"
+  pull_request:
+    branches: [video-editor-lab]
+    paths:
+      - "video-editor/**"
+      - ".github/workflows/video-editor-lab.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-editor-stage1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stage-1-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out lab branch
+        uses: actions/checkout@v4
+
+      - name: Install free system test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-mlt libmlt-data ffmpeg python3-pytest
+          ffmpeg -version
+          ffprobe -version
+          /usr/bin/python3 -c "import mlt7; print('MLT Python binding available')"
+
+      - name: Test Python editor, registry, catalogue and MLT renderer
+        working-directory: video-editor
+        run: /usr/bin/python3 -m pytest tests -q
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test Studio UI and Cloudflare Worker source
+        working-directory: video-editor/cloudflare
+        run: |
+          node --check public/studio.js
+          node --check src/index.js
+          node --test tests/*.test.mjs
+
+      - name: Validate D1 migrations offline with SQLite
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          migrations = Path("video-editor/cloudflare/migrations")
+          db = sqlite3.connect(":memory:")
+          for migration in sorted(migrations.glob("*.sql")):
+              db.executescript(migration.read_text(encoding="utf-8"))
+          print("PASS: all checked-in D1 migrations apply to an in-memory SQLite database.")
+          PY
