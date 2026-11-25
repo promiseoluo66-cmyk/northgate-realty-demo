@@ -14,7 +14,7 @@ from project_model import validate_project
 MAX_INPUT_VIDEO = 50 * 1024 * 1024
 MAX_RENDER_OUTPUT = 300 * 1024 * 1024
 
-WORKER_USER_AGENT = "independent-video-editor/0.2 (+https://github.com/promiseoluo66-cmyk/sparkle-clean-co)"
+WORKER_USER_AGENT = "independent-video-editor/0.2 (+https://github.com/promiseoluo66-cmyk/northgate-realty-demo/tree/video-editor-lab)"
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
