@@ -33,8 +33,21 @@ node --test tests/*.test.mjs
 
 The GitHub Actions workflow on this branch runs the automated checks on GitHub-hosted runners. A green run is required before Stage 1 can be accepted.
 
-## Current Stage 1 gaps
-- Automatic background autosave, crash recovery and cross-device project lifecycle.
+## Stage 1 — Task 1: project lifecycle
+
+**Status: implemented and automated tests passing.**
+
+- The initial validated project is saved to the server as soon as the renderer initializes it.
+- Every successful edit transaction is checkpointed, including its revision and undo/redo history, before video export begins.
+- If rendering or output upload fails, the runner reports its latest in-memory project and history so the last successful edit remains recoverable.
+- Running jobs with checkpoints appear in the saved-project list as read-only while the renderer is active.
+- Failed jobs with checkpoints can be reopened, renamed, receive imported media, and continue with another manual or AI edit.
+- Projects are stored server-side and listed through the authenticated API, so another device using the same Worker and API token can reopen them. The last-opened job shortcut remains device-local.
+- Revision checks prevent stale devices from silently overwriting a newer project revision.
+
+Automated validation covers checkpoint persistence, failed-project listing, and resuming manual edits. A live two-device browser test is not claimed: this branch intentionally has no production Worker deployment configuration.
+
+## Remaining Stage 1 gaps
 - Media thumbnails/waveforms, relinking and subtitle import.
 - Ripple overwrite, cross-track ripple insert, linked clips/groups, persistent markers and broader snapping.
 - Full track-level audio routing and crop keyframes.
