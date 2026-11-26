@@ -228,5 +228,5 @@ test("Stage 1 Tasks 4 and 5 expose track audio routing and animated crop control
   assert.match(studioScript, /crop_width/);
   assert.match(html, /value="crop_x"/);
   assert.match(html, /ease_in_quad/);
-  assert.match(studioScript, /ease_in_out_quart/);
+  assert.match(html, /ease_in_out_quart/);
 });
