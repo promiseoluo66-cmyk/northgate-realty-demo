@@ -439,8 +439,8 @@
     const ungroupButton = byId("studio-ungroup-clips");
     if (groupButton) groupButton.disabled = selectedClipIds.size < 2;
     if (ungroupButton) {
-      const grouped = flattenClips(currentProject).some((item) =>
-        selectedClipIds.has(item.clip.id) && Boolean(item.clip.group_id));
+      const grouped = currentProject ? flattenClips(currentProject).some((item) =>
+        selectedClipIds.has(item.clip.id) && Boolean(item.clip.group_id)) : false;
       ungroupButton.disabled = !grouped;
     }
 
@@ -704,6 +704,19 @@
     const seek = byId("timeline-seek");
     if (seek) seek.max = String(Math.max(1000000, endUs));
     fillTrackSelector();
+    const subtitleTrack = byId("studio-subtitle-track");
+    if (subtitleTrack) {
+      const prior = subtitleTrack.value;
+      subtitleTrack.replaceChildren();
+      (currentProject.tracks || []).filter((track) => track.type === "text" && track.locked !== true)
+        .sort((a,b) => Number(a.order || 0) - Number(b.order || 0)).forEach((track) => {
+          const option = element("option", "", track.name || "Text track");
+          option.value = track.id;
+          subtitleTrack.append(option);
+        });
+      if ([...subtitleTrack.options].some((option) => option.value === prior)) subtitleTrack.value = prior;
+      subtitleTrack.disabled = subtitleTrack.options.length === 0;
+    }
     const profile = currentProject.video_profile || {};
     const frameRate = profile.frame_rate || {};
     const setValue = (id, value) => { if (byId(id) && value !== undefined) byId(id).value = String(value); };
@@ -951,7 +964,8 @@
               : ["jpg","jpeg","png","webp","gif"];
           if (!supported.includes(extension)) throw new Error("Choose a supported " + asset.media_type + " file.");
           if (file.size < 1 || file.size > 50 * 1024 * 1024) throw new Error("The replacement must be 1 byte to 50 MB.");
-          const projectResponse = await window.api("/api/v1/jobs/" + window.activeJobId + "/project");
+          const jobId = window.getActiveStudioJobId();
+          const projectResponse = await window.api("/api/v1/jobs/" + jobId + "/project");
           const headers = {
             "Content-Type":file.type || "application/octet-stream",
             "X-File-Name":encodeURIComponent(file.name),
@@ -963,7 +977,7 @@
             const duration = await window.readBrowserMediaDuration(file, asset.media_type);
             headers["X-Media-Duration-Us"] = String(duration);
           }
-          await window.api("/api/v1/jobs/" + window.activeJobId + "/assets/" + encodeURIComponent(asset.id) + "/relink", {
+          await window.api("/api/v1/jobs/" + jobId + "/assets/" + encodeURIComponent(asset.id) + "/relink", {
             method:"PUT", headers, body:file
           });
           await window.loadProject(false);
