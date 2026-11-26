@@ -3,6 +3,11 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import importlib.util
+import json
+import shutil
+import subprocess
+
 import pytest
 
 from project_tool_executor import (
@@ -123,4 +128,56 @@ def test_render_export_renderer_failure_does_not_mutate_project(tmp_path):
             )
 
     assert executor.get_project() == before
+    assert executor.revision == 1
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mlt7") is None
+    or not shutil.which("ffmpeg")
+    or not shutil.which("ffprobe"),
+    reason="The system MLT Python binding and FFmpeg tools are required",
+)
+def test_render_export_runs_real_mlt_renderer_and_produces_probeable_mp4(tmp_path):
+    asset_root = tmp_path / "assets"
+    source = asset_root / "private" / "source.mp4"
+    source.parent.mkdir(parents=True)
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "testsrc=size=320x240:rate=24:duration=2",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ],
+        check=True, capture_output=True,
+    )
+
+    project = make_project()
+    project["video_profile"] = {
+        "width": 320,
+        "height": 240,
+        "frame_rate": {"numerator": 24, "denominator": 1},
+    }
+    project["assets"][0]["duration_us"] = 2_000_000
+    executor = ProjectToolExecutor(
+        project, asset_root=asset_root, output_dir=tmp_path / "exports",
+        render_timeout_seconds=60,
+    )
+
+    result = executor.execute_batch(
+        export_call("integration.mp4"),
+        expected_revision=1,
+        confirmed_tools={"render.export"},
+    )
+    output = Path(result["results"][0]["result"]["output_path"])
+    probe = json.loads(subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-show_entries",
+            "stream=codec_type,width,height", "-of", "json", str(output),
+        ],
+        check=True, capture_output=True, text=True,
+    ).stdout)
+
+    assert output.is_file()
+    assert output.stat().st_size > 1000
+    video = next(stream for stream in probe["streams"] if stream["codec_type"] == "video")
+    assert (video["width"], video["height"]) == (320, 240)
     assert executor.revision == 1
