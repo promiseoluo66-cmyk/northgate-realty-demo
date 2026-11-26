@@ -395,13 +395,15 @@ TOOL_DEFINITIONS = (
     ),
     ToolDefinition(
         "track.set_state", "timeline",
-        "Enable/disable a track or mute/unmute an audio/video track.",
+        "Enable/disable, mute/solo, set visibility, and adjust audio level or stereo pan on a track.",
         _schema({
             "track_id": _field("string", max_length=64),
             "enabled": _field("boolean"),
             "muted": _field("boolean"),
             "solo": _field("boolean"),
             "visible": _field("boolean"),
+            "audio_gain_db": _field("number", minimum=-96, maximum=24),
+            "audio_pan": _field("number", minimum=-1, maximum=1),
         }, ("track_id",)),
     ),
     ToolDefinition(
@@ -482,12 +484,17 @@ TOOL_DEFINITIONS = (
             "clip_id": _field("string", max_length=64),
             "property": _field("string", choices=(
                 "position_x", "position_y", "scale_x", "scale_y",
-                "rotation_deg", "opacity", "volume_db", "playback_rate",
+                "rotation_deg", "opacity", "volume_db", "playback_rate"
+                "crop_x", "crop_y", "crop_width", "crop_height",
             )),
             "time_us": _field("integer", minimum=0),
             "value": _field("number"),
             "interpolation": _field("string", choices=(
-                "hold", "linear", "ease_in", "ease_out", "ease_in_out", "bezier",
+                "hold", "linear", "ease_in", "ease_out", "ease_in_out",
+                "ease_in_quad", "ease_out_quad", "ease_in_out_quad",
+                "ease_in_cubic", "ease_out_cubic", "ease_in_out_cubic",
+                "ease_in_quart", "ease_out_quart", "ease_in_out_quart",
+                "smoothstep", "bezier",
             )),
             "bezier": _field("object", nested={
                 "properties": {
@@ -508,7 +515,8 @@ TOOL_DEFINITIONS = (
             "clip_id": _field("string", max_length=64),
             "property": _field("string", choices=(
                 "position_x", "position_y", "scale_x", "scale_y",
-                "rotation_deg", "opacity", "volume_db", "playback_rate",
+                "rotation_deg", "opacity", "volume_db", "playback_rate"
+                "crop_x", "crop_y", "crop_width", "crop_height",
             )),
         }, ("clip_id",)),
     ),
@@ -519,7 +527,8 @@ TOOL_DEFINITIONS = (
             "clip_id": _field("string", max_length=64),
             "property": _field("string", choices=(
                 "position_x", "position_y", "scale_x", "scale_y",
-                "rotation_deg", "opacity", "volume_db", "playback_rate",
+                "rotation_deg", "opacity", "volume_db", "playback_rate"
+                "crop_x", "crop_y", "crop_width", "crop_height",
             )),
             "time_us": _field("integer", minimum=0),
         }, ("clip_id", "property", "time_us")),
@@ -737,6 +746,8 @@ def validate_tool_call(name: str, arguments: Any) -> dict[str, Any]:
             "scale_x": (0.001, 100), "scale_y": (0.001, 100),
             "opacity": (0, 1), "volume_db": (-96, 24),
             "playback_rate": (0.05, 16),
+            "crop_x": (0, 1), "crop_y": (0, 1),
+            "crop_width": (0.001, 1), "crop_height": (0.001, 1),
             "position_x": (-100000, 100000), "position_y": (-100000, 100000),
             "rotation_deg": (-360000, 360000),
         }
