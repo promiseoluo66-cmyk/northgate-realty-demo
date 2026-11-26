@@ -99,7 +99,7 @@ test("Task 2 media previews, relinking and subtitle import are wired", () => {
   assert.match(studioScript, /waveform.samples/);
   assert.match(studioScript, /\/relink/);
   assert.match(html, /captions.import_subtitles/);
-  assert.match(html, /SRT or VTT/);
+  assert.match(html, /\.SRT or \.VTT/);
 });
 
 test("Task 3 linked groups, cross-track ripple, markers and snapping are wired", () => {
