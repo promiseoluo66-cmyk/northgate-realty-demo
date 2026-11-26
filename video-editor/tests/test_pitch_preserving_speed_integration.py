@@ -118,6 +118,15 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             output = root / "double-speed-render.mp4"
             _make_video_with_tone(source)
 
+            # MLT's timewarp producer delegates pitch correction to rbpitch.
+            import mlt7 as mlt
+            factory = mlt.Factory()
+            factory.init(None)
+            self.assertTrue(
+                mlt.Filter(mlt.Profile(), "rbpitch").is_valid(),
+                "The installed MLT runtime does not provide its required pitch filter.",
+            )
+
             executor = ProjectToolExecutor(_tone_project(source), asset_root=root)
             executor.execute("clip.set_speed", {
                 "clip_id": "speed-clip",
