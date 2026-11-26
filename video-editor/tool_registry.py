@@ -209,9 +209,10 @@ TOOL_DEFINITIONS = (
     ),
     ToolDefinition(
         "timeline.ripple_insert_clip", "timeline",
-        "Insert a video, image or audio asset on one track and shift later clips on that track forward by the inserted duration. It rejects an insertion point that cuts through an existing clip or transition.",
+        "Insert a video, image or audio asset and shift later clips forward on the selected track and any explicitly listed unlocked tracks.",
         _schema({
             "track_id": _field("string", max_length=64),
+            "ripple_track_ids": _field("array", nested={"minItems": 1, "maxItems": 20, "items": {"type": "string", "minLength": 1, "maxLength": 64}}),
             "kind": _field("string", choices=("video", "image", "audio")),
             "media_id": _field("string", max_length=64),
             "start_us": _field("integer", minimum=0),
@@ -220,6 +221,15 @@ TOOL_DEFINITIONS = (
             "source_out_us": _field("integer", minimum=1),
             "playback_rate": _field("number", minimum=0.05, maximum=16),
         }, ("track_id", "kind", "media_id", "start_us", "duration_us")),
+    ),
+    ToolDefinition(
+        "timeline.ripple_overwrite_clip", "timeline",
+        "Replace a clip source and ripple following clips on its track by the duration difference.",
+        _schema({
+            "clip_id": _field("string", max_length=64),
+            "media_id": _field("string", max_length=64),
+            "duration_us": _field("integer", minimum=1),
+        }, ("clip_id", "media_id")),
     ),
     ToolDefinition(
         "timeline.add_clip", "timeline",
@@ -245,6 +255,27 @@ TOOL_DEFINITIONS = (
             "duration_us": _field("integer", minimum=1),
             "text_style": _field("object", nested=_TEXT_STYLE_SCHEMA),
         }, ("track_id", "content", "start_us", "duration_us")),
+    ),
+    ToolDefinition(
+        "captions.import_subtitles", "captions",
+        "Create timed caption clips from supplied subtitle cue text and timestamps. This does not transcribe audio.",
+        _schema({
+            "track_id": _field("string", max_length=64),
+            "cues": _field("array", nested={
+                "minItems": 1, "maxItems": 500,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": _field("string", max_length=2000),
+                        "start_us": _field("integer", minimum=0),
+                        "end_us": _field("integer", minimum=1),
+                    },
+                    "required": ["text", "start_us", "end_us"],
+                    "additionalProperties": False,
+                },
+            }),
+            "text_style": _field("object", nested=_TEXT_STYLE_SCHEMA),
+        }, ("track_id", "cues")),
     ),
     ToolDefinition(
         "captions.add_word_timed", "captions",
@@ -285,6 +316,36 @@ TOOL_DEFINITIONS = (
             "start_us": _field("integer", minimum=0),
             "track_id": _field("string", max_length=64),
         }, ("clip_id", "start_us")),
+    ),
+    ToolDefinition(
+        "timeline.group_clips", "timeline",
+        "Link two or more clips so a move on one member moves all members together.",
+        _schema({
+            "clip_ids": _field("array", nested={"minItems": 2, "maxItems": 40, "items": {"type": "string", "minLength": 1, "maxLength": 64}}),
+            "name": _field("string", max_length=80),
+        }, ("clip_ids",)),
+    ),
+    ToolDefinition(
+        "timeline.ungroup_clips", "timeline",
+        "Unlink selected clips from their linked group.",
+        _schema({
+            "clip_ids": _field("array", nested={"minItems": 1, "maxItems": 40, "items": {"type": "string", "minLength": 1, "maxLength": 64}}),
+        }, ("clip_ids",)),
+    ),
+    ToolDefinition(
+        "timeline.add_marker", "timeline",
+        "Add a labelled marker at a timeline time.",
+        _schema({"time_us": _field("integer", minimum=0), "label": _field("string", max_length=120), "colour": _field("string", max_length=16)}, ("time_us", "label")),
+    ),
+    ToolDefinition(
+        "timeline.move_marker", "timeline",
+        "Move an existing timeline marker and optionally rename it.",
+        _schema({"marker_id": _field("string", max_length=64), "time_us": _field("integer", minimum=0), "label": _field("string", max_length=120)}, ("marker_id", "time_us")),
+    ),
+    ToolDefinition(
+        "timeline.remove_marker", "timeline",
+        "Remove an existing timeline marker.",
+        _schema({"marker_id": _field("string", max_length=64)}, ("marker_id",)),
     ),
     ToolDefinition(
         "timeline.duplicate_clip", "timeline",

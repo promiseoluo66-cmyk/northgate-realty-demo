@@ -244,6 +244,17 @@ def validate_project(document: Any) -> dict[str, Any]:
                 if clean_tag.casefold() in normalized_tags:
                     raise ProjectValidationError(f"{path}.tags contains duplicate tags.")
                 normalized_tags.add(clean_tag.casefold())
+        if "thumbnail_data_url" in asset:
+            thumbnail = _string(asset["thumbnail_data_url"], f"{path}.thumbnail_data_url", max_length=60000)
+            if not re.fullmatch(r"data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}", thumbnail):
+                raise ProjectValidationError(f"{path}.thumbnail_data_url must be a base64 JPEG data URL.")
+        if "waveform" in asset:
+            waveform = _object(asset["waveform"], f"{path}.waveform")
+            samples = _array(waveform.get("samples"), f"{path}.waveform.samples")
+            if not 1 <= len(samples) <= 128:
+                raise ProjectValidationError(f"{path}.waveform.samples must contain 1 to 128 peaks.")
+            for sample_index, sample in enumerate(samples):
+                _number(sample, f"{path}.waveform.samples[{sample_index}]", minimum=0, maximum=1)
         assets[asset_id] = asset
 
     tracks: dict[str, dict[str, Any]] = {}
@@ -368,6 +379,8 @@ def validate_project(document: Any) -> dict[str, Any]:
                 asset_duration = asset.get("duration_us")
                 if asset_duration is not None and source_out > asset_duration:
                     raise ProjectValidationError(f"{path}.source_out_us exceeds the source duration.")
+            if "group_id" in clip:
+                _identifier(clip["group_id"], f"{path}.group_id")
             if "transform" in clip:
                 _validate_transform(clip["transform"], f"{path}.transform")
             if "framing" in clip:
@@ -385,6 +398,51 @@ def validate_project(document: Any) -> dict[str, Any]:
             clips[clip_id] = clip
             # Keep local values referenced here to make the timing contract explicit.
             _ = start, rate
+
+    groups = _array(project.get("clip_groups", []), "project.clip_groups")
+    group_ids: set[str] = set()
+    grouped_clips: set[str] = set()
+    for index, raw in enumerate(groups):
+        path = f"project.clip_groups[{index}]"
+        group = _object(raw, path)
+        group_id = _identifier(group.get("id"), f"{path}.id")
+        if group_id in group_ids:
+            raise ProjectValidationError(f"{path}.id is duplicated.")
+        group_ids.add(group_id)
+        _string(group.get("name", "Linked group"), f"{path}.name", max_length=80)
+        member_ids = _array(group.get("clip_ids"), f"{path}.clip_ids")
+        if not 2 <= len(member_ids) <= 40:
+            raise ProjectValidationError(f"{path}.clip_ids must contain 2 to 40 clips.")
+        if len(set(member_ids)) != len(member_ids):
+            raise ProjectValidationError(f"{path}.clip_ids must not contain duplicates.")
+        for member_index, raw_clip_id in enumerate(member_ids):
+            member_id = _identifier(raw_clip_id, f"{path}.clip_ids[{member_index}]")
+            if member_id not in clips:
+                raise ProjectValidationError(f"{path}.clip_ids references a missing clip.")
+            if member_id in grouped_clips:
+                raise ProjectValidationError(f"{path}.clip_ids contains a clip already in another group.")
+            if clips[member_id].get("group_id") != group_id:
+                raise ProjectValidationError(f"{path}.clip_ids and clip group_id values do not match.")
+            grouped_clips.add(member_id)
+    for clip_id, clip in clips.items():
+        if clip.get("group_id") is not None and clip["group_id"] not in group_ids:
+            raise ProjectValidationError(f"Clip {clip_id!r} references a missing clip group.")
+
+    markers = _array(project.get("markers", []), "project.markers")
+    marker_ids: set[str] = set()
+    for index, raw in enumerate(markers):
+        path = f"project.markers[{index}]"
+        marker = _object(raw, path)
+        marker_id = _identifier(marker.get("id"), f"{path}.id")
+        if marker_id in marker_ids:
+            raise ProjectValidationError(f"{path}.id is duplicated.")
+        marker_ids.add(marker_id)
+        _integer(marker.get("time_us"), f"{path}.time_us", maximum=2**53 - 1)
+        _string(marker.get("label"), f"{path}.label", max_length=120)
+        if "colour" in marker:
+            colour = _string(marker["colour"], f"{path}.colour", max_length=16)
+            if not re.fullmatch(r"#[0-9A-Fa-f]{6}", colour):
+                raise ProjectValidationError(f"{path}.colour must be a six-digit hex colour.")
 
     transition_ids: set[str] = set()
     for index, raw in enumerate(_array(project.get("transitions", []), "project.transitions")):
