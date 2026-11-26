@@ -165,6 +165,25 @@ TOOL_DEFINITIONS = (
         read_only=True,
     ),
     ToolDefinition(
+        "media.extract_audio", "audio",
+        "Extract the first audio stream from a video into a new project audio asset. The generated asset is saved to private project storage by the render runner.",
+        _schema({
+            "media_id": _field("string", max_length=64),
+            "format": _field("string", choices=("m4a", "mp3", "wav")),
+        }, ("media_id",)),
+    ),
+    ToolDefinition(
+        "timeline.create_freeze_frame", "timeline",
+        "Extract a real still frame from a video and add it as an image clip on an unlocked overlay track for the requested hold duration. The generated image is saved to private project storage by the render runner.",
+        _schema({
+            "media_id": _field("string", max_length=64),
+            "track_id": _field("string", max_length=64),
+            "timestamp_us": _field("integer", minimum=0),
+            "start_us": _field("integer", minimum=0),
+            "duration_us": _field("integer", minimum=1, maximum=600000000),
+        }, ("media_id", "track_id", "timestamp_us", "start_us", "duration_us")),
+    ),
+    ToolDefinition(
         "media.detect_scenes", "analysis",
         "Find candidate visual scene changes in a video using FFmpeg's scene-change score. Results are timestamp candidates, not confirmed semantic cuts.",
         _schema({
