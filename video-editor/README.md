@@ -68,12 +68,20 @@ Known limits: waveform generation is skipped for audio files larger than 8 MiB o
 
 Automated acceptance checks cover core ripple operations, locked-track rejection, linked-group movement and cleanup, marker lifecycle, subtitle cue creation and validation, and the mobile Studio wiring.
 
+## Stage 1 — Tasks 4 and 5: track audio and animation
+
+**Implemented in the lab; new automated acceptance tests added, final CI verification pending.**
+
+- Video, overlay and audio tracks can store per-track gain (-96 to +24 dB) and stereo pan (-1 left to +1 right). Text tracks reject audio-routing settings. The MLT renderer applies volume and panning filters to audio-bearing clips.
+- Video/image clips can animate crop X, Y, width and height. The renderer samples animated crop geometry and validates every sampled rectangle against the source frame.
+- Animated crop requires readable source dimensions and cannot be combined with automatic framing or speed-ramp keyframes in this adapter stage.
+- Added quadratic, cubic, quartic and smoothstep easing and Studio zoom-out, pan-left/right and animated crop-reveal presets.
+
 ## Remaining Stage 1 acceptance gaps
-1. Full track-level audio routing.
-2. Crop keyframes and expanded animation presets/interpolation precision tests.
-3. Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
-4. Edited-composite preview, proxy media and low-resolution preview.
-5. End-to-end acceptance against the actual Worker/renderer configuration.
+- Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
+- Edited-composite preview, proxy media and low-resolution preview.
+- End-to-end acceptance against the actual Worker/renderer configuration.
+- Complete edge-case and editor-integration sign-off for all 49 registered operations.
 
 The original 42 registered Studio operations still require the separate full audit: implementation, individual tests, edge cases and editor integration. The current registry has 49 operations, but registration is not proof that every operation is complete.
 
