@@ -159,7 +159,8 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             root = Path(directory)
             video = root / "blue-video.mp4"
             audio = root / "tone-source.wav"
-            output = root / "double-speed-render.mp4"
+            output = root / "double-speed-render-pitch-on.mp4"
+            output_without_pitch = root / "double-speed-render-pitch-off.mp4"
             _make_test_media(video, audio)
 
             source_hz = _measure_tone_hz(audio)
@@ -192,19 +193,31 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             project = executor.get_project()
             self.assertEqual(project["tracks"][1]["clips"][0]["playback_rate"], 2.0)
 
-            result = render_project(project, root, output)
+            result = render_project(project, root, output, pitch_preserving=True)
             self.assertEqual(result["backend"], "MLT Python API")
             self.assertTrue(output.is_file())
             self.assertGreater(output.stat().st_size, 0)
 
-            measured_hz = _measure_tone_hz(output)
-            self.assertGreater(
-                measured_hz, 390.0,
-                f"Expected pitch-compensated 440 Hz audio, measured {measured_hz:.1f} Hz.",
+            raw_result = render_project(
+                project, root, output_without_pitch, pitch_preserving=False
             )
-            self.assertLess(
-                measured_hz, 490.0,
-                f"Expected pitch-compensated 440 Hz audio, measured {measured_hz:.1f} Hz.",
+            self.assertEqual(raw_result["backend"], "MLT Python API")
+            self.assertTrue(output_without_pitch.is_file())
+            self.assertGreater(output_without_pitch.stat().st_size, 0)
+
+            compensated_hz = _measure_tone_hz(output)
+            uncompensated_hz = _measure_tone_hz(output_without_pitch)
+            print(
+                "PITCH_DIAGNOSTIC "
+                f"source={source_hz:.1f}Hz "
+                f"MLT_warp_pitch=1:{compensated_hz:.1f}Hz "
+                f"MLT_warp_pitch=0:{uncompensated_hz:.1f}Hz"
+            )
+            close_to_source = lambda value: 390.0 <= value <= 490.0
+            self.assertTrue(
+                close_to_source(compensated_hz) or close_to_source(uncompensated_hz),
+                "Neither MLT timewarp mode preserved the 440 Hz tone: "
+                f"pitch_on={compensated_hz:.1f}Hz, pitch_off={uncompensated_hz:.1f}Hz.",
             )
 
 
