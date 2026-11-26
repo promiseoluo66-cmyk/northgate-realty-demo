@@ -2,7 +2,7 @@
 
 **Lab branch:** video-editor-lab  
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
-**Status:** Tasks 1–8 have implementation and automated acceptance coverage on `video-editor-lab`. Latest verified full workflow before proxy work: run #106 (259 Python tests, 47 Node tests, D1 migrations passed). Task 9 proxy/low-resolution preview is implemented in code and its CI verification is pending. Stage 1 is not complete; the full 52-operation edge-case sign-off and live hosted verification remain open.
+**Status:** Stage 1 Tasks 1–10 have implementation and offline automated acceptance coverage on `video-editor-lab`. Latest full workflow run #118 passed: 275 Python tests, 51 Node tests and all checked-in D1 migrations. Stage 1 is ready to progress to Stage 2 at the offline/code level. Live Worker-to-runner verification remains pending because deployment has not been authorized.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -111,7 +111,7 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 
 ### Task 9 — Proxy media and low-resolution preview
 
-**Implemented in code; latest full CI verification pending.**
+**Implemented and verified in GitHub Actions run #118.**
 
 - Added `media.create_proxy` for video assets, producing an H.264 MP4 proxy at a maximum of 640×360 while preserving the original file and duration.
 - Proxy generation rejects missing/invalid sources, duplicate proxies, projects at the 100-asset limit, output above 50 MB and sources longer than 30 minutes. Partial files are removed on failure.
@@ -121,7 +121,14 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 
 ### Task 10 — Complete 52-operation edge-case audit
 
-**In progress.** The current audit confirms 52 unique registered operations, executor dispatch references and feature-test references. Schema hardening now also checks required fields, numeric bounds, unknown arguments and malformed IDs in ID arrays. Final CI verification and the operation-by-operation failure/rollback/confirmation review remain outstanding.
+**Offline audit complete; GitHub Actions run #118 passed.**
+
+- 52 unique operations have executor dispatch references.
+- The shared audit tests check closed schemas, required fields, numeric boundaries, unknown arguments, malformed track-ID arrays and confirmation gates.
+- A stale-revision rejection check runs against all 52 operations.
+- Transaction tests verify that a later failing operation rolls back an earlier valid change, and that undo/redo restore project state as separate revisions.
+- Feature/subsystem tests cover supported operation behaviour; generated-media integration tests cover MLT freeze-frame rendering, pitch-preserving speed, audio extraction and proxy creation/storage.
+- This is offline acceptance evidence. It does not claim every possible parameter combination has been tested or prove a live Worker deployment.
 
 
 ## Remaining Stage 1 acceptance gaps
@@ -136,4 +143,4 @@ Optical-flow slow motion remains optional and gated. It must not introduce a pai
 - The original 42 registered operations remain part of the expanded full-audit set. The registry now contains 52 unique operations after the Task 2–3 additions and later media/audio operations; all 52 must be included in the final audit.
 - Run Python, Node, Worker/UI and generated-media MLT tests on this public lab branch.
 - Do not merge into Stable or deploy a Worker as part of this lab setup.
-- Do not mark Stage 1 complete until all required acceptance gaps are resolved or explicitly deferred with user approval.
+- Stage 1 offline implementation is complete. Do not claim production acceptance until the hosted Worker-to-runner test is completed after explicit deployment authorization.

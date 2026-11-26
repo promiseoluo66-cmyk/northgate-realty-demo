@@ -722,7 +722,7 @@
     "production_warning": "This catalogue is not evidence that all listed capabilities exist in the current app."
   },
   "audit": {
-    "audited_on": "2026-11-23",
+    "audited_on": "2026-11-26",
     "repository": "promiseoluo66-cmyk/northgate-realty-demo",
     "branch": "video-editor-lab",
     "base_branch": "main",
@@ -756,6 +756,9 @@
       "timeline.add_marker",
       "timeline.move_marker",
       "timeline.remove_marker"
+    ],
+    "stage1_task_9_added_operations": [
+      "media.create_proxy"
     ]
   }
 }
