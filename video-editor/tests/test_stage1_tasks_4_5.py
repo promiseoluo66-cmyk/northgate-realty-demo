@@ -192,5 +192,43 @@ class Stage1Tasks45Tests(unittest.TestCase):
             })
 
 
+    def test_project_profile_update_is_executable(self):
+        result = self.executor.execute("project.set_profile", {
+            "width": 1080, "height": 1920, "fps_numerator": 30, "fps_denominator": 1,
+        })
+        profile = result["project"]["video_profile"]
+        self.assertEqual(profile["width"], 1080)
+        self.assertEqual(profile["height"], 1920)
+        self.assertEqual(profile["frame_rate"], {"numerator": 30, "denominator": 1})
+
+    def test_track_create_and_remove_are_executable(self):
+        self.executor.execute("timeline.add_track", {
+            "track_type": "audio", "name": "Effects", "order": 3,
+        })
+        project = self.executor.get_project()
+        created = next(track for track in project["tracks"] if track["name"] == "Effects")
+        self.executor.execute("timeline.remove_track", {"track_id": created["id"]}, confirmed=True)
+        self.assertNotIn(created["id"], [track["id"] for track in self.executor.get_project()["tracks"]])
+
+    def test_clip_trim_is_executable_and_updates_source_duration(self):
+        result = self.executor.execute("timeline.trim_clip", {
+            "clip_id": "c1", "source_in_us": 200000, "source_out_us": 1200000,
+        })
+        clip = self.executor.get_project()["tracks"][0]["clips"][0]
+        self.assertEqual(clip["source_in_us"], 200000)
+        self.assertEqual(clip["source_out_us"], 1200000)
+        self.assertEqual(clip["duration_us"], 1000000)
+
+    def test_effect_remove_is_executable(self):
+        project = self.executor.get_project()
+        project["tracks"][0]["clips"][0]["effects"].append({
+            "id": "fx1", "type": "brightness", "parameters": {"level": 1.0},
+        })
+        self.executor = ProjectToolExecutor(project)
+        result = self.executor.execute("effect.remove", {"clip_id": "c1", "effect_id": "fx1"})
+        self.assertEqual(result["result"]["removed_effect_id"], "fx1")
+        self.assertEqual(self.executor.get_project()["tracks"][0]["clips"][0]["effects"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
