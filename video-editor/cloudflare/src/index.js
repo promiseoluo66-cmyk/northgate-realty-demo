@@ -952,7 +952,7 @@ export default {
       if (previewMatch && request.method === "POST") return await updateMediaPreview(request, env, previewMatch[1], previewMatch[2]);
       const relinkMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/assets\/([A-Za-z0-9_-]{1,64})\/relink$/);
       if (relinkMatch && request.method === "PUT") return await relinkMediaAsset(request, env, relinkMatch[1], relinkMatch[2]);
-      const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);      const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);
+      const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);
       if (sourceUrlMatch && request.method === "GET") return await getSourceUrl(request, env, sourceUrlMatch[1]);
       const manualEditMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/manual-edit$/);
       if (manualEditMatch && request.method === "POST") return await queueManualEdit(request, env, manualEditMatch[1]);
