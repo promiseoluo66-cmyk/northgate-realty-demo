@@ -7,14 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from unittest.mock import patch
-from types import SimpleNamespace
-
 from mlt_engine.renderer import (
     MltRenderError,
     _apply_clip_transform,
     _frame_at_us,
-    _select_audio_sample_rate,
     compile_render_plan,
 )
 
@@ -73,51 +69,6 @@ class FrameConversionTests(unittest.TestCase):
     def test_fractional_frame_rate(self):
         # At 30000/1001 fps, one second is approximately 29.97 frames.
         self.assertEqual(_frame_at_us(1_000_000, 30_000, 1_001), 30)
-
-
-class AudioSampleRateSelectionTests(unittest.TestCase):
-    def test_single_44100_hz_source_matches_consumer_rate(self):
-        plan = {
-            "tracks": [{
-                "type": "audio", "muted": False,
-                "clips": [{"kind": "audio", "path": "/tmp/tone.wav"}],
-            }],
-        }
-        with patch(
-            "mlt_engine.renderer.subprocess.run",
-            return_value=SimpleNamespace(returncode=0, stdout="44100\\n"),
-        ):
-            self.assertEqual(_select_audio_sample_rate(plan), 44100)
-
-    def test_mixed_sample_rates_use_standard_48000_hz_clock(self):
-        plan = {
-            "tracks": [{
-                "type": "audio", "muted": False,
-                "clips": [
-                    {"kind": "audio", "path": "/tmp/a.wav"},
-                    {"kind": "audio", "path": "/tmp/b.wav"},
-                ],
-            }],
-        }
-        with patch(
-            "mlt_engine.renderer.subprocess.run",
-            side_effect=[
-                SimpleNamespace(returncode=0, stdout="44100\\n"),
-                SimpleNamespace(returncode=0, stdout="48000\\n"),
-            ],
-        ):
-            self.assertEqual(_select_audio_sample_rate(plan), 48000)
-
-    def test_no_audio_sources_use_safe_48000_hz_default(self):
-        self.assertEqual(
-            _select_audio_sample_rate({
-                "tracks": [{
-                    "type": "video", "muted": False,
-                    "clips": [{"kind": "video", "path": "/tmp/video-no-audio.mp4"}],
-                }],
-            }),
-            48000,
-        )
 
 
 class CompilePlanTests(unittest.TestCase):

@@ -159,8 +159,7 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             root = Path(directory)
             video = root / "blue-video.mp4"
             audio = root / "tone-source.wav"
-            output = root / "double-speed-render-pitch-on.mp4"
-            output_without_pitch = root / "double-speed-render-pitch-off.mp4"
+            output = root / "double-speed-render.mp4"
             _make_test_media(video, audio)
 
             source_hz = _measure_tone_hz(audio)
@@ -171,15 +170,6 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             self.assertLess(
                 source_hz, 450.0,
                 f"The generated WAV test tone should be 440 Hz, measured {source_hz:.1f} Hz.",
-            )
-
-            # MLT's timewarp producer delegates pitch correction to rbpitch.
-            import mlt7 as mlt
-            factory = mlt.Factory()
-            factory.init(None)
-            self.assertTrue(
-                mlt.Filter(mlt.Profile(), "rbpitch").is_valid(),
-                "The installed MLT runtime does not provide its required pitch filter.",
             )
 
             executor = ProjectToolExecutor(
@@ -193,35 +183,23 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             project = executor.get_project()
             self.assertEqual(project["tracks"][1]["clips"][0]["playback_rate"], 2.0)
 
-            result = render_project(project, root, output, pitch_preserving=True)
+            result = render_project(project, root, output)
             self.assertEqual(result["backend"], "MLT Python API")
             self.assertTrue(output.is_file())
             self.assertGreater(output.stat().st_size, 0)
 
-            raw_result = render_project(
-                project, root, output_without_pitch, pitch_preserving=False
-            )
-            self.assertEqual(raw_result["backend"], "MLT Python API")
-            self.assertTrue(output_without_pitch.is_file())
-            self.assertGreater(output_without_pitch.stat().st_size, 0)
-
-            compensated_hz = _measure_tone_hz(output)
-            uncompensated_hz = _measure_tone_hz(output_without_pitch)
+            measured_hz = _measure_tone_hz(output)
             print(
-                "PITCH_DIAGNOSTIC "
-                f"source={source_hz:.1f}Hz "
-                f"MLT_warp_pitch=1:{compensated_hz:.1f}Hz "
-                f"MLT_warp_pitch=0:{uncompensated_hz:.1f}Hz"
+                "PITCH_ACCEPTANCE "
+                f"source={source_hz:.1f}Hz rendered={measured_hz:.1f}Hz"
             )
             self.assertGreater(
-                compensated_hz, 390.0,
-                "MLT pitch compensation did not preserve the 440 Hz tone: "
-                f"pitch_on={compensated_hz:.1f}Hz, pitch_off={uncompensated_hz:.1f}Hz.",
+                measured_hz, 390.0,
+                f"2x speed changed the source pitch: measured {measured_hz:.1f} Hz.",
             )
             self.assertLess(
-                compensated_hz, 490.0,
-                "MLT pitch compensation did not preserve the 440 Hz tone: "
-                f"pitch_on={compensated_hz:.1f}Hz, pitch_off={uncompensated_hz:.1f}Hz.",
+                measured_hz, 490.0,
+                f"2x speed changed the source pitch: measured {measured_hz:.1f} Hz.",
             )
 
 

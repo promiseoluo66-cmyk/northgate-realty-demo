@@ -1275,73 +1275,14 @@ def _playlist_hide_flags(track_plan: dict[str, Any]) -> int:
     return hide
 
 
-def _select_audio_sample_rate(plan: dict[str, Any]) -> int:
-    """Choose an MLT output rate that avoids pitch drift for common source rates.
-
-    MLT's timewarp pitch filter operates on each producer's input sample clock.
-    Matching a single dominant source rate to the consumer avoids an extra
-    resampling ratio being applied around the timewarp correction. Mixed-rate
-    projects use the standard 48 kHz output clock.
-    """
-    rates_by_path: dict[str, int] = {}
-    for track in plan.get("tracks", []):
-        if track.get("muted", False):
-            continue
-        if track.get("type") not in {"video", "overlay", "audio"}:
-            continue
-        for clip in track.get("clips", []):
-            if clip.get("kind") not in {"video", "audio"}:
-                continue
-            source = clip.get("path")
-            if source is None:
-                continue
-            source_path = str(source)
-            if source_path in rates_by_path:
-                continue
-            probe = subprocess.run(
-                [
-                    "ffprobe", "-v", "error", "-select_streams", "a:0",
-                    "-show_entries", "stream=sample_rate",
-                    "-of", "default=noprint_wrappers=1:nokey=1", source_path,
-                ],
-                check=False, capture_output=True, text=True, timeout=30,
-            )
-            if probe.returncode != 0:
-                continue
-            try:
-                sample_rate = int((probe.stdout or "").strip().splitlines()[0])
-            except (IndexError, TypeError, ValueError):
-                continue
-            if 8000 <= sample_rate <= 192000:
-                rates_by_path[source_path] = sample_rate
-
-    if not rates_by_path:
-        return 48000
-    counts: dict[int, int] = {}
-    for sample_rate in rates_by_path.values():
-        counts[sample_rate] = counts.get(sample_rate, 0) + 1
-    rate, count = max(counts.items(), key=lambda item: item[1])
-    if count > len(rates_by_path) / 2:
-        return rate
-    return 48000
-
-
 def render_project(
     project_document: Any,
     asset_root: str | Path,
     destination: str | Path,
     *,
     timeout_seconds: int = 120,
-    pitch_preserving: bool = True,
 ) -> dict[str, Any]:
-    """Render the supported project subset through the LGPL MLT Python API.
-
-    Pitch correction is enabled by default. The optional switch is exposed to
-    integration tests so MLT's underlying timewarp audio can be compared with
-    its Rubber Band correction path; product renders should retain the default.
-    """
-    if not isinstance(pitch_preserving, bool):
-        raise MltRenderError("pitch_preserving must be a boolean.")
+    """Render the supported project subset through the LGPL MLT Python API."""
     plan = compile_render_plan(project_document, asset_root)
     target = Path(destination).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1456,8 +1397,9 @@ def render_project(
                         raise MltRenderError(
                             f"MLT timewarp could not open source clip {clip['id']}."
                         )
-                    if pitch_preserving:
-                        producer.set("warp_pitch", 1)
+                    # Do not set warp_pitch: MLT's timewarp already retains
+                    # source pitch in this render path. warp_pitch=1 applies a
+                    # second correction and halves the tone in real renders.
                 else:
                     producer = mlt.Producer(profile, str(clip["path"]))
                     if not producer.is_valid():
@@ -1629,8 +1571,7 @@ def render_project(
     consumer.set("pix_fmt", "yuv420p")
     consumer.set("acodec", "aac")
     consumer.set("ab", "128k")
-    audio_sample_rate = _select_audio_sample_rate(plan)
-    consumer.set("ar", audio_sample_rate)
+    consumer.set("ar", 48000)
     consumer.set("channels", 2)
     consumer.set("real_time", -1)
 
@@ -1682,5 +1623,4 @@ def render_project(
         "audio_tracks": len(audio_track_indexes),
         "bytes": target.stat().st_size,
         "audio": "mixed" if audio_track_indexes else "none",
-        "audio_sample_rate": audio_sample_rate,
     }
