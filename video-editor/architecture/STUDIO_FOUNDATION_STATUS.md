@@ -2,7 +2,7 @@
 
 **Lab branch:** video-editor-lab  
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
-**Status:** Tasks 1–5 automated acceptance checks passed in GitHub Actions run #61 on 26 November 2026. Stage 1 is not complete; the remaining acceptance gaps below are still open.
+**Status:** Tasks 1–8 have implementation and automated acceptance coverage on `video-editor-lab`. Latest verified full workflow: run #106 (259 Python tests, 47 Node tests, D1 migrations passed). Stage 1 is not complete; proxy/low-resolution preview, the full 51-operation edge-case sign-off, and live hosted verification remain open.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -21,7 +21,7 @@
 - Keyframe graph interactions, copy/paste, remove/clear and motion presets.
 - Track-level audio gain and stereo pan on video/overlay/audio tracks, with project validation and renderer filters.
 - Animated crop X/Y/width/height keyframes for video/image clips, expanded easing functions and Studio motion presets.
-- 49 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
+- 51 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
 
 ## Stage 1 task status
 
@@ -74,18 +74,54 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 
 ### Task 5 — Animation and crop keyframes
 
-**Implemented in the lab; new automated acceptance checks added, final CI verification pending.**
+**Implemented in the lab; automated acceptance checks pass in run #106.**
 
 - Crop X/Y/width/height can be animated on video and image clips.
 - The MLT adapter samples animated crop geometry into affine transform keyframes and checks each sampled crop rectangle against the source frame.
 - Animated crop requires source dimensions and cannot be combined with automatic framing or playback-speed ramp keyframes in this adapter stage.
 - Added quadratic, cubic, quartic and smoothstep easing, plus Studio zoom-out, pan-left/right and animated crop-reveal presets.
 
+
+### Task 6 — Audio extraction, freeze-frame and durable generated-media storage
+
+**Implemented; automated acceptance checks pass in GitHub Actions run #104.**
+
+- `media.extract_audio` creates verified M4A, MP3 or WAV project assets using FFmpeg/FFprobe.
+- `timeline.create_freeze_frame` extracts a real PNG and inserts an image hold on an unlocked overlay track.
+- Generated audio/still assets are uploaded as private Release assets, with IDs checkpointed in the project and undo/redo history.
+- Runner recovery downloads assets referenced by the current project and history. Upload failures clean up partial uploads and do not persist dead IDs.
+- The real MLT freeze-frame test renders a blue base with a red still overlay, then decodes output frames before, during and after the hold to verify the visible pixels.
+
+### Task 7 — Pitch-preserving speed changes
+
+**Implemented; real-render acceptance test passes in run #104.**
+
+- The MLT render path avoids an extra `warp_pitch` correction that produced a 220.5 Hz tone from a 440 Hz source.
+- The integration test renders a 2x-speed clip and measures the output tone near 440 Hz.
+- The render output remains on the stable 48 kHz audio clock.
+
+### Task 8 — Edited-composite preview
+
+**Implemented; Studio UI acceptance tests pass in run #106.**
+
+- The Studio player starts with source footage while a render is queued or running.
+- Once the Worker reports a completed render, the player authenticates to the Worker and receives a short-lived signed URL for the private rendered MP4.
+- The player switches to the edited-composite output and labels the revision. A later edit switches back to source footage while rendering.
+- The ordinary download action remains separate from the preview player.
+
+### Task 9 — Proxy media and low-resolution preview
+
+**Not yet implemented.** This requires a bounded proxy/preview storage lifecycle in the private Release repository. Do not delete original media or user-generated audio/still assets. The replacement/retention policy for older temporary preview assets must be settled before implementation.
+
+### Task 10 — Complete 51-operation edge-case audit
+
+**In progress.** The current audit confirms 51 unique registered operations, executor dispatch references and feature-test references. Schema hardening now also checks required fields, numeric bounds, unknown arguments and malformed IDs in ID arrays. Final CI verification and the operation-by-operation failure/rollback/confirmation review remain outstanding.
+
+
 ## Remaining Stage 1 acceptance gaps
-1. Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
-2. Edited-composite preview, proxy media and low-resolution preview.
-3. Successful end-to-end hosted tests against the actual Worker/renderer configuration.
-4. Complete edge-case and editor-integration sign-off for all 49 registered operations.
+1. Proxy media and low-resolution preview (Task 9).
+2. Complete edge-case and editor-integration sign-off for all 51 registered operations (Task 10).
+3. Successful end-to-end hosted tests against the actual Worker/renderer configuration; deployment remains gated on explicit user authorization.
 
 Optical-flow slow motion remains optional and gated. It must not introduce a paid dependency or hidden fallback.
 
