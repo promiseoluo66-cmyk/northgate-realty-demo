@@ -2,7 +2,7 @@
 
 **Lab branch:** video-editor-lab  
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
-**Status:** Tasks 1–3 passed their latest complete CI run. Tasks 4 and 5 are implemented in the isolated lab, with new acceptance checks awaiting the next complete CI run. Stage 1 is not complete.
+**Status:** Tasks 1–5 automated acceptance checks passed in GitHub Actions run #61 on 26 November 2026. Stage 1 is not complete; the remaining acceptance gaps below are still open.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -66,7 +66,7 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 
 ### Task 4 — Track-level audio routing
 
-**Implemented in the lab; new automated acceptance checks added, final CI verification pending.**
+**Implemented in the lab; automated acceptance checks pass in GitHub Actions run #61.**
 
 - Video, overlay and audio tracks can store gain in dB (-96 to +24) and stereo pan (-1 left to +1 right).
 - Track mix settings are saved with the canonical project and validated. Text tracks reject audio-routing settings.
