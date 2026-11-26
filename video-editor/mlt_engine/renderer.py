@@ -60,6 +60,7 @@ def _is_identity_transform(clip: dict[str, Any]) -> bool:
 
 _VISUAL_KEYFRAME_PROPERTIES = {
     "position_x", "position_y", "scale_x", "scale_y", "rotation_deg", "opacity",
+    "crop_x", "crop_y", "crop_width", "crop_height",
 }
 
 
@@ -76,12 +77,26 @@ def _eased_ratio(ratio: float, keyframe: dict[str, Any]) -> float:
         return 0.0
     if mode == "linear":
         return ratio
-    if mode == "ease_in":
-        return ratio * ratio * ratio
-    if mode == "ease_out":
+    if mode in {"ease_in", "ease_in_cubic"}:
+        return ratio ** 3
+    if mode in {"ease_out", "ease_out_cubic"}:
         return 1.0 - (1.0 - ratio) ** 3
-    if mode == "ease_in_out":
+    if mode in {"ease_in_out", "ease_in_out_cubic"}:
         return 4.0 * ratio ** 3 if ratio < 0.5 else 1.0 - ((-2.0 * ratio + 2.0) ** 3) / 2.0
+    if mode == "ease_in_quad":
+        return ratio ** 2
+    if mode == "ease_out_quad":
+        return 1.0 - (1.0 - ratio) ** 2
+    if mode == "ease_in_out_quad":
+        return 2.0 * ratio ** 2 if ratio < 0.5 else 1.0 - ((-2.0 * ratio + 2.0) ** 2) / 2.0
+    if mode == "ease_in_quart":
+        return ratio ** 4
+    if mode == "ease_out_quart":
+        return 1.0 - (1.0 - ratio) ** 4
+    if mode == "ease_in_out_quart":
+        return 8.0 * ratio ** 4 if ratio < 0.5 else 1.0 - ((-2.0 * ratio + 2.0) ** 4) / 2.0
+    if mode == "smoothstep":
+        return ratio * ratio * (3.0 - 2.0 * ratio)
     if mode == "bezier":
         curve = keyframe.get("bezier", {})
         x1 = float(curve.get("x1", 0.25))
@@ -181,10 +196,20 @@ def _compile_clip_transform(
     fps_num: int, fps_den: int, duration_frames: int,
     source_dimensions: tuple[int, int] | None = None,
 ) -> dict[str, Any] | None:
-    """Compile transforms and sampled keyframe easing into MLT animations."""
+    """Compile visual transforms, animated crops and sampled easing into MLT."""
     raw_transform = clip.get("transform") or {}
     position = raw_transform.get("position", {})
     scale = raw_transform.get("scale", {})
+    crop = clip.get("crop")
+    crop_props = {"crop_x", "crop_y", "crop_width", "crop_height"}
+    keyframes = clip.get("keyframes", [])
+    crop_keyframes = any(item["property"] in crop_props for item in keyframes)
+    crop_active = crop is not None or crop_keyframes
+    framing = clip.get("framing")
+    if crop_active and framing:
+        raise MltRenderError("Manual crop cannot be combined with automatic framing.")
+    if crop_active and source_dimensions is None:
+        raise MltRenderError("Manual crop requires readable source width and height metadata.")
     base = {
         "position_x": float(position.get("x", 0.0)),
         "position_y": float(position.get("y", 0.0)),
@@ -196,13 +221,12 @@ def _compile_clip_transform(
         "anchor_y": float(raw_transform.get("anchor_y", 0.5)),
         "flip_horizontal": bool(raw_transform.get("flip_horizontal", False)),
         "flip_vertical": bool(raw_transform.get("flip_vertical", False)),
+        "crop_x": float((crop or {}).get("x", 0.0)),
+        "crop_y": float((crop or {}).get("y", 0.0)),
+        "crop_width": float((crop or {}).get("width", 1.0)),
+        "crop_height": float((crop or {}).get("height", 1.0)),
     }
-    keyframes = clip.get("keyframes", [])
-    framing = clip.get("framing")
-    crop = clip.get("crop")
-    if crop and framing:
-        raise MltRenderError("Manual crop cannot be combined with automatic framing.")
-    if not keyframes and _is_identity_transform(clip) and not framing and not crop:
+    if not keyframes and _is_identity_transform(clip) and not framing and not crop_active:
         return None
 
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -215,7 +239,6 @@ def _compile_clip_transform(
                 f"Keyframe property {prop!r} is not supported by this visual MLT adapter."
             )
         grouped.setdefault(prop, []).append(keyframe)
-
     for entries in grouped.values():
         entries.sort(key=lambda item: item["time_us"])
 
@@ -232,70 +255,34 @@ def _compile_clip_transform(
                     raise MltRenderError("Keyframe times must increase.")
                 ratio = (time_us - left["time_us"]) / span
                 eased = _eased_ratio(ratio, left)
-                start_value = float(left["value"])
-                return start_value + (float(right["value"]) - start_value) * eased
+                return float(left["value"]) + (float(right["value"]) - float(left["value"])) * eased
         return float(entries[-1]["value"])
 
-    # MLT affine's rectangle property is interpolated linearly. Sample non-linear
-    # user easing curves into a bounded set of linear points so that the actual
-    # render follows the selected easing rather than silently treating it as linear.
     framing_mode = framing.get("mode") if framing else None
-    crop_source_offset_x = 0.0
-    crop_source_offset_y = 0.0
-    crop_view_width = float(width)
-    crop_view_height = float(height)
-    if crop:
+    source_width = source_height = 0
+    if crop_active or framing_mode in {"fit", "fill"}:
         if source_dimensions is None:
-            raise MltRenderError("Manual crop requires readable source width and height metadata.")
+            requirement = "Manual crop" if crop_active else framing_mode.title()
+            raise MltRenderError(f"{requirement} requires readable source width and height metadata.")
         source_width, source_height = source_dimensions
         if source_width <= 0 or source_height <= 0:
-            raise MltRenderError("Manual crop requires positive source dimensions.")
-        crop_x = float(crop["x"])
-        crop_y = float(crop["y"])
-        if base["flip_horizontal"]:
-            crop_x = 1.0 - crop_x - float(crop["width"])
-        if base["flip_vertical"]:
-            crop_y = 1.0 - crop_y - float(crop["height"])
-        crop_source_offset_x = crop_x * source_width
-        crop_source_offset_y = crop_y * source_height
-        crop_source_width = float(crop["width"]) * source_width
-        crop_source_height = float(crop["height"]) * source_height
-        if (
-            crop_source_width <= 0 or crop_source_height <= 0
-            or crop_source_offset_x + crop_source_width > source_width + 0.001
-            or crop_source_offset_y + crop_source_height > source_height + 0.001
-        ):
-            raise MltRenderError("Manual crop rectangle must stay inside the source frame.")
-        crop_scale = max(width / crop_source_width, height / crop_source_height)
-        framing_width = source_width * crop_scale
-        framing_height = source_height * crop_scale
-        crop_source_offset_x *= crop_scale
-        crop_source_offset_y *= crop_scale
-        crop_view_width = crop_source_width * crop_scale
-        crop_view_height = crop_source_height * crop_scale
-    elif framing_mode in {"fit", "fill"}:
-        if source_dimensions is None:
-            raise MltRenderError(
-                f"{framing_mode.title()} framing requires readable source width and height metadata."
-            )
-        source_width, source_height = source_dimensions
-        if source_width <= 0 or source_height <= 0:
-            raise MltRenderError("Framing requires positive source dimensions.")
-        framing_scale = (
+            raise MltRenderError("Framing/crop requires positive source dimensions.")
+
+    if framing_mode in {"fit", "fill"}:
+        base_framing_scale = (
             min(width / source_width, height / source_height)
-            if framing_mode == "fit"
-            else max(width / source_width, height / source_height)
+            if framing_mode == "fit" else max(width / source_width, height / source_height)
         )
-        framing_width = source_width * framing_scale
-        framing_height = source_height * framing_scale
+        default_framing_width = source_width * base_framing_scale
+        default_framing_height = source_height * base_framing_scale
     else:
-        framing_width = float(width)
-        framing_height = float(height)
+        default_framing_width = float(width)
+        default_framing_height = float(height)
 
     has_animation = any(len(entries) > 1 for entries in grouped.values())
     if has_animation:
         sample_step = max(1, math.ceil(duration_frames / 10000))
-        sample_times: dict[int, int] = {
+        sample_times = {
             frame: frame * 1_000_000 * fps_den // fps_num
             for frame in range(0, duration_frames, sample_step)
         }
@@ -303,27 +290,48 @@ def _compile_clip_transform(
             (duration_frames - 1) * 1_000_000 * fps_den // fps_num
         )
         for keyframe in keyframes:
-            if keyframe["property"] not in _VISUAL_KEYFRAME_PROPERTIES:
-                continue
-            frame = min(_frame_at_us(keyframe["time_us"], fps_num, fps_den), duration_frames - 1)
-            sample_times[frame] = keyframe["time_us"]
+            if keyframe["property"] in _VISUAL_KEYFRAME_PROPERTIES:
+                frame = min(_frame_at_us(keyframe["time_us"], fps_num, fps_den), duration_frames - 1)
+                sample_times[frame] = keyframe["time_us"]
     else:
-        # A static transform or a single initial keyframe is a single value,
-        # not an artificial animation spanning the entire clip.
         sample_times = {0: 0}
 
     points: list[tuple[int, str, float, float]] = []
     for frame, time_us in sorted(sample_times.items()):
         values = {prop: value_at(prop, time_us) for prop in base}
+        framing_width = default_framing_width
+        framing_height = default_framing_height
+        crop_source_offset_x = crop_source_offset_y = 0.0
+        crop_view_width, crop_view_height = float(width), float(height)
+        if crop_active:
+            crop_x, crop_y = values["crop_x"], values["crop_y"]
+            crop_w, crop_h = values["crop_width"], values["crop_height"]
+            if (
+                crop_x < 0 or crop_y < 0 or crop_w <= 0 or crop_h <= 0
+                or crop_x + crop_w > 1.000000001
+                or crop_y + crop_h > 1.000000001
+            ):
+                raise MltRenderError("Animated crop rectangle must stay inside the source frame.")
+            if values["flip_horizontal"]:
+                crop_x = 1.0 - crop_x - crop_w
+            if values["flip_vertical"]:
+                crop_y = 1.0 - crop_y - crop_h
+            crop_source_width = crop_w * source_width
+            crop_source_height = crop_h * source_height
+            crop_scale = max(width / crop_source_width, height / crop_source_height)
+            framing_width, framing_height = source_width * crop_scale, source_height * crop_scale
+            crop_source_offset_x = crop_x * source_width * crop_scale
+            crop_source_offset_y = crop_y * source_height * crop_scale
+            crop_view_width = crop_source_width * crop_scale
+            crop_view_height = crop_source_height * crop_scale
+
         rect_width = framing_width * values["scale_x"]
         rect_height = framing_height * values["scale_y"]
         if rect_width > 8192 or rect_height > 8192:
             raise MltRenderError("Transformed clip dimensions exceed the 8192-pixel safety limit.")
         if rect_width <= 0 or rect_height <= 0:
             raise MltRenderError("Animated scale must remain greater than zero.")
-        if crop:
-            # Scale the full source, then offset it so the selected source-space
-            # rectangle is centred and covers the entire output canvas.
+        if crop_active:
             rect_x = (width - crop_view_width * values["scale_x"]) / 2.0
             rect_y = (height - crop_view_height * values["scale_y"]) / 2.0
             rect_x -= crop_source_offset_x * values["scale_x"]
@@ -331,42 +339,24 @@ def _compile_clip_transform(
         elif framing_mode in {"fit", "fill"}:
             horizontal = framing.get("horizontal_alignment", "center")
             vertical = framing.get("vertical_alignment", "middle")
-            rect_x = (
-                0.0 if horizontal == "left"
-                else (width - rect_width) / 2.0 if horizontal == "center"
-                else width - rect_width
+            rect_x = 0.0 if horizontal == "left" else (
+                (width - rect_width) / 2.0 if horizontal == "center" else width - rect_width
             )
-            rect_y = (
-                0.0 if vertical == "top"
-                else (height - rect_height) / 2.0 if vertical == "middle"
-                else height - rect_height
+            rect_y = 0.0 if vertical == "top" else (
+                (height - rect_height) / 2.0 if vertical == "middle" else height - rect_height
             )
         else:
-            rect_x = (width - rect_width) / 2.0
-            rect_y = (height - rect_height) / 2.0
-        # The affine filter rotates around the rectangle centre. Translate the
-        # rectangle by (R-I)(C-P) so a user-selected normalized pivot P remains
-        # fixed through rotation. Anchor values are fractions of the source
-        # rectangle: (0.5, 0.5) keeps the default centre pivot.
+            rect_x, rect_y = (width - rect_width) / 2.0, (height - rect_height) / 2.0
+
         angle = math.radians(values["rotation_deg"])
-        cosine = math.cos(angle)
-        sine = math.sin(angle)
+        cosine, sine = math.cos(angle), math.sin(angle)
         center_to_pivot_x = (0.5 - values["anchor_x"]) * rect_width
         center_to_pivot_y = (0.5 - values["anchor_y"]) * rect_height
-        pivot_shift_x = (
-            cosine * center_to_pivot_x - sine * center_to_pivot_y
-            - center_to_pivot_x
-        )
-        pivot_shift_y = (
-            sine * center_to_pivot_x + cosine * center_to_pivot_y
-            - center_to_pivot_y
-        )
+        pivot_shift_x = cosine * center_to_pivot_x - sine * center_to_pivot_y - center_to_pivot_x
+        pivot_shift_y = sine * center_to_pivot_x + cosine * center_to_pivot_y - center_to_pivot_y
         rect_x += values["position_x"] + pivot_shift_x
         rect_y += values["position_y"] + pivot_shift_y
-        rect = (
-            f"{rect_x:.3f}/{rect_y:.3f}:"
-            f"{rect_width:.3f}x{rect_height:.3f}:1.000"
-        )
+        rect = f"{rect_x:.3f}/{rect_y:.3f}:{rect_width:.3f}x{rect_height:.3f}:1.000"
         points.append((frame, rect, values["rotation_deg"], values["opacity"]))
 
     if len(points) == 1:
@@ -379,8 +369,7 @@ def _compile_clip_transform(
         )
     opacity_alpha_value = (
         ";".join(f"{frame}={opacity:.3f}" for frame, _, _, opacity in points)
-        if len(points) > 1
-        else f"{points[0][3]:.3f}"
+        if len(points) > 1 else f"{points[0][3]:.3f}"
     )
     return {
         "rect": rect_value,
@@ -393,7 +382,7 @@ def _compile_clip_transform(
         "animated": has_animation,
         "rotation_animated": len(grouped.get("rotation_deg", [])) > 1,
         "framing": dict(framing) if framing else None,
-        "crop": dict(crop) if crop else None,
+        "crop": dict(crop) if crop else ({"animated": True} if crop_keyframes else None),
         "flip_horizontal": base["flip_horizontal"],
         "flip_vertical": base["flip_vertical"],
     }
@@ -769,6 +758,8 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                 if (
                     clip.get("framing", {}).get("mode") in {"fit", "fill"}
                     or clip.get("crop")
+                    or any(item["property"] in {"crop_x", "crop_y", "crop_width", "crop_height"}
+                           for item in clip.get("keyframes", []))
                 ):
                     source_dimensions = _probe_media_dimensions(visual_media_path)
             if not 0.05 <= playback_rate <= 16.0:
@@ -914,6 +905,8 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                 ),
                 "solo": bool(track.get("solo", False)),
                 "visible": bool(track.get("visible", True)),
+                "audio_gain_db": float(track.get("audio_gain_db", 0)),
+                "audio_pan": float(track.get("audio_pan", 0)),
                 "clips": planned_clips,
                 "transitions": transitions_by_track[track["id"]],
             })
@@ -933,6 +926,31 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
         "total_frames": maximum_end_frame,
         "tracks": planned_tracks,
     }
+
+
+def _apply_track_audio_routing(
+    mlt: Any, profile: Any, producer: Any, *, gain_db: float = 0.0, pan: float = 0.0,
+) -> None:
+    """Apply a track's volume and stereo-balance settings to its audio signal."""
+    if not math.isfinite(float(gain_db)) or not -96.0 <= float(gain_db) <= 24.0:
+        raise MltRenderError("Track audio gain must be between -96 and 24 dB.")
+    if not math.isfinite(float(pan)) or not -1.0 <= float(pan) <= 1.0:
+        raise MltRenderError("Track audio pan must be between -1 (left) and 1 (right).")
+    if not math.isclose(float(gain_db), 0.0, abs_tol=1e-9):
+        volume = mlt.Filter(profile, "avfilter.volume")
+        if not volume.is_valid():
+            raise MltRenderError("The required LGPL FFmpeg volume filter is not installed.")
+        volume.set("av.volume", f"{10.0 ** (float(gain_db) / 20.0):.9f}")
+        volume.set("av.precision", "double")
+        producer.attach(volume)
+    if not math.isclose(float(pan), 0.0, abs_tol=1e-9):
+        panner = mlt.Filter(profile, "panner")
+        if not panner.is_valid():
+            raise MltRenderError("The required LGPL MLT panner filter is not installed.")
+        panner.set("channel", -1)
+        panner.set("gang", 1)
+        panner.set("split", (float(pan) + 1.0) / 2.0)
+        producer.attach(panner)
 
 
 def _apply_clip_effects(mlt: Any, profile: Any, producer: Any,
@@ -1388,6 +1406,12 @@ def render_project(
                     producer.set("eof", "loop")
                     producer.set("length", clip["duration_frames"])
                 _apply_clip_effects(mlt, profile, producer, clip["effects"])
+                if clip["kind"] in {"video", "audio"}:
+                    _apply_track_audio_routing(
+                        mlt, profile, producer,
+                        gain_db=track_plan["audio_gain_db"],
+                        pan=track_plan["audio_pan"],
+                    )
                 # Static transforms are safe to attach to every speed segment.
                 # Animated transforms are rejected when a speed curve is active because
                 # their local keyframe clocks need a combined time-remapping pass.
