@@ -425,6 +425,167 @@ class ProjectToolExecutor:
         ]
         return base
 
+    def set_persisted_asset_id(self, media_id: str, release_asset_id: int) -> None:
+        """Attach private Release storage metadata without creating a new edit revision."""
+        if isinstance(release_asset_id, bool) or not isinstance(release_asset_id, int) or release_asset_id < 1:
+            raise ProjectToolExecutionError("The private media storage returned an invalid asset ID.")
+        found = False
+        for document in [self._project, *self._undo_stack, *self._redo_stack]:
+            for asset in document.get("assets", []):
+                if asset.get("id") == media_id:
+                    asset["release_asset_id"] = release_asset_id
+                    found = True
+        if not found:
+            raise ProjectToolExecutionError("The generated project asset no longer exists.")
+        self._project = validate_project(self._project)
+        self._undo_stack = [validate_project(item) for item in self._undo_stack]
+        self._redo_stack = [validate_project(item) for item in self._redo_stack]
+
+    def _local_asset_path(self, project: dict[str, Any], media_id: str, expected_type: str) -> tuple[dict[str, Any], Path]:
+        if self._asset_root is None:
+            raise ProjectToolExecutionError("Media generation requires a configured asset directory.")
+        asset = self._asset(project, media_id)
+        if asset.get("media_type") != expected_type:
+            raise ProjectToolExecutionError(f"This operation requires a {expected_type} asset.")
+        storage_key = asset.get("storage_key")
+        if not isinstance(storage_key, str) or not storage_key.strip():
+            raise ProjectToolExecutionError("The selected media has no local storage reference.")
+        root = self._asset_root.resolve()
+        path = (root / storage_key).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise ProjectToolExecutionError("The media storage reference escapes the asset directory.") from exc
+        if not path.is_file():
+            raise ProjectToolExecutionError("The selected media file is not available to the renderer.")
+        return asset, path
+
+    def _extract_audio_asset(self, project: dict[str, Any], media_id: str, output_format: str) -> dict[str, Any]:
+        source_asset, source_path = self._local_asset_path(project, media_id, "video")
+        if self._asset_root is None:
+            raise ProjectToolExecutionError("Audio extraction requires a configured asset directory.")
+        extension = output_format if output_format in {"m4a", "mp3", "wav"} else "m4a"
+        media_id_new = _new_id("audio")
+        filename = f"{media_id_new}.{extension}"
+        output_path = self._asset_root / filename
+        if output_path.exists():
+            raise ProjectToolExecutionError("The generated audio filename already exists.")
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+             "-of", "json", str(source_path)],
+            check=True, capture_output=True, text=True, timeout=60,
+        )
+        metadata = json.loads(probe.stdout)
+        if not any(item.get("codec_type") == "audio" for item in metadata.get("streams", []) if isinstance(item, dict)):
+            raise ProjectToolExecutionError("The selected video contains no audio stream to extract.")
+        codec_args = {
+            "m4a": ["-c:a", "aac", "-b:a", "192k"],
+            "mp3": ["-c:a", "libmp3lame", "-q:a", "2"],
+            "wav": ["-c:a", "pcm_s16le"],
+        }[extension]
+        try:
+            subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-n", "-i", str(source_path),
+                 "-map", "0:a:0", "-vn", *codec_args, str(output_path)],
+                check=True, capture_output=True, text=True, timeout=300,
+            )
+            if not output_path.is_file() or output_path.stat().st_size <= 0:
+                raise ProjectToolExecutionError("FFmpeg produced an empty audio file.")
+            output_probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+                 "-of", "json", str(output_path)],
+                check=True, capture_output=True, text=True, timeout=60,
+            )
+            output_data = json.loads(output_probe.stdout)
+            duration = float(output_data.get("format", {}).get("duration") or 0)
+            if duration <= 0 or not any(item.get("codec_type") == "audio" for item in output_data.get("streams", []) if isinstance(item, dict)):
+                raise ProjectToolExecutionError("The extracted file failed audio-stream or duration verification.")
+        except Exception as exc:
+            output_path.unlink(missing_ok=True)
+            if isinstance(exc, ProjectToolExecutionError):
+                raise
+            raise ProjectToolExecutionError("Audio extraction failed: " + str(exc)[:240]) from exc
+        asset = {
+            "id": media_id_new, "media_type": "audio", "file_name": filename,
+            "storage_key": filename, "size_bytes": output_path.stat().st_size,
+            "duration_us": max(1, int(round(duration * 1_000_000))),
+            "generated": True, "generated_from_media_id": source_asset["id"],
+        }
+        project["assets"].append(asset)
+        return {"media_id": media_id_new, "file_name": filename,
+                "duration_us": asset["duration_us"], "size_bytes": asset["size_bytes"],
+                "storage_status": "pending_private_upload"}
+
+    def _create_freeze_frame(self, project: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+        source_asset, source_path = self._local_asset_path(project, args["media_id"], "video")
+        track = self._find_track(project, args["track_id"])
+        if track.get("locked", False) or track.get("type") != "overlay":
+            raise ProjectToolExecutionError("A freeze-frame hold must be placed on an unlocked overlay track.")
+        timestamp_us = int(args["timestamp_us"])
+        duration_us = int(args["duration_us"])
+        if duration_us <= 0 or duration_us > 600_000_000:
+            raise ProjectToolExecutionError("Freeze-frame hold duration must be between 1 microsecond and 10 minutes.")
+        if timestamp_us < 0:
+            raise ProjectToolExecutionError("Freeze-frame timestamp cannot be negative.")
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
+             "-of", "json", str(source_path)],
+            check=True, capture_output=True, text=True, timeout=60,
+        )
+        metadata = json.loads(probe.stdout)
+        video = next((item for item in metadata.get("streams", []) if isinstance(item, dict) and item.get("codec_type") == "video"), None)
+        source_duration = float(metadata.get("format", {}).get("duration") or 0)
+        if video is None or source_duration <= 0:
+            raise ProjectToolExecutionError("The selected source does not contain readable video.")
+        if timestamp_us >= int(source_duration * 1_000_000):
+            raise ProjectToolExecutionError("Freeze-frame timestamp must be inside the source video duration.")
+        if self._asset_root is None:
+            raise ProjectToolExecutionError("Freeze-frame generation requires a configured asset directory.")
+        image_id = _new_id("frame")
+        filename = image_id + ".png"
+        output_path = self._asset_root / filename
+        if output_path.exists():
+            raise ProjectToolExecutionError("The generated freeze-frame filename already exists.")
+        timestamp = timestamp_us / 1_000_000
+        try:
+            subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-n", "-i", str(source_path),
+                 "-ss", f"{timestamp:.6f}", "-frames:v", "1", "-an", str(output_path)],
+                check=True, capture_output=True, text=True, timeout=120,
+            )
+            if not output_path.is_file() or output_path.stat().st_size <= 0:
+                raise ProjectToolExecutionError("FFmpeg did not produce a readable freeze-frame image.")
+            image_probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                 "stream=width,height", "-of", "json", str(output_path)],
+                check=True, capture_output=True, text=True, timeout=60,
+            )
+            image_stream = json.loads(image_probe.stdout).get("streams", [])
+            if not image_stream or int(image_stream[0].get("width") or 0) < 1 or int(image_stream[0].get("height") or 0) < 1:
+                raise ProjectToolExecutionError("The generated freeze-frame image failed verification.")
+        except Exception as exc:
+            output_path.unlink(missing_ok=True)
+            if isinstance(exc, ProjectToolExecutionError):
+                raise
+            raise ProjectToolExecutionError("Freeze-frame generation failed: " + str(exc)[:240]) from exc
+        asset = {
+            "id": image_id, "media_type": "image", "file_name": filename,
+            "storage_key": filename, "size_bytes": output_path.stat().st_size,
+            "generated": True, "generated_from_media_id": source_asset["id"],
+        }
+        project["assets"].append(asset)
+        clip = {
+            "id": _new_id("clip"), "kind": "image", "media_id": image_id,
+            "start_us": int(args["start_us"]), "duration_us": duration_us,
+            "source_in_us": 0, "playback_rate": 1.0, "effects": [], "keyframes": [],
+        }
+        track["clips"].append(clip)
+        return {"media_id": image_id, "clip_id": clip["id"], "track_id": track["id"],
+                "timestamp_us": timestamp_us, "start_us": clip["start_us"],
+                "duration_us": duration_us, "width": int(image_stream[0]["width"]),
+                "height": int(image_stream[0]["height"]),
+                "storage_status": "pending_private_upload"}
+
     def _apply(
         self, project: dict[str, Any], name: str, args: dict[str, Any]
     ) -> tuple[Any, bool]:
@@ -473,6 +634,14 @@ class ProjectToolExecutor:
                 int(args.get("analysis_seconds", 600)),
                 float(args.get("silence_threshold_db", -50)),
             ), False
+
+        if name == "media.extract_audio":
+            return self._extract_audio_asset(
+                project, args["media_id"], args.get("format", "m4a")
+            ), True
+
+        if name == "timeline.create_freeze_frame":
+            return self._create_freeze_frame(project, args), True
 
         if name == "media.detect_scenes":
             if self._asset_root is None:
