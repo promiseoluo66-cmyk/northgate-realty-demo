@@ -1065,3 +1065,90 @@ class TrackVisibilityRenderTests(unittest.TestCase):
         self.assertEqual(_playlist_hide_flags({
             "type": "audio", "visible": True, "muted": True,
         }), 3)
+
+
+class GeneratedFreezeFrameMltRenderTests(unittest.TestCase):
+    """Exercise extraction -> timeline hold -> real MLT render -> decoded pixels."""
+
+    @unittest.skipUnless(
+        __import__("importlib").util.find_spec("mlt7") is not None
+        and __import__("shutil").which("ffmpeg")
+        and __import__("shutil").which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_generated_freeze_frame_is_visible_for_the_full_hold_duration(self):
+        import json
+        import subprocess
+        from project_tool_executor import ProjectToolExecutor
+        from mlt_engine.renderer import render_project
+
+        root = self.root
+        base = root / "source.mp4"
+        freeze_source = root / "freeze-source.mp4"
+        output = root / "freeze-frame-hold-render.mp4"
+
+        def make_colour_video(path, colour, duration):
+            subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i",
+                f"color=c={colour}:s=320x240:r=25:d={duration}",
+                "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(path),
+            ], check=True, capture_output=True, text=True, timeout=120)
+
+        make_colour_video(base, "blue", 3)
+        make_colour_video(freeze_source, "red", 2)
+        self.project["assets"][0].update({
+            "size_bytes": base.stat().st_size, "duration_us": 3_000_000,
+        })
+        main_clip = self.project["tracks"][0]["clips"][0]
+        main_clip.update({"duration_us": 3_000_000, "source_out_us": 3_000_000})
+        self.project["assets"].append({
+            "id": "freeze-source", "media_type": "video",
+            "file_name": freeze_source.name, "storage_key": freeze_source.name,
+            "size_bytes": freeze_source.stat().st_size, "duration_us": 2_000_000,
+        })
+        self.project["tracks"].append({
+            "id": "track-overlay", "type": "overlay", "name": "Freeze holds",
+            "order": 1, "locked": False, "clips": [],
+        })
+
+        executor = ProjectToolExecutor(self.project, asset_root=root)
+        result = executor.execute("timeline.create_freeze_frame", {
+            "media_id": "freeze-source", "track_id": "track-overlay",
+            "timestamp_us": 500_000, "start_us": 1_000_000,
+            "duration_us": 1_500_000,
+        })
+        generated = result["results"][0]["result"]
+        generated_asset = next(
+            item for item in executor.get_project()["assets"]
+            if item["id"] == generated["media_id"]
+        )
+        still_path = root / generated_asset["storage_key"]
+        self.assertTrue(still_path.is_file())
+        self.assertGreater(still_path.stat().st_size, 0)
+
+        receipt = render_project(executor.get_project(), root, output, timeout_seconds=120)
+        self.assertTrue(receipt["ok"])
+        self.assertTrue(output.is_file())
+        self.assertGreater(output.stat().st_size, 0)
+
+        def centre_rgb(timestamp):
+            decoded = subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-i", str(output), "-ss", f"{timestamp:.3f}",
+                "-vf", "crop=20:20:150:110,scale=1:1:flags=area,format=rgb24",
+                "-frames:v", "1", "-f", "rawvideo", "-",
+            ], check=True, capture_output=True, timeout=60)
+            self.assertEqual(len(decoded.stdout), 3)
+            return tuple(decoded.stdout)
+
+        before_hold = centre_rgb(0.5)
+        during_hold = centre_rgb(1.25)
+        near_hold_end = centre_rgb(2.4)
+        after_hold = centre_rgb(2.7)
+        self.assertGreater(before_hold[2], 150, f"Expected blue before hold, got {before_hold}")
+        for timestamp, pixel in ((1.25, during_hold), (2.4, near_hold_end)):
+            self.assertGreater(pixel[0], 150, f"Expected red freeze at {timestamp}s, got {pixel}")
+            self.assertLess(pixel[1], 90, f"Unexpected green at {timestamp}s: {pixel}")
+            self.assertLess(pixel[2], 90, f"Unexpected blue at {timestamp}s: {pixel}")
+        self.assertGreater(after_hold[2], 150, f"Expected blue after hold, got {after_hold}")
