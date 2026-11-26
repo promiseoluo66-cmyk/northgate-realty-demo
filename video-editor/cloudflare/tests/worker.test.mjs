@@ -187,6 +187,12 @@ test("project media import stores a private asset and an undoable project revisi
     constructor() { super(); }
   };
   globalThis.fetch = async (url, options) => {
+    if (String(url) === "https://api.github.com/repos/owner/repo") {
+      assert.equal(options.headers.authorization, "Bearer github-test-token");
+      return new Response(JSON.stringify({ private: true }), {
+        status: 200, headers: { "Content-Type": "application/json" }
+      });
+    }
     assert.match(String(url), /uploads\.github\.com/);
     assert.equal(options.method, "POST");
     const bytes = await new Response(options.body).arrayBuffer();
