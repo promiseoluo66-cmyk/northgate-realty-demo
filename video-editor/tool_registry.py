@@ -484,7 +484,7 @@ TOOL_DEFINITIONS = (
             "clip_id": _field("string", max_length=64),
             "property": _field("string", choices=(
                 "position_x", "position_y", "scale_x", "scale_y",
-                "rotation_deg", "opacity", "volume_db", "playback_rate"
+                "rotation_deg", "opacity", "volume_db", "playback_rate",
                 "crop_x", "crop_y", "crop_width", "crop_height",
             )),
             "time_us": _field("integer", minimum=0),
@@ -515,7 +515,7 @@ TOOL_DEFINITIONS = (
             "clip_id": _field("string", max_length=64),
             "property": _field("string", choices=(
                 "position_x", "position_y", "scale_x", "scale_y",
-                "rotation_deg", "opacity", "volume_db", "playback_rate"
+                "rotation_deg", "opacity", "volume_db", "playback_rate",
                 "crop_x", "crop_y", "crop_width", "crop_height",
             )),
         }, ("clip_id",)),
@@ -527,7 +527,7 @@ TOOL_DEFINITIONS = (
             "clip_id": _field("string", max_length=64),
             "property": _field("string", choices=(
                 "position_x", "position_y", "scale_x", "scale_y",
-                "rotation_deg", "opacity", "volume_db", "playback_rate"
+                "rotation_deg", "opacity", "volume_db", "playback_rate",
                 "crop_x", "crop_y", "crop_width", "crop_height",
             )),
             "time_us": _field("integer", minimum=0),
