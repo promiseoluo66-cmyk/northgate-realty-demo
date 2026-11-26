@@ -299,3 +299,83 @@ def test_project_media_download_includes_generated_assets_in_redo_history(tmp_pa
     download_project_media_assets(job, project, tmp_path, "owner", "repo", "secret")
     assert downloaded == [(76543, "redo.m4a")]
     assert (tmp_path / "redo.m4a").read_bytes() == b"history-audio"
+
+
+def test_private_release_upload_sends_generated_media_with_mime_type(tmp_path, monkeypatch):
+    from cloudflare.runner import upload_release_asset
+
+    media = tmp_path / "freeze-frame.png"
+    media.write_bytes(b"png-image-bytes")
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"id":54321}'
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["method"] = request.get_method()
+        captured["headers"] = request.headers
+        captured["body"] = request.data
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr("cloudflare.runner.urllib.request.urlopen", fake_urlopen)
+    asset_id = upload_release_asset(
+        "owner", "repo", 1234, "release-token", media,
+        asset_name="project-frame-frame-123.png", content_type="image/png",
+    )
+    assert asset_id == 54321
+    assert captured["url"] == (
+        "https://uploads.github.com/repos/owner/repo/releases/1234/assets"
+        "?name=project-frame-frame-123.png"
+    )
+    assert captured["method"] == "POST"
+    assert captured["headers"]["Authorization"] == "Bearer release-token"
+    assert captured["headers"]["Content-type"] == "image/png"
+    assert captured["body"] == b"png-image-bytes"
+
+
+def test_runner_callback_sends_project_and_undo_redo_checkpoint(monkeypatch):
+    from cloudflare.runner import callback
+
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"ok":true,"project_revision":8}'
+
+    def fake_urlopen(request, timeout):
+        import json
+        captured["url"] = request.full_url
+        captured["secret"] = request.get_header("X-callback-secret")
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return Response()
+
+    monkeypatch.setattr("cloudflare.runner.urllib.request.urlopen", fake_urlopen)
+    project = {
+        "revision": 8,
+        "assets": [{
+            "id": "generated-frame", "media_type": "image",
+            "storage_key": "frame.png", "release_asset_id": 54321,
+        }],
+    }
+    history = {"undo": [{"revision": 7, "assets": []}], "redo": []}
+    callback(
+        "https://worker.example", "callback-secret", "a" * 32,
+        "running", "Generated media checkpoint saved.",
+        project_json=project, project_revision=8, history_state=history,
+    )
+    assert captured["url"] == "https://worker.example/api/internal/jobs/" + "a" * 32
+    assert captured["secret"] == "callback-secret"
+    assert captured["body"]["project_json"]["assets"][0]["release_asset_id"] == 54321
+    assert captured["body"]["project_revision"] == 8
+    assert captured["body"]["history_state"] == history
