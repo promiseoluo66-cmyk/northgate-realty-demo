@@ -1006,5 +1006,57 @@ class EditorToolExpansionTests(unittest.TestCase):
 
 
 
+
+    def test_proxy_generation_removes_partial_output_after_ffmpeg_failure(self):
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory)
+            before = executor.get_project()
+            partial_paths = []
+
+            def fake_run(command, **kwargs):
+                if command[0] == "ffprobe":
+                    return SimpleNamespace(stdout=json.dumps({
+                        "format": {"duration": "2.0"},
+                        "streams": [{"codec_type": "video", "width": 160, "height": 120}],
+                    }), stderr="")
+                if command[0] == "ffmpeg":
+                    partial = Path(command[-1])
+                    partial.write_bytes(b"partial-proxy")
+                    partial_paths.append(partial)
+                    raise subprocess.CalledProcessError(1, command, stderr="simulated proxy failure")
+                raise AssertionError("Unexpected process: " + command[0])
+
+            with patch("project_tool_executor.subprocess.run", side_effect=fake_run):
+                with self.assertRaisesRegex(ProjectToolExecutionError, "Proxy generation failed"):
+                    executor.execute("media.create_proxy", {"media_id": "video-asset"})
+            self.assertEqual(executor.get_project(), before)
+            self.assertEqual(executor.revision, 1)
+            self.assertEqual(len(partial_paths), 1)
+            self.assertFalse(partial_paths[0].exists())
+
+    def test_proxy_generation_never_overwrites_an_existing_file(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory)
+            existing = Path(directory) / "proxy-fixed.mp4"
+            existing.write_bytes(b"keep-existing-proxy")
+            before = executor.get_project()
+            with patch("project_tool_executor._new_id", return_value="proxy-fixed"):
+                with self.assertRaisesRegex(ProjectToolExecutionError, "already exists"):
+                    executor.execute("media.create_proxy", {"media_id": "video-asset"})
+            self.assertEqual(existing.read_bytes(), b"keep-existing-proxy")
+            self.assertEqual(executor.get_project(), before)
+
+
 if __name__ == "__main__":
     unittest.main()

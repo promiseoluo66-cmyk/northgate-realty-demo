@@ -532,3 +532,57 @@ test("private media asset URL route requires the app token", async () => {
   );
   assert.equal(response.status, 401);
 });
+
+
+test("private media asset URL returns a signed URL only for a stored project asset", async () => {
+  const originalFetch = globalThis.fetch;
+  const jobId = "e".repeat(32);
+  const project = {
+    assets: [{
+      id: "proxy-123", media_type: "video", release_asset_id: 4567,
+      proxy_for_media_id: "source-video"
+    }]
+  };
+  const env = {
+    APP_API_TOKEN: "test-app-token",
+    GITHUB_TOKEN: "github-private-token",
+    GITHUB_OWNER: "owner",
+    GITHUB_REPO: "private-media",
+    DB: {
+      prepare(sql) {
+        assert.match(sql, /SELECT input_asset_id,project_json FROM jobs WHERE id=\?/);
+        return { bind(id) {
+          assert.equal(id, jobId);
+          return { first: async () => ({
+            input_asset_id: 1234,
+            project_json: JSON.stringify(project)
+          }) };
+        }};
+      }
+    }
+  };
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), "https://api.github.com/repos/owner/private-media/releases/assets/4567");
+    assert.equal(options.headers.authorization, "Bearer github-private-token");
+    assert.equal(options.headers.accept, "application/octet-stream");
+    assert.equal(options.redirect, "manual");
+    return new Response(null, {
+      status: 302,
+      headers: { location: "https://signed-private-assets.example/proxy-123.mp4" }
+    });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://studio.test/api/v1/jobs/" + jobId + "/assets/proxy-123/url", {
+        headers: { Authorization: "Bearer test-app-token" }
+      }),
+      env
+    );
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.source_url, "https://signed-private-assets.example/proxy-123.mp4");
+    assert.equal(payload.expires_soon, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
