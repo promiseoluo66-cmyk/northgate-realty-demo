@@ -46,6 +46,15 @@ test("Current approval-aware project and AI edit routes remain connected", () =>
   assert.match(html, /ai-edit\/confirm/);
 });
 
+test("Studio switches from source footage to the authenticated edited-composite preview after render", () => {
+  assert.match(html, /id="studio-preview-caption"/);
+  assert.match(html, /loadCompositePreview\(data\.project_revision\|\|0\)/);
+  assert.match(html, /jobs.*download/);
+  assert.match(html, /video\.dataset\.previewMode="composite"/);
+  assert.match(html, /Edited-composite preview/);
+  assert.match(html, /loadSourcePreview\(true\)/);
+});
+
 test("Studio exposes real source preview, playhead and direct editing controls", () => {
   for (const id of [
     "studio-preview", "timeline-seek", "playhead-time",
