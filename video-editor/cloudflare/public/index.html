@@ -151,7 +151,7 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
     <div id="studio-safe-guides" class="safe-guides hidden" aria-hidden="true"><span></span><i></i><b></b></div>
   </div>
   <label class="guide-toggle"><input id="studio-safe-guides-toggle" type="checkbox"> Show canvas safe-area guides</label>
-  <p class="preview-caption">Source-footage preview. The final edited composition is produced by the cloud render after you apply operations.</p>
+  <p class="preview-caption" id="studio-preview-caption">Source-footage preview. When a cloud render completes, this player switches to the edited-composite preview.</p>
 </div>
 <div class="studio-tabs" role="tablist" aria-label="Project panels">
   <button class="studio-tab" id="studio-tab-timeline" type="button" role="tab" aria-controls="studio-timeline-view" aria-selected="true" aria-pressed="true">Timeline</button>
@@ -407,11 +407,50 @@ async function refreshJob(){
     if(data.project_revision&&Number(data.project_revision)!==loadedProjectRevision){
       await loadProject(false);
     }
-    if(data.status==="queued"||data.status==="running")pollJob();
-    else if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}
+    if(data.status==="completed"&&data.download_url){
+      await loadCompositePreview(data.project_revision||0);
+    }else if(data.status==="queued"||data.status==="running"){
+      await loadSourcePreview(true);
+      pollJob();
+    }else if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}
   }catch(e){message("render-status",e.message,"error");}
 }
-async function loadSourcePreview(){if(!activeJobId)return;const video=$("studio-preview");if(!video||video.dataset.jobId===activeJobId)return;try{const data=await api("/api/v1/jobs/"+activeJobId+"/source-url");if(!data.source_url)throw new Error("The source preview URL was not returned.");video.src=data.source_url;video.dataset.jobId=activeJobId;video.load();}catch(e){message("render-status","Source preview: "+e.message,"error");}}
+async function loadSourcePreview(force=false){
+  if(!activeJobId)return;
+  const video=$("studio-preview");
+  if(!video||(!force&&video.dataset.previewMode==="source"&&video.dataset.jobId===activeJobId))return;
+  try{
+    const data=await api("/api/v1/jobs/"+activeJobId+"/source-url");
+    if(!data.source_url)throw new Error("The source preview URL was not returned.");
+    video.src=data.source_url;
+    video.dataset.jobId=activeJobId;
+    video.dataset.previewMode="source";
+    video.dataset.previewRevision="";
+    video.load();
+    const caption=$("studio-preview-caption");
+    if(caption)caption.textContent="Source-footage preview. The edited-composite preview will appear automatically after rendering completes.";
+  }catch(e){message("render-status","Source preview: "+e.message,"error");}
+}
+async function loadCompositePreview(revision){
+  if(!activeJobId)return;
+  const video=$("studio-preview");
+  if(!video)return;
+  const revisionKey=String(revision||0);
+  if(video.dataset.previewMode==="composite"&&video.dataset.jobId===activeJobId&&video.dataset.previewRevision===revisionKey)return;
+  try{
+    // Authenticate to the Worker first; it returns a short-lived signed URL
+    // for the private Release asset. The video element can then stream it.
+    const data=await api("/api/v1/jobs/"+activeJobId+"/download");
+    if(!data.download_url)throw new Error("The private edited-composite preview URL was not returned.");
+    video.src=data.download_url;
+    video.dataset.jobId=activeJobId;
+    video.dataset.previewMode="composite";
+    video.dataset.previewRevision=revisionKey;
+    video.load();
+    const caption=$("studio-preview-caption");
+    if(caption)caption.textContent="Edited-composite preview · Revision "+revisionKey+". This is the rendered timeline output.";
+  }catch(e){message("render-status","Edited-composite preview: "+e.message,"error");}
+}
 async function openProjectById(id){
   if(!/^[a-f0-9]{32}$/.test(id))throw new Error("Enter a valid 32-character project ID.");
   activeJobId=id;
