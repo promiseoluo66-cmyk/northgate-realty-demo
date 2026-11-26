@@ -708,7 +708,7 @@ class ProjectToolExecutor:
                     existing_end = existing_start + int(existing["duration_us"])
                     if existing_start < insert_at < existing_end:
                         raise ProjectToolExecutionError(
-                            f"Ripple insert cannot cut through clip {existing['id']!r} on track {affected['id']!r}; split it first."
+                            f"Ripple insert cannot split through an existing clip {existing['id']!r} on track {affected['id']!r}; split it first."
                         )
             affected_clip_ids = {
                 clip["id"] for affected in ripple_tracks for clip in affected["clips"]
