@@ -151,8 +151,7 @@ def persist_generated_project_assets(
         if item.get("generated") is True and item.get("release_asset_id") is None
     ]
     current_total = sum(int(item.get("size_bytes") or 0) for item in project_assets)
-    pending_total = sum(int(item.get("size_bytes") or 0) for item in pending)
-    if current_total + pending_total > MAX_PROJECT_MEDIA_BYTES:
+    if current_total > MAX_PROJECT_MEDIA_BYTES:
         raise ValueError("Project media storage is limited to 200 MB total.")
     persisted: list[tuple[str, int]] = []
     try:
