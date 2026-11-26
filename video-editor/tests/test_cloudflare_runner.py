@@ -284,6 +284,10 @@ def test_project_media_download_includes_generated_assets_in_redo_history(tmp_pa
         path.write_bytes(b"history-audio")
 
     monkeypatch.setattr("cloudflare.runner.download_release_asset", fake_download)
+    monkeypatch.setattr(
+        "cloudflare.runner._probe_project_asset_duration_us",
+        lambda path, media_type: 1_000_000,
+    )
     project = {"assets": []}
     job = {"history_state": {"undo": [], "redo": [{
         "assets": [{
