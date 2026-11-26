@@ -247,7 +247,7 @@ test("Studio can create a stored video proxy and switch between source/proxy and
   assert.match(html, /id="studio-source-preview"/);
   assert.match(html, /id="studio-composite-preview"/);
   assert.match(html, /proxy_for_media_id/);
-  assert.match(html, /\/assets\/\+encodeURIComponent\(proxy\.id\)\/url/);
+  assert.match(html, /encodeURIComponent\(proxy\?proxy\.id:targetMediaId\)/);
 });
 
 

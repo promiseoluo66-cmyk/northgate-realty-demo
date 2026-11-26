@@ -81,11 +81,13 @@
           clip.kind === "video" && clip.media_id === previewMediaId &&
           playheadUs >= Number(clip.start_us || 0) &&
           playheadUs <= Number(clip.start_us || 0) + Number(clip.duration_us || 0));
-        const desired = mainClip
-          ? (Number(mainClip.clip.source_in_us || 0) +
-            (playheadUs - Number(mainClip.clip.start_us || 0)) *
-            Number(mainClip.clip.playback_rate || 1)) / 1000000
-          : 0;
+        const desired = video.dataset.previewMode === "composite"
+          ? playheadUs / 1000000
+          : mainClip
+            ? (Number(mainClip.clip.source_in_us || 0) +
+              (playheadUs - Number(mainClip.clip.start_us || 0)) *
+              Number(mainClip.clip.playback_rate || 1)) / 1000000
+            : 0;
         const safeTime = Math.max(0, Math.min(Math.max(0, video.duration - 0.04), desired));
         if (Math.abs(video.currentTime - safeTime) > 0.08) video.currentTime = safeTime;
       }
@@ -1171,11 +1173,13 @@
     const previewMediaId = preview.dataset.mediaId || "source-video";
     const main = flattenClips(currentProject).find(({clip}) =>
       clip.kind === "video" && clip.media_id === previewMediaId);
-    const mapped = main
-      ? Number(main.clip.start_us || 0) +
-        (preview.currentTime * 1000000 - Number(main.clip.source_in_us || 0)) /
-        Number(main.clip.playback_rate || 1)
-      : preview.currentTime * 1000000;
+    const mapped = preview.dataset.previewMode === "composite"
+      ? preview.currentTime * 1000000
+      : main
+        ? Number(main.clip.start_us || 0) +
+          (preview.currentTime * 1000000 - Number(main.clip.source_in_us || 0)) /
+          Number(main.clip.playback_rate || 1)
+        : preview.currentTime * 1000000;
     playheadUs = Math.max(0, mapped);
     if (seek) seek.value = String(Math.round(playheadUs));
     if (byId("playhead-time")) byId("playhead-time").textContent = formatTime(playheadUs);
