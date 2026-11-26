@@ -1,8 +1,8 @@
 # Stage 1 — Mobile Studio and Editing Foundation
 
-**Lab branch:** `video-editor-lab`  
-**Repository:** `promiseoluo66-cmyk/northgate-realty-demo`  
-**Status:** Task 1 is complete in the isolated lab; the remaining acceptance gaps are listed below.
+**Lab branch:** video-editor-lab  
+**Repository:** promiseoluo66-cmyk/northgate-realty-demo  
+**Status:** Tasks 1, 2 and 3 are implemented in the isolated lab and their current automated checks pass. Stage 1 is not complete.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -11,6 +11,12 @@
 - Project open/list/rename APIs, revision checks and bounded undo/redo history.
 - Track add, rename, reorder, lock, enable, mute, solo, hide/show and remove operations.
 - Multi-file media import, project media bin, filename/type/folder/tag search, folder assignment and insertion at playhead.
+- Small browser-generated image/video thumbnails and audio waveform metadata, revision-guarded preview persistence, and media relinking that preserves asset IDs and clip references.
+- .SRT and .VTT subtitle import into unlocked text tracks, with cue timing validation.
+- Ripple overwrite and cross-track ripple insert with validation before project mutation.
+- Linked clip groups with atomic movement and cleanup during split, delete, ungroup and track removal.
+- Persistent timeline markers with add, move, rename, remove and playhead navigation.
+- Cross-track snapping to clip edges, markers and playhead, with a user toggle.
 - Manual crop rectangle, flip controls and custom rotation pivot.
 - Keyframe graph interactions, copy/paste, remove/clear and motion presets.
 - 49 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
@@ -31,14 +37,37 @@
 
 Automated tests cover checkpoint persistence, failed-checkpoint discovery, and resuming a manual edit from a failed project. A live two-device browser test remains unperformed because this branch is intentionally test-only and has no production Worker deployment configuration.
 
+### Task 2 — Media management
+
+**Implemented; automated Python, Worker and Studio UI checks pass.**
+
+- Image/video thumbnails are generated in the browser as small JPEG previews.
+- Audio waveforms are generated as 96 normalized peak samples for supported files up to 8 MiB.
+- Preview metadata is validated, saved against the expected project revision and preserved in the canonical project document. Preview generation is optional and cannot invalidate a successful media import.
+- Media relinking validates type, extension, size, duration and expected revision. It replaces the private stored source while preserving the existing asset ID, so timeline references remain intact.
+- The media bin displays available previews and exposes relinking.
+- .SRT and .VTT imports create phrase-timed text clips on an unlocked text track. The importer does not transcribe audio; it validates timestamp format, cue order, non-overlap, file size and cue count before applying the edit.
+
+Known limits: waveform generation is skipped for audio files larger than 8 MiB or when browser audio decoding is unavailable. Preview generation is best-effort. Subtitle files are limited to 1 MiB and 500 cues per import.
+
+### Task 3 — Timeline editing
+
+**Implemented; automated Python and Studio UI checks pass.**
+
+- Ripple overwrite replaces a clip source and shifts following clips on that track by the duration difference. It rejects incompatible media, unsupported animated speed curves, invalid source duration and overlaps.
+- Cross-track ripple insert shifts later clips on the explicitly selected unlocked tracks. All affected tracks are validated before mutation; locked tracks and clips crossing the insertion point are rejected without partial edits.
+- Linked groups move across tracks together. Group movement is validated atomically, and group membership remains valid through split, delete, ungroup and track removal.
+- Markers support add, move/rename, remove and playhead navigation.
+- Snapping considers the playhead, markers and clip edges across unlocked tracks, using a 150 ms threshold and a Studio toggle.
+
+Automated tests cover ripple insert/overwrite, locked-track and incompatible-source rejection, group movement and cleanup, marker lifecycle, subtitle cue validation and creation, project metadata validation, and UI wiring.
+
 ## Remaining Stage 1 acceptance gaps
-1. Media thumbnails/waveforms, relinking and subtitle-file import.
-2. Ripple overwrite, cross-track ripple insert, groups/linked clips, persistent markers and broader snapping.
-3. Full track-level audio routing.
-4. Crop keyframes and expanded animation presets/interpolation precision tests.
-5. Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
-6. Edited-composite preview, proxy media and low-resolution preview.
-7. Successful end-to-end hosted tests against the actual Worker/renderer configuration.
+1. Full track-level audio routing.
+2. Crop keyframes and expanded animation presets/interpolation precision tests.
+3. Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
+4. Edited-composite preview, proxy media and low-resolution preview.
+5. Successful end-to-end hosted tests against the actual Worker/renderer configuration.
 
 Optical-flow slow motion remains optional and gated. It must not introduce a paid dependency or hidden fallback.
 
