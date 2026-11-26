@@ -2,7 +2,7 @@
 
 **Lab branch:** video-editor-lab  
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
-**Status:** Tasks 1, 2 and 3 are implemented in the isolated lab and their current automated checks pass. Stage 1 is not complete.
+**Status:** Tasks 1–3 passed their latest complete CI run. Tasks 4 and 5 are implemented in the isolated lab, with new acceptance checks awaiting the next complete CI run. Stage 1 is not complete.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -19,6 +19,8 @@
 - Cross-track snapping to clip edges, markers and playhead, with a user toggle.
 - Manual crop rectangle, flip controls and custom rotation pivot.
 - Keyframe graph interactions, copy/paste, remove/clear and motion presets.
+- Track-level audio gain and stereo pan on video/overlay/audio tracks, with project validation and renderer filters.
+- Animated crop X/Y/width/height keyframes for video/image clips, expanded easing functions and Studio motion presets.
 - 49 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
 
 ## Stage 1 task status
@@ -62,12 +64,28 @@ Known limits: waveform generation is skipped for audio files larger than 8 MiB o
 
 Automated tests cover ripple insert/overwrite, locked-track and incompatible-source rejection, group movement and cleanup, marker lifecycle, subtitle cue validation and creation, project metadata validation, and UI wiring.
 
+### Task 4 — Track-level audio routing
+
+**Implemented in the lab; new automated acceptance checks added, final CI verification pending.**
+
+- Video, overlay and audio tracks can store gain in dB (-96 to +24) and stereo pan (-1 left to +1 right).
+- Track mix settings are saved with the canonical project and validated. Text tracks reject audio-routing settings.
+- The MLT renderer applies track volume and panning filters to audio-bearing video/audio clips. Neutral settings avoid unnecessary filters; unavailable required filters fail clearly.
+
+### Task 5 — Animation and crop keyframes
+
+**Implemented in the lab; new automated acceptance checks added, final CI verification pending.**
+
+- Crop X/Y/width/height can be animated on video and image clips.
+- The MLT adapter samples animated crop geometry into affine transform keyframes and checks each sampled crop rectangle against the source frame.
+- Animated crop requires source dimensions and cannot be combined with automatic framing or playback-speed ramp keyframes in this adapter stage.
+- Added quadratic, cubic, quartic and smoothstep easing, plus Studio zoom-out, pan-left/right and animated crop-reveal presets.
+
 ## Remaining Stage 1 acceptance gaps
-1. Full track-level audio routing.
-2. Crop keyframes and expanded animation presets/interpolation precision tests.
-3. Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
-4. Edited-composite preview, proxy media and low-resolution preview.
-5. Successful end-to-end hosted tests against the actual Worker/renderer configuration.
+1. Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
+2. Edited-composite preview, proxy media and low-resolution preview.
+3. Successful end-to-end hosted tests against the actual Worker/renderer configuration.
+4. Complete edge-case and editor-integration sign-off for all 49 registered operations.
 
 Optical-flow slow motion remains optional and gated. It must not introduce a paid dependency or hidden fallback.
 
