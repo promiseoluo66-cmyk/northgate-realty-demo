@@ -622,11 +622,64 @@ class ProjectToolExecutor:
                 "preserved_playback_rate": rate,
             }, True
 
-        if name == "timeline.ripple_insert_clip":
-            track = self._find_track(project, args["track_id"])
+        if name == "timeline.ripple_overwrite_clip":
+            track, clip = self._find_clip(project, args["clip_id"])
             if track.get("locked", False):
                 raise ProjectToolExecutionError("The selected track is locked.")
+            asset = self._asset(project, args["media_id"])
+            if asset.get("media_type") != clip["kind"]:
+                raise ProjectToolExecutionError(
+                    f"Ripple overwrite requires a {clip['kind']} asset; selected asset is {asset.get('media_type')!r}."
+                )
+            if any(item["property"] == "playback_rate" for item in clip.get("keyframes", [])):
+                raise ProjectToolExecutionError("Ripple overwrite does not support animated speed curves.")
+            old_start = int(clip["start_us"])
+            old_duration = int(clip["duration_us"])
+            old_end = old_start + old_duration
+            rate = float(clip.get("playback_rate", 1.0))
+            new_duration = int(args.get("duration_us") or asset.get("duration_us") or old_duration)
+            if new_duration < 1 or old_start + new_duration > 2**53 - 1:
+                raise ProjectToolExecutionError("The replacement duration is outside safe timeline limits.")
+            required_source = round(new_duration * rate)
+            known_duration = asset.get("duration_us")
+            if clip["kind"] != "image" and known_duration is not None and required_source > int(known_duration):
+                raise ProjectToolExecutionError("The replacement media is too short for the selected duration and speed.")
+            for other in track["clips"]:
+                if other["id"] == clip["id"]:
+                    continue
+                other_start = int(other["start_us"])
+                other_end = other_start + int(other["duration_us"])
+                if other_start < old_end and other_end > old_start:
+                    raise ProjectToolExecutionError("Ripple overwrite requires non-overlapping clips on the target track.")
+            delta = new_duration - old_duration
+            for other in track["clips"]:
+                if other["id"] != clip["id"] and int(other["start_us"]) >= old_end:
+                    next_start = int(other["start_us"]) + delta
+                    if next_start < old_start + new_duration or next_start < 0 or next_start > 2**53 - 1:
+                        raise ProjectToolExecutionError("Ripple overwrite would cause a clip overlap or unsafe time.")
+            clip["media_id"] = asset["id"]
+            clip["duration_us"] = new_duration
+            clip["source_in_us"] = 0
+            if clip["kind"] == "image":
+                clip.pop("source_out_us", None)
+            else:
+                clip["source_out_us"] = required_source
+            shifted_ids = []
+            for other in track["clips"]:
+                if other["id"] != clip["id"] and int(other["start_us"]) >= old_end:
+                    other["start_us"] = int(other["start_us"]) + delta
+                    shifted_ids.append(other["id"])
+            return {
+                "clip_id": clip["id"], "media_id": asset["id"],
+                "old_duration_us": old_duration, "new_duration_us": new_duration,
+                "shifted_clip_ids": shifted_ids,
+            }, True
+
+        if name == "timeline.ripple_insert_clip":
+            track = self._find_track(project, args["track_id"])
             kind = args["kind"]
+            if track.get("locked", False):
+                raise ProjectToolExecutionError("The selected track is locked.")
             self._ensure_track_compatibility(track, kind)
             asset = self._asset(project, args["media_id"])
             expected_type = {"video": "video", "image": "image", "audio": "audio"}[kind]
@@ -639,62 +692,58 @@ class ProjectToolExecutor:
                 raise ProjectToolExecutionError("Still images use normal playback speed.")
             insert_at = int(args["start_us"])
             duration = int(args["duration_us"])
-            if duration < 1:
-                raise ProjectToolExecutionError("Inserted clip duration must be positive.")
-            insert_end = insert_at + duration
-            if insert_end > 2**53 - 1:
-                raise ProjectToolExecutionError("Ripple insertion would exceed safe timeline time limits.")
-            clips = track["clips"]
-            for existing in clips:
-                existing_start = int(existing["start_us"])
-                existing_end = existing_start + int(existing["duration_us"])
-                if existing_start < insert_at < existing_end:
-                    raise ProjectToolExecutionError(
-                        "Ripple insert cannot split through an existing clip; split it first."
-                    )
-            track_clip_ids = {clip["id"] for clip in clips}
-            clip_by_id = {clip["id"]: clip for clip in clips}
+            if duration < 1 or insert_at + duration > 2**53 - 1:
+                raise ProjectToolExecutionError("Inserted clip duration is outside safe timeline limits.")
+            requested_ids = args.get("ripple_track_ids") or [track["id"]]
+            if len(requested_ids) != len(set(requested_ids)):
+                raise ProjectToolExecutionError("Ripple track IDs must be unique.")
+            if track["id"] not in requested_ids:
+                raise ProjectToolExecutionError("The insertion track must be included in ripple_track_ids.")
+            ripple_tracks = [self._find_track(project, track_id) for track_id in requested_ids]
+            for affected in ripple_tracks:
+                if affected.get("locked", False):
+                    raise ProjectToolExecutionError(f"Ripple insertion cannot shift locked track {affected['id']!r}.")
+                for existing in affected["clips"]:
+                    existing_start = int(existing["start_us"])
+                    existing_end = existing_start + int(existing["duration_us"])
+                    if existing_start < insert_at < existing_end:
+                        raise ProjectToolExecutionError(
+                            f"Ripple insert cannot cut through clip {existing['id']!r} on track {affected['id']!r}; split it first."
+                        )
+            affected_clip_ids = {
+                clip["id"] for affected in ripple_tracks for clip in affected["clips"]
+            }
+            clip_by_id = {
+                clip["id"]: clip for affected in ripple_tracks for clip in affected["clips"]
+            }
             for transition in project.get("transitions", []):
-                from_id = transition["from_clip_id"]
-                to_id = transition["to_clip_id"]
-                if from_id not in track_clip_ids or to_id not in track_clip_ids:
+                from_id, to_id = transition["from_clip_id"], transition["to_clip_id"]
+                if from_id not in affected_clip_ids or to_id not in affected_clip_ids:
                     continue
                 from_start = int(clip_by_id[from_id]["start_us"])
                 to_start = int(clip_by_id[to_id]["start_us"])
                 if (from_start < insert_at <= to_start) or (to_start < insert_at <= from_start):
-                    raise ProjectToolExecutionError(
-                        "Ripple insert cannot split through an existing transition."
-                    )
+                    raise ProjectToolExecutionError("Ripple insert cannot split through an existing transition.")
             shifted_ids = []
-            for existing in clips:
-                if int(existing["start_us"]) >= insert_at:
-                    existing["start_us"] = int(existing["start_us"]) + duration
-                    shifted_ids.append(existing["id"])
+            for affected in ripple_tracks:
+                for existing in affected["clips"]:
+                    if int(existing["start_us"]) >= insert_at:
+                        existing["start_us"] = int(existing["start_us"]) + duration
+                        shifted_ids.append(existing["id"])
             clip = {
-                "id": _new_id("clip"),
-                "kind": kind,
-                "media_id": args["media_id"],
-                "start_us": insert_at,
-                "duration_us": duration,
+                "id": _new_id("clip"), "kind": kind, "media_id": args["media_id"],
+                "start_us": insert_at, "duration_us": duration,
                 "source_in_us": int(args.get("source_in_us", 0)),
-                "playback_rate": rate,
-                "effects": [],
-                "keyframes": [],
+                "playback_rate": rate, "effects": [], "keyframes": [],
             }
             if kind != "image" and "source_out_us" in args:
                 clip["source_out_us"] = int(args["source_out_us"])
-            clips.append(clip)
+            track["clips"].append(clip)
             return {
-                "clip_id": clip["id"],
-                "track_id": track["id"],
-                "inserted_start_us": insert_at,
-                "inserted_duration_us": duration,
-                "shifted_clip_ids": sorted(
-                    shifted_ids,
-                    key=lambda clip_id: next(
-                        item["start_us"] for item in clips if item["id"] == clip_id
-                    ),
-                ),
+                "clip_id": clip["id"], "track_id": track["id"],
+                "ripple_track_ids": [item["id"] for item in ripple_tracks],
+                "inserted_start_us": insert_at, "inserted_duration_us": duration,
+                "shifted_clip_ids": sorted(shifted_ids),
             }, True
 
         if name == "timeline.add_clip":
@@ -818,6 +867,47 @@ class ProjectToolExecutor:
                 "transcription_performed": False,
             }, True
 
+        if name == "captions.import_subtitles":
+            track = self._find_track(project, args["track_id"])
+            if track.get("locked", False) or track["type"] != "text":
+                raise ProjectToolExecutionError("Subtitle import requires an unlocked text track.")
+            cues = args["cues"]
+            previous_end = -1
+            total_text = 0
+            for index, cue in enumerate(cues):
+                start_us, end_us = int(cue["start_us"]), int(cue["end_us"])
+                text_value = str(cue["text"]).strip()
+                if not text_value or end_us <= start_us:
+                    raise ProjectToolExecutionError(f"Subtitle cue {index} has invalid text or timing.")
+                if start_us < previous_end:
+                    raise ProjectToolExecutionError("Subtitle cues must be chronological and must not overlap.")
+                previous_end = end_us
+                total_text += len(text_value)
+            if total_text > 100000:
+                raise ProjectToolExecutionError("Imported subtitle text exceeds the 100,000-character project limit.")
+            style = {
+                "size": 42, "weight": 700, "fgcolour": "#FFFFFF", "outline": 1,
+                "halign": "center", "valign": "middle",
+                "x_percent": 5, "y_percent": 70, "width_percent": 90, "height_percent": 22,
+            }
+            style.update(deepcopy(args.get("text_style", {})))
+            created = []
+            for cue in cues:
+                caption_text = str(cue["text"]).strip()
+                caption = {
+                    "id": _new_id("caption"), "kind": "text",
+                    "start_us": int(cue["start_us"]),
+                    "duration_us": int(cue["end_us"]) - int(cue["start_us"]),
+                    "text": {"content": caption_text, **deepcopy(style)},
+                    "effects": [], "keyframes": [],
+                }
+                track["clips"].append(caption)
+                created.append(caption["id"])
+            return {
+                "track_id": track["id"], "cue_count": len(created),
+                "created_clip_ids": created, "transcription_performed": False,
+            }, True
+
         if name == "text.update_clip":
             _, clip = self._find_clip(project, args["clip_id"])
             if clip["kind"] != "text":
@@ -837,15 +927,124 @@ class ProjectToolExecutor:
             if target_track.get("locked", False):
                 raise ProjectToolExecutionError("The destination track is locked.")
             self._ensure_track_compatibility(target_track, clip["kind"])
-            source_track["clips"].remove(clip)
-            clip["start_us"] = args["start_us"]
-            target_track["clips"].append(clip)
+            new_start = int(args["start_us"])
+            delta = new_start - int(clip["start_us"])
+            group = next((item for item in project.get("clip_groups", [])
+                          if item.get("id") == clip.get("group_id")), None)
+            member_ids = set(group["clip_ids"]) if group else {clip["id"]}
+            members = []
+            for member_track in project["tracks"]:
+                for member_clip in member_track["clips"]:
+                    if member_clip["id"] not in member_ids:
+                        continue
+                    if member_track.get("locked", False):
+                        raise ProjectToolExecutionError("A linked clip is on a locked track.")
+                    destination = target_track if member_clip["id"] == clip["id"] else member_track
+                    if destination["id"] == target_track["id"]:
+                        self._ensure_track_compatibility(destination, member_clip["kind"])
+                    proposed = new_start if member_clip["id"] == clip["id"] else int(member_clip["start_us"]) + delta
+                    proposed_end = proposed + int(member_clip["duration_us"])
+                    for other in destination["clips"]:
+                        if other["id"] in member_ids:
+                            continue
+                        other_start = int(other["start_us"])
+                        other_end = other_start + int(other["duration_us"])
+                        if proposed < other_end and proposed_end > other_start:
+                            raise ProjectToolExecutionError("Moving this clip or linked group would overlap another clip.")
+                    members.append((member_track, destination, member_clip, proposed))
+            if len(members) != len(member_ids):
+                raise ProjectToolExecutionError("The linked group references a missing clip.")
+            # All validation completes before any member is moved.
+            for old_track, destination, member_clip, proposed in members:
+                if old_track is not destination:
+                    old_track["clips"].remove(member_clip)
+                    destination["clips"].append(member_clip)
+                member_clip["start_us"] = proposed
             return {
-                "clip_id": clip["id"],
-                "from_track_id": source_track["id"],
-                "to_track_id": target_track["id"],
-                "start_us": clip["start_us"],
+                "clip_id": clip["id"], "from_track_id": source_track["id"],
+                "to_track_id": target_track["id"], "start_us": clip["start_us"],
+                "moved_clip_ids": sorted(member_ids),
             }, True
+
+        if name == "timeline.group_clips":
+            member_ids = args["clip_ids"]
+            if len(member_ids) != len(set(member_ids)):
+                raise ProjectToolExecutionError("A linked group cannot contain duplicate clip IDs.")
+            members = []
+            for clip_id in member_ids:
+                member_track, member_clip = self._find_clip(project, clip_id)
+                if member_track.get("locked", False):
+                    raise ProjectToolExecutionError("Clips on locked tracks cannot be grouped.")
+                if member_clip.get("group_id"):
+                    raise ProjectToolExecutionError("A selected clip already belongs to a linked group.")
+                members.append(member_clip)
+            group_id = _new_id("group")
+            group = {
+                "id": group_id,
+                "name": str(args.get("name") or "Linked group").strip()[:80] or "Linked group",
+                "clip_ids": list(member_ids),
+            }
+            for member in members:
+                member["group_id"] = group_id
+            project.setdefault("clip_groups", []).append(group)
+            return {"group_id": group_id, "clip_ids": list(member_ids), "name": group["name"]}, True
+
+        if name == "timeline.ungroup_clips":
+            requested = set(args["clip_ids"])
+            groups = project.setdefault("clip_groups", [])
+            affected = []
+            for group in list(groups):
+                removed = requested.intersection(group["clip_ids"])
+                if not removed:
+                    continue
+                affected.extend(sorted(removed))
+                group["clip_ids"] = [item for item in group["clip_ids"] if item not in removed]
+                for track_item in project["tracks"]:
+                    for member in track_item["clips"]:
+                        if member["id"] in removed:
+                            member.pop("group_id", None)
+                if len(group["clip_ids"]) < 2:
+                    for track_item in project["tracks"]:
+                        for member in track_item["clips"]:
+                            if member["id"] in group["clip_ids"]:
+                                member.pop("group_id", None)
+                    groups.remove(group)
+            if not affected:
+                raise ProjectToolExecutionError("None of the selected clips belongs to a linked group.")
+            return {"ungrouped_clip_ids": affected}, True
+
+        if name == "timeline.add_marker":
+            marker = {
+                "id": _new_id("marker"),
+                "time_us": int(args["time_us"]),
+                "label": args["label"].strip(),
+                "colour": args.get("colour", "#F5C542"),
+            }
+            if not marker["label"]:
+                raise ProjectToolExecutionError("Enter a marker label.")
+            return_value = deepcopy(marker)
+            project.setdefault("markers", []).append(marker)
+            return return_value, True
+
+        if name == "timeline.move_marker":
+            marker = next((item for item in project.get("markers", [])
+                           if item["id"] == args["marker_id"]), None)
+            if marker is None:
+                raise ProjectToolExecutionError("The selected marker does not exist.")
+            marker["time_us"] = int(args["time_us"])
+            if "label" in args:
+                marker["label"] = args["label"].strip()
+                if not marker["label"]:
+                    raise ProjectToolExecutionError("Enter a marker label.")
+            return deepcopy(marker), True
+
+        if name == "timeline.remove_marker":
+            markers = project.setdefault("markers", [])
+            marker = next((item for item in markers if item["id"] == args["marker_id"]), None)
+            if marker is None:
+                raise ProjectToolExecutionError("The selected marker does not exist.")
+            markers.remove(marker)
+            return {"removed_marker_id": args["marker_id"]}, True
 
         if name == "timeline.duplicate_clip":
             source_track, source_clip = self._find_clip(project, args["clip_id"])
