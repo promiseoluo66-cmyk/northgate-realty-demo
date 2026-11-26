@@ -1,6 +1,8 @@
 """Unit tests for the safe MLT adapter compiler (no MLT runtime required)."""
 from __future__ import annotations
 
+import importlib.util
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -1079,9 +1081,9 @@ class GeneratedFreezeFrameMltRenderTests(unittest.TestCase):
 
 
     @unittest.skipUnless(
-        __import__("importlib").util.find_spec("mlt7") is not None
-        and __import__("shutil").which("ffmpeg")
-        and __import__("shutil").which("ffprobe"),
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
         "The real MLT/FFmpeg runtime is not installed.",
     )
     def test_generated_freeze_frame_is_visible_for_the_full_hold_duration(self):
