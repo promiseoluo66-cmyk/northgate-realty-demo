@@ -308,15 +308,24 @@ def test_private_release_upload_sends_generated_media_with_mime_type(tmp_path, m
     media.write_bytes(b"png-image-bytes")
     captured = {}
 
-    class Response:
+    class ResponseBody:
+        def __init__(self, body):
+            self.body = body
         def __enter__(self):
             return self
         def __exit__(self, *args):
             return False
         def read(self):
-            return b'{"id":54321}'
+            return self.body
+
+    class Response(ResponseBody):
+        def __init__(self):
+            super().__init__(b'{"id":54321}')
 
     def fake_urlopen(request, timeout):
+        if request.get_method() == "GET":
+            captured["visibility_url"] = request.full_url
+            return ResponseBody(b'{"private":true}')
         captured["url"] = request.full_url
         captured["method"] = request.get_method()
         captured["headers"] = request.headers
@@ -379,3 +388,30 @@ def test_runner_callback_sends_project_and_undo_redo_checkpoint(monkeypatch):
     assert captured["body"]["project_json"]["assets"][0]["release_asset_id"] == 54321
     assert captured["body"]["project_revision"] == 8
     assert captured["body"]["history_state"] == history
+
+
+
+def test_release_upload_refuses_public_storage_repository(tmp_path, monkeypatch):
+    import pytest
+    from cloudflare.runner import upload_release_asset
+
+    media = tmp_path / "frame.png"
+    media.write_bytes(b"png")
+    calls = []
+
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"private":false}'
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.get_method())
+        return Response()
+
+    monkeypatch.setattr("cloudflare.runner.urllib.request.urlopen", fake_urlopen)
+    with pytest.raises(ValueError, match="must be a private GitHub repository"):
+        upload_release_asset("owner", "public-repo", 1234, "token", media, content_type="image/png")
+    assert calls == ["GET"]
