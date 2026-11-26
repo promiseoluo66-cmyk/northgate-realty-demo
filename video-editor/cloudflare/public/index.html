@@ -27,6 +27,14 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
 .timeline-ruler .timeline-label-cell{color:#8594b6;font-weight:800;letter-spacing:.08em}
 .timeline-ruler-lane{position:relative;height:31px;border-bottom:1px solid #405071;color:#aab8d7}
 .timeline-tick{position:absolute;top:5px;transform:translateX(-2px);font-size:10px;white-space:nowrap}
+.timeline-marker{position:absolute;top:1px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transform:translateX(-50%);border:1px solid #f5c542;border-radius:5px;padding:2px 4px;background:#3d3520;color:#ffe8a4;font-size:9px;z-index:4}
+.marker-chip{display:flex;align-items:center;gap:5px;margin:4px 5px 0 0}
+.marker-chip button{font-size:10px;padding:5px 7px}
+.media-preview{display:flex;flex-direction:column;gap:6px;margin:8px 0;min-height:44px}
+.media-thumbnail{max-width:100%;width:100%;height:92px;object-fit:contain;border-radius:7px;background:#090f1b}
+.media-thumbnail-placeholder{display:grid;place-items:center;min-height:44px;border:1px dashed #425277;border-radius:7px;color:#8fa0c3;font-size:10px}
+.media-waveform{display:flex;align-items:center;justify-content:center;gap:2px;min-height:30px;padding:4px;border-radius:6px;background:#0b1725}
+.media-waveform-bar{flex:1;min-width:1px;max-width:5px;border-radius:2px;background:#6fc6aa}
 .timeline-track-row{margin-top:5px}
 .track-label{height:62px;border-radius:7px 0 0 7px}
 .track-label strong{font-size:11px;line-height:1.2}
@@ -152,8 +160,14 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
 <section id="studio-timeline-view" role="tabpanel" aria-labelledby="studio-tab-timeline">
   <div class="studio-controls">
     <label for="timeline-zoom">Timeline zoom <input id="timeline-zoom" type="range" min="50" max="200" step="10" value="100"></label>
+    <label for="timeline-snap-toggle"><input id="timeline-snap-toggle" type="checkbox" checked> Snap across tracks</label>
     <span id="studio-duration">Timeline length —</span>
   </div>
+  <div class="edit-grid">
+    <label for="timeline-marker-label">Marker label<input id="timeline-marker-label" maxlength="120" placeholder="e.g. Intro ends"></label>
+    <button class="btn secondary" id="studio-add-marker" type="button">Add marker at playhead</button>
+  </div>
+  <div id="studio-marker-list" class="media-bin" aria-label="Timeline markers"></div>
   <div id="studio-timeline-empty">Waiting for project data…</div>
   <div class="timeline-scroll" aria-label="Scrollable multitrack timeline">
     <div class="timeline-canvas" id="timeline-canvas">
@@ -175,14 +189,26 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
     <div class="edit-actions"><button class="btn secondary" id="studio-import-media" type="button">Import selected media</button></div>
     <p id="studio-import-status" class="hint" aria-live="polite">No files selected.</p>
   </div>
+  <div class="edit-panel">
+    <h3>Import subtitles</h3>
+    <p class="hint">Import an existing .SRT or .VTT subtitle file. This uses its existing timestamps; it does not transcribe audio.</p>
+    <input id="studio-subtitle-file" type="file" accept=".srt,.vtt,text/plain,text/vtt">
+    <label for="studio-subtitle-track" class="hint">Destination text track<select id="studio-subtitle-track"></select></label>
+    <div class="edit-actions"><button class="btn secondary" id="studio-import-subtitles" type="button">Import subtitle cues</button></div>
+    <p id="studio-subtitle-status" class="hint" aria-live="polite">No subtitle file selected.</p>
+  </div>
   <label for="media-bin-search" class="hint">Search project media<input id="media-bin-search" type="search" placeholder="Search filename, type, folder or tag"></label>
   <label for="media-bin-folder-filter" class="hint">Filter folder<select id="media-bin-folder-filter"><option value="">All folders</option></select></label>
   <div id="studio-media-bin" class="media-bin"></div>
 </section>
 <section class="inspector" aria-live="polite">
   <h3>Clip inspector</h3>
-  <div id="studio-clip-inspector"><p class="hint">Select a clip on the timeline.</p></div>
-  <button class="btn secondary studio-refresh" id="studio-clear-selection" type="button">Clear selection</button>
+  <div id="studio-clip-inspector"><p class="hint">Select a clip on the timeline. Hold Shift while selecting to select multiple clips.</p></div>
+  <div class="edit-actions">
+    <button class="btn secondary" id="studio-group-clips" type="button" disabled>Link selected clips</button>
+    <button class="btn secondary" id="studio-ungroup-clips" type="button" disabled>Unlink selected clips</button>
+    <button class="btn secondary studio-refresh" id="studio-clear-selection" type="button">Clear selection</button>
+  </div>
 </section>
 
 <section class="edit-panel" aria-label="Direct clip editing">
@@ -466,13 +492,81 @@ async function readBrowserMediaDuration(file,mediaType){
     return Math.round(duration*1000000);
   }finally{URL.revokeObjectURL(url);element.removeAttribute("src");}
 }
+async function createMediaPreview(file,mediaType){
+  const metadata={};
+  let url=null;
+  try{
+    if(mediaType==="image"||mediaType==="video"){
+      url=URL.createObjectURL(file);
+      let source;
+      if(mediaType==="image"){
+        source=await new Promise((resolve,reject)=>{
+          const image=new Image();
+          image.onload=()=>resolve(image);
+          image.onerror=()=>reject(new Error("Image preview could not be decoded."));
+          image.src=url;
+        });
+      }else{
+        source=document.createElement("video");
+        source.muted=true;source.playsInline=true;source.preload="metadata";
+        await new Promise((resolve,reject)=>{
+          source.onerror=()=>reject(new Error("Video preview could not be decoded."));
+          source.onloadedmetadata=()=>{
+            try{source.currentTime=Math.min(0.4,Math.max(0,source.duration/3));}
+            catch(error){reject(error);}
+          };
+          source.onseeked=()=>resolve();
+          source.src=url;source.load();
+        });
+      }
+      const width=source.videoWidth||source.naturalWidth||0;
+      const height=source.videoHeight||source.naturalHeight||0;
+      if(width>0&&height>0){
+        const scale=Math.min(1,96/width,72/height);
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(width*scale));
+        canvas.height=Math.max(1,Math.round(height*scale));
+        const context=canvas.getContext("2d");
+        context.drawImage(source,0,0,canvas.width,canvas.height);
+        let thumbnail=canvas.toDataURL("image/jpeg",0.42);
+        if(thumbnail.length>12000)thumbnail=canvas.toDataURL("image/jpeg",0.24);
+        if(thumbnail.length<=12000)metadata.thumbnail_data_url=thumbnail;
+      }
+    }else if(mediaType==="audio"&&file.size<=8*1024*1024){
+      const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+      if(AudioContextClass){
+        const audioContext=new AudioContextClass();
+        try{
+          const decoded=await audioContext.decodeAudioData(await file.arrayBuffer());
+          const channel=decoded.getChannelData(0);
+          const bins=96;
+          const block=Math.max(1,Math.floor(channel.length/bins));
+          const peaks=[];
+          let maximum=0;
+          for(let bin=0;bin<bins;bin++){
+            const start=bin*block,end=Math.min(channel.length,bin===bins-1?channel.length:(bin+1)*block);
+            let peak=0;
+            for(let i=start;i<end;i++)peak=Math.max(peak,Math.abs(channel[i]));
+            peaks.push(peak);maximum=Math.max(maximum,peak);
+          }
+          metadata.waveform={samples:peaks.map((value)=>maximum?Number((value/maximum).toFixed(3)):0)};
+        }finally{await audioContext.close();}
+      }
+    }
+  }catch(error){
+    // Preview generation is optional; a successfully imported source must remain usable.
+  }finally{
+    if(url)URL.revokeObjectURL(url);
+  }
+  return metadata;
+}
 async function importStudioMedia(){
   const files=Array.from($("studio-media-files").files||[]);
   if(!files.length)return message("studio-import-status","Choose one or more media files first.","error");
   if(!activeJobId)return message("studio-import-status","Open a saved project before importing media.","error");
   if(files.length>20)return message("studio-import-status","Import up to 20 files in one batch.","error");
   const button=$("studio-import-media");button.disabled=true;
-  let imported=0;const failures=[];
+  let imported=0;const failures=[];const previewWarnings=[];
   try{
     for(let index=0;index<files.length;index++){
       const file=files[index];const extension=(file.name.split(".").pop()||"").toLowerCase();
@@ -494,6 +588,16 @@ async function importStudioMedia(){
           method:"POST",headers,body:file
         });
         imported++;
+        const preview=await createMediaPreview(file,mediaType);
+        if(Object.keys(preview).length){
+          try{
+            const saved=await api("/api/v1/jobs/"+activeJobId+"/assets/"+encodeURIComponent(result.asset.id)+"/preview",{
+              method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({expected_revision:result.project_revision,...preview})
+            });
+            result.project_revision=saved.project_revision;
+          }catch(previewError){previewWarnings.push(file.name+": preview metadata was not saved ("+previewError.message+")");}
+        }
         message("studio-import-status",result.message+" ("+imported+"/"+files.length+")","success");
       }catch(error){failures.push(file.name+": "+error.message);}
     }
@@ -502,9 +606,53 @@ async function importStudioMedia(){
     if(failures.length)message("studio-import-status",imported+" file(s) imported. "+failures.join(" | "),"error");
     else message("studio-import-status",imported+" file(s) imported and saved to the project.","success");
   }finally{button.disabled=false;}
+  if(previewWarnings.length&&!failures.length)message("studio-import-status",imported+" file(s) imported. Preview warning: "+previewWarnings.join(" | "),"error");
+}
+async function importStudioSubtitles(){
+  const file=$("studio-subtitle-file").files[0];
+  if(!file)return message("studio-subtitle-status","Choose an .SRT or .VTT file first.","error");
+  if(file.size<1||file.size>1024*1024)return message("studio-subtitle-status","Subtitle file must be 1 byte to 1 MB.","error");
+  const trackId=$("studio-subtitle-track").value;
+  if(!trackId)return message("studio-subtitle-status","Add an unlocked text track first.","error");
+  try{
+    const raw=(await file.text()).replace(/^\uFEFF/,"").replace(/\r/g,"");
+    const blocks=raw.split(/\n\s*\n/);
+    const parseTime=(value)=>{
+      const match=value.trim().match(/^(?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{1,3})$/);
+      if(!match)throw new Error("Unsupported subtitle timestamp: "+value);
+      const hours=Number(match[1]||0),minutes=Number(match[2]),seconds=Number(match[3]);
+      const millis=Number(String(match[4]).padEnd(3,"0"));
+      return (((hours*60+minutes)*60+seconds)*1000+millis)*1000;
+    };
+    const cues=[];
+    for(const block of blocks){
+      const lines=block.split("\n").map((line)=>line.trim()).filter(Boolean);
+      const timingIndex=lines.findIndex((line)=>line.includes("-->"));
+      if(timingIndex<0)continue;
+      const parts=lines[timingIndex].split("-->");
+      if(parts.length!==2)throw new Error("Subtitle timing line is malformed.");
+      const start_us=parseTime(parts[0]);
+      const endToken=parts[1].trim().split(/\s+/)[0];
+      const end_us=parseTime(endToken);
+      const text=lines.slice(timingIndex+1).join(" ").replace(/<[^>]*>/g,"").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").trim();
+      if(!text)continue;
+      cues.push({text,start_us,end_us});
+      if(cues.length>500)throw new Error("Import up to 500 subtitle cues at a time.");
+    }
+    if(!cues.length)throw new Error("No valid subtitle cues were found. Check the SRT/VTT timing format.");
+    if(cues.some((cue,index)=>cue.end_us<=cue.start_us||(index>0&&cue.start_us<cues[index-1].end_us))){
+      throw new Error("Subtitle cues must have positive durations and must not overlap.");
+    }
+    const button=$("studio-import-subtitles");button.disabled=true;
+    await window.applyStudioOperations([{name:"captions.import_subtitles",arguments:{track_id:trackId,cues}}]);
+    message("studio-subtitle-status",cues.length+" subtitle cue(s) added to the timeline.","success");
+    $("studio-subtitle-file").value="";
+  }catch(error){message("studio-subtitle-status",error.message,"error");}
+  finally{$("studio-import-subtitles").disabled=false;}
 }
 async function applyStudioOperations(tool_calls,confirmed_tools=[]){if(!activeJobId)throw new Error("Connect to a saved project first.");const project=await api("/api/v1/jobs/"+activeJobId+"/project");const result=await api("/api/v1/jobs/"+activeJobId+"/manual-edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:project.revision,tool_calls,confirmed_tools})});message("render-status",result.message||"Studio edit queued.","success");await refreshJob();pollJob();return result;}
 window.applyStudioOperations=applyStudioOperations;
+window.getActiveStudioJobId=()=>activeJobId;
 
 async function applyAIEdit(){const rawInstruction=$("next-instruction").value.trim();if(!rawInstruction)return message("render-status","Describe the next edit first.","error");const selectedContext=window.studioSelectedClipInstruction?window.studioSelectedClipInstruction():"";const instruction=selectedContext+"User request: "+rawInstruction;const button=$("apply-ai-edit");button.disabled=true;button.textContent="Queuing AI edit…";try{const project=await api("/api/v1/jobs/"+activeJobId+"/project");const data=await api("/api/v1/jobs/"+activeJobId+"/ai-edit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({instruction,expected_revision:project.revision})});$("next-instruction").value="";message("render-status",data.message,"success");await refreshJob();pollJob();}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Ask AI to edit this project";}}
 async function approveAIEdit(){const button=$("approve-edit");button.disabled=true;button.textContent="Queuing approved changes…";try{const job=await api("/api/v1/jobs/"+activeJobId);const project=await api("/api/v1/jobs/"+activeJobId+"/project");const tools=job.pending_plan?.required_confirmations||[];const data=await api("/api/v1/jobs/"+activeJobId+"/ai-edit/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:project.revision,confirmed_tools:tools})});message("render-status",data.message,"success");await refreshJob();pollJob();}catch(e){message("render-status",e.message,"error");}finally{button.disabled=false;button.textContent="Approve these changes";}}
@@ -526,6 +674,7 @@ $("studio-open-project").addEventListener("click",openSavedProject);
 $("studio-rename-project").addEventListener("click",renameCurrentProject);
 $("refresh-saved-projects").addEventListener("click",loadSavedProjects);
 $("studio-import-media").addEventListener("click",importStudioMedia);
+$("studio-import-subtitles").addEventListener("click",importStudioSubtitles);
 $("studio-media-files").addEventListener("change",()=>{
   const files=Array.from($("studio-media-files").files||[]);
   message("studio-import-status",files.length?files.length+" file(s) selected.":"No files selected.");
