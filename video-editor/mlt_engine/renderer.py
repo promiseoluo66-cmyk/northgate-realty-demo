@@ -262,7 +262,7 @@ def _compile_clip_transform(
     source_width = source_height = 0
     if crop_active or framing_mode in {"fit", "fill"}:
         if source_dimensions is None:
-            requirement = "Manual crop" if crop_active else framing_mode.title()
+            requirement = "Manual crop" if crop_active else framing_mode.title() + " framing"
             raise MltRenderError(f"{requirement} requires readable source width and height metadata.")
         source_width, source_height = source_dimensions
         if source_width <= 0 or source_height <= 0:
