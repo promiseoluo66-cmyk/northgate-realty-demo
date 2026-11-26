@@ -1069,6 +1069,14 @@ class TrackVisibilityRenderTests(unittest.TestCase):
 
 class GeneratedFreezeFrameMltRenderTests(unittest.TestCase):
     """Exercise extraction -> timeline hold -> real MLT render -> decoded pixels."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.project = make_project(self.root)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
 
     @unittest.skipUnless(
         __import__("importlib").util.find_spec("mlt7") is not None
