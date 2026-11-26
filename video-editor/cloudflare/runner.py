@@ -13,6 +13,7 @@ from project_model import validate_project
 
 MAX_INPUT_VIDEO = 50 * 1024 * 1024
 MAX_RENDER_OUTPUT = 300 * 1024 * 1024
+MAX_PROJECT_MEDIA_BYTES = 200 * 1024 * 1024
 
 WORKER_USER_AGENT = "independent-video-editor/0.2 (+https://github.com/promiseoluo66-cmyk/northgate-realty-demo/tree/video-editor-lab)"
 
@@ -144,10 +145,16 @@ def persist_generated_project_assets(
     """Upload generated media privately, then attach IDs to the current project/history."""
     root = output_dir.resolve()
     uploaded: list[int] = []
+    project_assets = executor.get_project().get("assets", [])
     pending = [
-        item for item in executor.get_project().get("assets", [])
+        item for item in project_assets
         if item.get("generated") is True and item.get("release_asset_id") is None
     ]
+    current_total = sum(int(item.get("size_bytes") or 0) for item in project_assets)
+    pending_total = sum(int(item.get("size_bytes") or 0) for item in pending)
+    if current_total + pending_total > MAX_PROJECT_MEDIA_BYTES:
+        raise ValueError("Project media storage is limited to 200 MB total.")
+    persisted: list[tuple[str, int]] = []
     try:
         for asset in pending:
             storage_key = asset.get("storage_key")
@@ -178,7 +185,10 @@ def persist_generated_project_assets(
                 content_type=content_type,
             )
             uploaded.append(remote_id)
-            executor.set_persisted_asset_id(str(asset["id"]), remote_id)
+            persisted.append((str(asset["id"]), remote_id))
+        # Only mutate project/history after every upload succeeded.
+        for media_id, remote_id in persisted:
+            executor.set_persisted_asset_id(media_id, remote_id)
     except Exception:
         for remote_id in uploaded:
             delete_release_asset(owner, repo, remote_id, token)
