@@ -208,3 +208,90 @@ def test_download_project_media_assets_rejects_storage_path_traversal(tmp_path):
         download_project_media_assets(
             {"job_id": "e" * 32}, project, tmp_path, "owner", "repo", "private-token"
         )
+
+
+
+def _executor_with_generated_assets(tmp_path, count=1):
+    from cloudflare.runner import _build_initial_project
+    from project_tool_executor import ProjectToolExecutor
+    project = _build_initial_project(
+        {"job_id": "f" * 32, "input_filename": "source.mp4", "skill": {}},
+        duration_us=2_000_000, fps_num=30, fps_den=1,
+        source_width=640, source_height=360, size_bytes=1024,
+    )
+    for index in range(count):
+        filename = f"generated-{index}.m4a"
+        (tmp_path / filename).write_bytes(b"generated-audio")
+        project["assets"].append({
+            "id": f"generated-{index}", "media_type": "audio",
+            "file_name": filename, "storage_key": filename,
+            "size_bytes": len(b"generated-audio"), "duration_us": 1_000_000,
+            "generated": True,
+        })
+    return ProjectToolExecutor(project)
+
+
+def test_generated_media_upload_is_private_and_release_id_is_saved(tmp_path, monkeypatch):
+    from cloudflare.runner import persist_generated_project_assets
+    executor = _executor_with_generated_assets(tmp_path)
+    calls = []
+
+    def fake_upload(owner, repo, release_id, token, path, asset_name=None, content_type="video/mp4"):
+        calls.append((owner, repo, release_id, path.name, content_type, asset_name))
+        return 98765
+
+    monkeypatch.setattr("cloudflare.runner.upload_release_asset", fake_upload)
+    uploaded = persist_generated_project_assets(
+        executor, tmp_path, "owner", "repo", 1234, "secret"
+    )
+    assert uploaded == [98765]
+    assert calls[0][:5] == ("owner", "repo", 1234, "generated-0.m4a", "audio/mp4")
+    asset = next(item for item in executor.get_project()["assets"] if item["id"] == "generated-0")
+    assert asset["release_asset_id"] == 98765
+
+
+def test_generated_media_upload_failure_cleans_up_and_does_not_attach_dead_ids(tmp_path, monkeypatch):
+    import pytest
+    from cloudflare.runner import persist_generated_project_assets
+    executor = _executor_with_generated_assets(tmp_path, count=2)
+    upload_count = {"value": 0}
+    deleted = []
+
+    def fake_upload(*args, **kwargs):
+        upload_count["value"] += 1
+        if upload_count["value"] == 1:
+            return 45678
+        raise RuntimeError("simulated GitHub upload failure")
+
+    monkeypatch.setattr("cloudflare.runner.upload_release_asset", fake_upload)
+    monkeypatch.setattr(
+        "cloudflare.runner.delete_release_asset",
+        lambda owner, repo, asset_id, token: deleted.append(asset_id),
+    )
+    with pytest.raises(RuntimeError, match="simulated GitHub upload failure"):
+        persist_generated_project_assets(executor, tmp_path, "owner", "repo", 1234, "secret")
+    assert deleted == [45678]
+    assert all("release_asset_id" not in item for item in executor.get_project()["assets"]
+               if item.get("generated"))
+
+
+def test_project_media_download_includes_generated_assets_in_redo_history(tmp_path, monkeypatch):
+    from cloudflare.runner import download_project_media_assets
+    downloaded = []
+
+    def fake_download(owner, repo, asset_id, token, path):
+        downloaded.append((asset_id, path.name))
+        path.write_bytes(b"history-audio")
+
+    monkeypatch.setattr("cloudflare.runner.download_release_asset", fake_download)
+    project = {"assets": []}
+    job = {"history_state": {"undo": [], "redo": [{
+        "assets": [{
+            "id": "generated-redo", "media_type": "audio",
+            "file_name": "redo.m4a", "storage_key": "redo.m4a",
+            "size_bytes": 13, "release_asset_id": 76543,
+        }]
+    }]}}
+    download_project_media_assets(job, project, tmp_path, "owner", "repo", "secret")
+    assert downloaded == [(76543, "redo.m4a")]
+    assert (tmp_path / "redo.m4a").read_bytes() == b"history-audio"
