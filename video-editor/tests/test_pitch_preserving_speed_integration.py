@@ -162,6 +162,16 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
             output = root / "double-speed-render.mp4"
             _make_test_media(video, audio)
 
+            source_hz = _measure_tone_hz(audio)
+            self.assertGreater(
+                source_hz, 430.0,
+                f"The generated WAV test tone should be 440 Hz, measured {source_hz:.1f} Hz.",
+            )
+            self.assertLess(
+                source_hz, 450.0,
+                f"The generated WAV test tone should be 440 Hz, measured {source_hz:.1f} Hz.",
+            )
+
             # MLT's timewarp producer delegates pitch correction to rbpitch.
             import mlt7 as mlt
             factory = mlt.Factory()
