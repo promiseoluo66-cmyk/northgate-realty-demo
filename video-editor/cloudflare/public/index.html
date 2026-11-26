@@ -270,9 +270,11 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
         <option value="scale_x">Scale X</option><option value="scale_y">Scale Y</option>
         <option value="rotation_deg">Rotation</option><option value="opacity">Opacity</option>
         <option value="playback_rate">Playback speed</option><option value="volume_db">Audio volume (dB)</option>
+        <option value="crop_x">Crop X</option><option value="crop_y">Crop Y</option>
+        <option value="crop_width">Crop width</option><option value="crop_height">Crop height</option>
       </select></label>
       <label for="keyframe-value">Value<input id="keyframe-value" type="number" step="0.01"></label>
-      <label for="keyframe-interpolation">Interpolation<select id="keyframe-interpolation"><option value="linear">Linear</option><option value="hold">Hold</option><option value="ease_in">Ease in</option><option value="ease_out">Ease out</option><option value="ease_in_out">Ease in/out</option></select></label>
+      <label for="keyframe-interpolation">Interpolation<select id="keyframe-interpolation"><option value="linear">Linear</option><option value="hold">Hold</option><option value="ease_in">Ease in cubic</option><option value="ease_out">Ease out cubic</option><option value="ease_in_out">Ease in/out cubic</option><option value="ease_in_quad">Ease in quadratic</option><option value="ease_out_quad">Ease out quadratic</option><option value="ease_in_out_quad">Ease in/out quadratic</option><option value="ease_in_quart">Ease in quartic</option><option value="ease_out_quart">Ease out quartic</option><option value="ease_in_out_quart">Ease in/out quartic</option><option value="smoothstep">Smoothstep</option></select></label>
       <label for="keyframe-time">Local clip time (seconds)<input id="keyframe-time" type="number" min="0" step="0.01"></label>
     </div>
     <div class="edit-actions">
@@ -286,7 +288,9 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
     <div class="edit-grid" style="margin-top:10px">
       <label for="motion-preset">Motion preset<select id="motion-preset">
         <option value="fade_in">Fade in</option><option value="fade_out">Fade out</option>
-        <option value="zoom_in">Zoom in</option><option value="speed_ramp">Speed ramp</option>
+        <option value="zoom_in">Zoom in</option><option value="zoom_out">Zoom out</option>
+        <option value="pan_left">Pan left</option><option value="pan_right">Pan right</option>
+        <option value="crop_reveal">Animated crop reveal</option><option value="speed_ramp">Speed ramp</option>
       </select></label>
       <button class="btn secondary" id="studio-apply-motion-preset" type="button">Apply motion preset</button>
     </div>
@@ -307,6 +311,8 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
       <label for="manage-track">Manage track<select id="manage-track"></select></label>
       <label for="rename-track">Rename track<input id="rename-track" maxlength="80"></label>
       <label for="track-order">Track position (top to bottom)<input id="track-order" type="number" min="0" step="1" value="0"></label>
+      <label for="track-audio-gain">Track audio gain (dB)<input id="track-audio-gain" type="number" min="-96" max="24" step="0.5" value="0"></label>
+      <label for="track-audio-pan">Track audio pan (-1 left, +1 right)<input id="track-audio-pan" type="number" min="-1" max="1" step="0.05" value="0"></label>
       <label for="profile-preset">Canvas preset<select id="profile-preset">
         <option value="custom">Custom current size</option><option value="9:16">Portrait 9:16</option>
         <option value="16:9">Landscape 16:9</option><option value="1:1">Square 1:1</option>
@@ -326,6 +332,7 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
       <button class="btn secondary" id="studio-toggle-track-visible" type="button">Hide visuals</button>
       <button class="btn secondary" id="studio-toggle-track-muted" type="button">Mute track</button>
       <button class="btn secondary" id="studio-toggle-track-solo" type="button">Solo track</button>
+      <button class="btn secondary" id="studio-apply-track-audio" type="button">Apply track audio mix</button>
       <button class="btn secondary" id="studio-remove-track" type="button">Remove track</button>
       <button class="btn secondary" id="studio-set-profile" type="button">Update project profile</button>
       <button class="btn secondary" id="studio-undo" type="button">Undo</button>
