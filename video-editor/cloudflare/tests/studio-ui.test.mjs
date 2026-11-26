@@ -217,3 +217,16 @@ test("Failed renders with saved checkpoints remain editable for recovery", () =>
   assert.match(html, /Recovery checkpoint available/);
   assert.match(html, /project\.status\|\|"saved"/);
 });
+
+
+test("Stage 1 Tasks 4 and 5 expose track audio routing and animated crop controls", () => {
+  assert.match(html, /id="track-audio-gain"/);
+  assert.match(html, /id="track-audio-pan"/);
+  assert.match(studioScript, /audio_gain_db:numeric\("track-audio-gain"\)/);
+  assert.match(studioScript, /audio_pan:numeric\("track-audio-pan"\)/);
+  assert.match(studioScript, /crop_reveal/);
+  assert.match(studioScript, /crop_width/);
+  assert.match(html, /value="crop_x"/);
+  assert.match(html, /ease_in_quad/);
+  assert.match(studioScript, /ease_in_out_quart/);
+});
