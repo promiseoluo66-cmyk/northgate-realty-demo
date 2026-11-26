@@ -356,7 +356,7 @@ def test_runner_callback_sends_project_and_undo_redo_checkpoint(monkeypatch):
     def fake_urlopen(request, timeout):
         import json
         captured["url"] = request.full_url
-        captured["secret"] = request.get_header("X-Callback-Secret")
+        captured["secret"] = request.get_header("X-callback-secret")
         captured["body"] = json.loads(request.data.decode("utf-8"))
         return Response()
 
