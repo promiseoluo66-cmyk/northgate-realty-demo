@@ -516,6 +516,106 @@ class ProjectToolExecutor:
                 "duration_us": asset["duration_us"], "size_bytes": asset["size_bytes"],
                 "storage_status": "pending_private_upload"}
 
+    def _create_proxy_asset(self, project: dict[str, Any], media_id: str) -> dict[str, Any]:
+        source_asset, source_path = self._local_asset_path(project, media_id, "video")
+        if self._asset_root is None:
+            raise ProjectToolExecutionError("Proxy generation requires a configured asset directory.")
+        if any(item.get("proxy_for_media_id") == media_id for item in project["assets"]):
+            raise ProjectToolExecutionError("A proxy already exists for this video asset.")
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration:stream=codec_type,width,height",
+             "-of", "json", str(source_path)],
+            check=True, capture_output=True, text=True, timeout=60,
+        )
+        metadata = json.loads(probe.stdout)
+        video = next(
+            (item for item in metadata.get("streams", [])
+             if isinstance(item, dict) and item.get("codec_type") == "video"),
+            None,
+        )
+        duration = float(metadata.get("format", {}).get("duration") or 0)
+        if video is None or duration <= 0 or duration > 1800:
+            raise ProjectToolExecutionError(
+                "Proxy source must contain readable video with a duration up to 30 minutes."
+            )
+        proxy_id = _new_id("proxy")
+        filename = proxy_id + ".mp4"
+        output_path = self._asset_root / filename
+        if output_path.exists():
+            raise ProjectToolExecutionError("The generated proxy filename already exists.")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-n",
+                    "-i", str(source_path), "-map", "0:v:0", "-map", "0:a?",
+                    "-vf",
+                    "scale=w='min(640,iw)':h='min(360,ih)':"
+                    "force_original_aspect_ratio=decrease:force_divisible_by=2",
+                    "-c:v", "libx264", "-preset", "ultrafast",
+                    "-b:v", "150k", "-maxrate", "200k", "-bufsize", "400k",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "48k",
+                    "-ac", "2", "-movflags", "+faststart", str(output_path),
+                ],
+                check=True, capture_output=True, text=True, timeout=600,
+            )
+            if not output_path.is_file() or output_path.stat().st_size <= 0:
+                raise ProjectToolExecutionError("FFmpeg produced an empty proxy file.")
+            if output_path.stat().st_size > 50 * 1024 * 1024:
+                raise ProjectToolExecutionError("The generated proxy exceeds the 50 MB per-file storage limit.")
+            proxy_probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries",
+                 "format=duration:stream=codec_type,width,height",
+                 "-of", "json", str(output_path)],
+                check=True, capture_output=True, text=True, timeout=60,
+            )
+            proxy_metadata = json.loads(proxy_probe.stdout)
+            proxy_video = next(
+                (item for item in proxy_metadata.get("streams", [])
+                 if isinstance(item, dict) and item.get("codec_type") == "video"),
+                None,
+            )
+            proxy_duration = float(proxy_metadata.get("format", {}).get("duration") or 0)
+            if (
+                proxy_video is None
+                or int(proxy_video.get("width") or 0) < 1
+                or int(proxy_video.get("height") or 0) < 1
+                or int(proxy_video.get("width") or 0) > 640
+                or int(proxy_video.get("height") or 0) > 360
+                or proxy_duration <= 0
+                or abs(proxy_duration - duration) > max(0.25, duration * 0.02)
+            ):
+                raise ProjectToolExecutionError("The generated proxy failed video, dimension or duration verification.")
+        except Exception as exc:
+            output_path.unlink(missing_ok=True)
+            if isinstance(exc, ProjectToolExecutionError):
+                raise
+            raise ProjectToolExecutionError("Proxy generation failed: " + str(exc)[:240]) from exc
+
+        asset = {
+            "id": proxy_id,
+            "media_type": "video",
+            "file_name": filename,
+            "storage_key": filename,
+            "size_bytes": output_path.stat().st_size,
+            "duration_us": max(1, int(round(proxy_duration * 1_000_000))),
+            "generated": True,
+            "generated_from_media_id": source_asset["id"],
+            "proxy_for_media_id": source_asset["id"],
+            "proxy_profile": {"max_width": 640, "max_height": 360, "video_bitrate": 150000},
+        }
+        project["assets"].append(asset)
+        return {
+            "proxy_media_id": proxy_id,
+            "source_media_id": source_asset["id"],
+            "file_name": filename,
+            "duration_us": asset["duration_us"],
+            "width": int(proxy_video["width"]),
+            "height": int(proxy_video["height"]),
+            "size_bytes": asset["size_bytes"],
+            "storage_status": "pending_private_upload",
+        }
+
     def _create_freeze_frame(self, project: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
         source_asset, source_path = self._local_asset_path(project, args["media_id"], "video")
         track = self._find_track(project, args["track_id"])
@@ -634,6 +734,9 @@ class ProjectToolExecutor:
                 int(args.get("analysis_seconds", 600)),
                 float(args.get("silence_threshold_db", -50)),
             ), False
+
+        if name == "media.create_proxy":
+            return self._create_proxy_asset(project, args["media_id"]), True
 
         if name == "media.extract_audio":
             return self._extract_audio_asset(

@@ -523,3 +523,12 @@ test("manual Studio edits can resume from a failed project's saved checkpoint", 
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("private media asset URL route requires the app token", async () => {
+  const response = await worker.fetch(
+    new Request("https://studio.test/api/v1/jobs/" + "d".repeat(32) + "/assets/proxy-123/url"),
+    {}
+  );
+  assert.equal(response.status, 401);
+});

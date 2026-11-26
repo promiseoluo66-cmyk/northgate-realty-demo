@@ -779,15 +779,31 @@ async function relinkMediaAsset(request, env, id, assetId) {
   }
 }
 
-async function getSourceUrl(request, env, id) {
+async function getAssetUrl(request, env, id, assetId) {
   if (!authorized(request, env)) return json({ error: "Unauthorized." }, 401);
   if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) {
     return json({ error: "Private media storage is not configured." }, 503);
   }
-  const row = await env.DB.prepare("SELECT input_asset_id FROM jobs WHERE id=?").bind(id).first();
+  const row = await env.DB.prepare(
+    "SELECT input_asset_id,project_json FROM jobs WHERE id=?"
+  ).bind(id).first();
   if (!row) return json({ error: "Job not found." }, 404);
+  let releaseAssetId = null;
+  if (assetId === "source-video") {
+    releaseAssetId = row.input_asset_id;
+  } else if (row.project_json) {
+    let project;
+    try { project = JSON.parse(row.project_json); }
+    catch (_) { return json({ error: "Saved project metadata is invalid." }, 500); }
+    const asset = (project.assets || []).find(item => item.id === assetId);
+    if (!asset) return json({ error: "Media asset not found." }, 404);
+    releaseAssetId = asset.release_asset_id;
+  }
+  if (!Number.isSafeInteger(Number(releaseAssetId)) || Number(releaseAssetId) < 1) {
+    return json({ error: "This media asset has not been saved to private storage yet." }, 409);
+  }
   const endpoint = "https://api.github.com/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO +
-    "/releases/assets/" + row.input_asset_id;
+    "/releases/assets/" + Number(releaseAssetId);
   const response = await fetch(endpoint, {
     headers: {
       authorization: "Bearer " + env.GITHUB_TOKEN,
@@ -802,7 +818,11 @@ async function getSourceUrl(request, env, id) {
     if (!location) return json({ error: "GitHub did not provide a media preview location." }, 502);
     return json({ source_url: location, expires_soon: true }, 200);
   }
-  return json({ error: "Could not create a private source preview (HTTP " + response.status + ")." }, 502);
+  return json({ error: "Could not create a private media preview (HTTP " + response.status + ")." }, 502);
+}
+
+async function getSourceUrl(request, env, id) {
+  return getAssetUrl(request, env, id, "source-video");
 }
 
 async function queueManualEdit(request, env, id) {
@@ -968,6 +988,8 @@ export default {
       if (relinkMatch && request.method === "PUT") return await relinkMediaAsset(request, env, relinkMatch[1], relinkMatch[2]);
       const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);
       if (sourceUrlMatch && request.method === "GET") return await getSourceUrl(request, env, sourceUrlMatch[1]);
+      const assetUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/assets\/([A-Za-z0-9_-]{1,64})\/url$/);
+      if (assetUrlMatch && request.method === "GET") return await getAssetUrl(request, env, assetUrlMatch[1], assetUrlMatch[2]);
       const manualEditMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/manual-edit$/);
       if (manualEditMatch && request.method === "POST") return await queueManualEdit(request, env, manualEditMatch[1]);
       const projectMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/project$/);

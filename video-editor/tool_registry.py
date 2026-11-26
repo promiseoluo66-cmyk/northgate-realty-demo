@@ -165,6 +165,11 @@ TOOL_DEFINITIONS = (
         read_only=True,
     ),
     ToolDefinition(
+        "media.create_proxy", "media",
+        "Create a bounded low-resolution H.264 proxy for a video asset. The original remains unchanged and the proxy is stored with the project.",
+        _schema({"media_id": _field("string", max_length=64)}, ("media_id",)),
+    ),
+    ToolDefinition(
         "media.extract_audio", "audio",
         "Extract the first audio stream from a video into a new project audio asset. The generated asset is saved to private project storage by the render runner.",
         _schema({

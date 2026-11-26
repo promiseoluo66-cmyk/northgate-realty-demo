@@ -884,10 +884,6 @@ class EditorToolExpansionTests(unittest.TestCase):
             restored = next(item for item in executor.get_project()["assets"] if item["id"] == media_id)
             self.assertEqual(restored["release_asset_id"], 987654)
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_audio_extraction_ffmpeg_partial_output_is_removed_on_failure(self):
         import json
         import subprocess
@@ -952,3 +948,63 @@ if __name__ == "__main__":
                 executor.execute("media.extract_audio", {"media_id": "video-asset"})
             self.assertEqual(executor.get_project(), before)
             self.assertEqual(executor.revision, 1)
+
+    def test_proxy_generation_creates_verified_low_resolution_asset_and_supports_undo_redo(self):
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            executor, source = self._make_real_media_executor(directory)
+            result = executor.execute("media.create_proxy", {"media_id": "video-asset"})
+            created = result["results"][0]["result"]
+            proxy = next(item for item in executor.get_project()["assets"] if item["id"] == created["proxy_media_id"])
+            proxy_path = Path(directory) / proxy["storage_key"]
+            self.assertTrue(proxy_path.is_file())
+            self.assertGreater(proxy_path.stat().st_size, 0)
+            self.assertEqual(proxy["proxy_for_media_id"], "video-asset")
+            self.assertEqual(proxy["generated_from_media_id"], "video-asset")
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries",
+                 "format=duration:stream=codec_type,width,height",
+                 "-of", "json", str(proxy_path)],
+                check=True, capture_output=True, text=True,
+            )
+            metadata = json.loads(probe.stdout)
+            video = next(item for item in metadata["streams"] if item["codec_type"] == "video")
+            self.assertLessEqual(video["width"], 640)
+            self.assertLessEqual(video["height"], 360)
+            self.assertAlmostEqual(float(metadata["format"]["duration"]), 2.0, delta=0.25)
+            self.assertEqual(created["width"], video["width"])
+            executor.execute("history.undo", {})
+            self.assertFalse(any(item["id"] == proxy["id"] for item in executor.get_project()["assets"]))
+            executor.execute("history.redo", {})
+            restored = next(item for item in executor.get_project()["assets"] if item["id"] == proxy["id"])
+            self.assertEqual(restored["storage_key"], proxy["storage_key"])
+            self.assertTrue(proxy_path.is_file())
+
+    def test_proxy_generation_rejects_duplicates_without_mutation(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory)
+            executor.execute("media.create_proxy", {"media_id": "video-asset"})
+            before = executor.get_project()
+            with self.assertRaisesRegex(ProjectToolExecutionError, "proxy already exists"):
+                executor.execute("media.create_proxy", {"media_id": "video-asset"})
+            self.assertEqual(executor.get_project(), before)
+
+    def test_proxy_generation_rejects_missing_source_without_mutation(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            executor, source = self._make_real_media_executor(directory)
+            source.unlink()
+            before = executor.get_project()
+            with self.assertRaisesRegex(ProjectToolExecutionError, "not available"):
+                executor.execute("media.create_proxy", {"media_id": "video-asset"})
+            self.assertEqual(executor.get_project(), before)
+
+
+
+if __name__ == "__main__":
+    unittest.main()

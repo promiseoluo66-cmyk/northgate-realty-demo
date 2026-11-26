@@ -769,6 +769,30 @@
     const activeFolder = folderFilter?.value || "";
     const filtered = assets.filter((asset) => {
       const folder = asset.folder || "Unsorted";
+      const existingProxy = assets.find((item) => item.proxy_for_media_id === asset.id);
+      const proxyStatus = asset.proxy_for_media_id
+        ? element("p", "hint", "Low-resolution proxy for " + asset.proxy_for_media_id)
+        : existingProxy
+          ? element("p", "hint", "Proxy ready · " + existingProxy.file_name)
+          : null;
+      const proxyButton = asset.media_type === "video" && !asset.proxy_for_media_id && !existingProxy
+        ? element("button", "btn secondary", "Create 640×360 proxy")
+        : null;
+      if (proxyButton) {
+        proxyButton.type = "button";
+        proxyButton.addEventListener("click", async () => {
+          proxyButton.disabled = true;
+          proxyButton.textContent = "Generating proxy…";
+          try {
+            await submitOperations([{name:"media.create_proxy",arguments:{media_id:asset.id}}]);
+          } catch (error) {
+            const status = byId("render-status");
+            if (status) { status.textContent = error.message; status.className = "status error"; }
+            proxyButton.disabled = false;
+            proxyButton.textContent = "Create 640×360 proxy";
+          }
+        });
+      }
       const tags = Array.isArray(asset.tags) ? asset.tags : [];
       const matchesQuery = !query ||
         String(asset.file_name || "").toLowerCase().includes(query) ||
@@ -1025,7 +1049,9 @@
           if (status) { status.textContent = error.message; status.className = "status error"; }
         }
       });
+      if (proxyStatus) card.append(proxyStatus);
       card.append(title, preview, meta, editor, replace, overwrite, insert, relinkInput, relink, place);
+      if (proxyButton) card.append(proxyButton);
       host.append(card);
     });
   }

@@ -151,6 +151,10 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
     <div id="studio-safe-guides" class="safe-guides hidden" aria-hidden="true"><span></span><i></i><b></b></div>
   </div>
   <label class="guide-toggle"><input id="studio-safe-guides-toggle" type="checkbox"> Show canvas safe-area guides</label>
+  <div class="edit-actions">
+    <button class="btn secondary" id="studio-source-preview" type="button">Preview source / proxy</button>
+    <button class="btn secondary" id="studio-composite-preview" type="button">Preview edited composite</button>
+  </div>
   <p class="preview-caption" id="studio-preview-caption">Source-footage preview. When a cloud render completes, this player switches to the edited-composite preview.</p>
 </div>
 <div class="studio-tabs" role="tablist" aria-label="Project panels">
@@ -420,7 +424,13 @@ async function loadSourcePreview(force=false){
   const video=$("studio-preview");
   if(!video||(!force&&video.dataset.previewMode==="source"&&video.dataset.jobId===activeJobId))return;
   try{
-    const data=await api("/api/v1/jobs/"+activeJobId+"/source-url");
+    const projectData=await api("/api/v1/jobs/"+activeJobId+"/project");
+    const assets=Array.isArray(projectData.project?.assets)?projectData.project.assets:[];
+    const proxy=assets.find(item=>item.proxy_for_media_id==="source-video"&&item.release_asset_id);
+    const endpoint=proxy
+      ? "/api/v1/jobs/"+activeJobId+"/assets/"+encodeURIComponent(proxy.id)+"/url"
+      : "/api/v1/jobs/"+activeJobId+"/source-url";
+    const data=await api(endpoint);
     if(!data.source_url)throw new Error("The source preview URL was not returned.");
     video.src=data.source_url;
     video.dataset.jobId=activeJobId;
@@ -428,7 +438,9 @@ async function loadSourcePreview(force=false){
     video.dataset.previewRevision="";
     video.load();
     const caption=$("studio-preview-caption");
-    if(caption)caption.textContent="Source-footage preview. The edited-composite preview will appear automatically after rendering completes.";
+    if(caption)caption.textContent=proxy
+      ? "Low-resolution source proxy preview · 640×360 maximum. The original remains unchanged for final export."
+      : "Source-footage preview. Create a 640×360 proxy from the media bin for a lighter preview on slower devices.";
   }catch(e){message("render-status","Source preview: "+e.message,"error");}
 }
 async function loadCompositePreview(revision){
@@ -713,6 +725,8 @@ $("connect").addEventListener("click",connect);
 $("render-form").addEventListener("submit",submitVideo);
 $("refresh-job").addEventListener("click",refreshJob);
 $("download-link").addEventListener("click",downloadJob);
+$("studio-source-preview").addEventListener("click",()=>loadSourcePreview(true));
+$("studio-composite-preview").addEventListener("click",()=>loadCompositePreview(loadedProjectRevision));
 $("import-skill").addEventListener("click",importSkill);
 $("generate-skill").addEventListener("click",generateSkill);
 $("apply-ai-edit").addEventListener("click",applyAIEdit);

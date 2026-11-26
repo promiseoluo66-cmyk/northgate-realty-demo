@@ -239,3 +239,13 @@ test("Stage 1 Tasks 4 and 5 expose track audio routing and animated crop control
   assert.match(html, /ease_in_quad/);
   assert.match(html, /ease_in_out_quart/);
 });
+
+
+test("Studio can create a stored video proxy and switch between source/proxy and edited composite previews", () => {
+  assert.match(studioScript, /media\.create_proxy/);
+  assert.match(studioScript, /Create 640×360 proxy/);
+  assert.match(html, /id="studio-source-preview"/);
+  assert.match(html, /id="studio-composite-preview"/);
+  assert.match(html, /proxy_for_media_id/);
+  assert.match(html, /\/assets\/\+encodeURIComponent\(proxy\.id\)\/url/);
+});
