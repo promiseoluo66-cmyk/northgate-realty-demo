@@ -90,7 +90,20 @@ async function githubRequest(env, path, options = {}) {
   return response.json();
 }
 
+async function requirePrivateStorageRepository(env) {
+  const metadata = await githubRequest(
+    env, "/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO
+  );
+  if (!metadata || metadata.private !== true) {
+    throw new Error(
+      "Generated media storage must be a private GitHub repository. " +
+      "The configured repository is public or its visibility could not be verified."
+    );
+  }
+}
+
 async function createInputRelease(env, jobId) {
+  await requirePrivateStorageRepository(env);
   const tag = "ve-input-" + jobId;
   const release = await githubRequest(env, "/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO + "/releases", {
     method: "POST",
@@ -108,6 +121,7 @@ async function createInputRelease(env, jobId) {
 }
 
 async function uploadReleaseAsset(env, release, filename, body, contentType, contentLength) {
+  await requirePrivateStorageRepository(env);
   const endpoint = "https://uploads.github.com/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO +
     "/releases/" + release.id + "/assets?name=" + encodeURIComponent(filename);
   // FixedLengthStream preserves the exact Content-Length while streaming the
