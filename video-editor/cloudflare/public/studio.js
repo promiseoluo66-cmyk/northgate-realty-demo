@@ -76,15 +76,16 @@
     if (syncPreview) {
       const video = byId("studio-preview");
       if (video && Number.isFinite(video.duration)) {
+        const previewMediaId = video.dataset.mediaId || "source-video";
         const mainClip = flattenClips(currentProject || {}).find(({clip}) =>
-          clip.kind === "video" && clip.media_id === "source-video" &&
+          clip.kind === "video" && clip.media_id === previewMediaId &&
           playheadUs >= Number(clip.start_us || 0) &&
           playheadUs <= Number(clip.start_us || 0) + Number(clip.duration_us || 0));
         const desired = mainClip
           ? (Number(mainClip.clip.source_in_us || 0) +
             (playheadUs - Number(mainClip.clip.start_us || 0)) *
             Number(mainClip.clip.playback_rate || 1)) / 1000000
-          : playheadUs / 1000000;
+          : 0;
         const safeTime = Math.max(0, Math.min(Math.max(0, video.duration - 0.04), desired));
         if (Math.abs(video.currentTime - safeTime) > 0.08) video.currentTime = safeTime;
       }
@@ -1138,6 +1139,11 @@
 
   window.renderStudioProject = renderProject;
   window.studioSelectedClipInstruction = selectedClipInstruction;
+  window.getStudioPreviewMediaId = () => {
+    const selected = findSelectedClip();
+    return selected && selected.clip.kind === "video"
+      ? selected.clip.media_id : "source-video";
+  };
 
   const zoomInput = byId("timeline-zoom");
   if (zoomInput) zoomInput.addEventListener("input", renderTimeline);
@@ -1162,8 +1168,9 @@
   const preview = byId("studio-preview");
   if (preview) preview.addEventListener("timeupdate", () => {
     if (!currentProject || !Number.isFinite(preview.currentTime)) return;
+    const previewMediaId = preview.dataset.mediaId || "source-video";
     const main = flattenClips(currentProject).find(({clip}) =>
-      clip.kind === "video" && clip.media_id === "source-video");
+      clip.kind === "video" && clip.media_id === previewMediaId);
     const mapped = main
       ? Number(main.clip.start_us || 0) +
         (preview.currentTime * 1000000 - Number(main.clip.source_in_us || 0)) /

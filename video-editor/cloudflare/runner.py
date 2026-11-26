@@ -191,6 +191,7 @@ def persist_generated_project_assets(
             extension = path.suffix.lower()
             content_types = {
                 ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+                ".mp4": "video/mp4",
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                 ".webp": "image/webp",
             }

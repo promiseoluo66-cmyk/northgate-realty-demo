@@ -249,3 +249,11 @@ test("Studio can create a stored video proxy and switch between source/proxy and
   assert.match(html, /proxy_for_media_id/);
   assert.match(html, /\/assets\/\+encodeURIComponent\(proxy\.id\)\/url/);
 });
+
+
+test("Selected video clip can use its private low-resolution proxy for source preview", () => {
+  assert.match(studioScript, /getStudioPreviewMediaId/);
+  assert.match(studioScript, /video\.dataset\.mediaId/);
+  assert.match(html, /targetMediaId=window\.getStudioPreviewMediaId/);
+  assert.match(html, /proxy_for_media_id===targetMediaId/);
+});

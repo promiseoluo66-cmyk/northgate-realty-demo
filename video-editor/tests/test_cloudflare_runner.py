@@ -436,3 +436,34 @@ def test_generated_media_upload_enforces_project_storage_limit_before_upload(tmp
     assert uploads == []
     assert all("release_asset_id" not in item for item in executor.get_project()["assets"]
                if item.get("generated"))
+
+
+def test_generated_video_proxy_upload_uses_video_mime_and_saves_release_id(tmp_path, monkeypatch):
+    from cloudflare.runner import persist_generated_project_assets
+    from project_tool_executor import ProjectToolExecutor
+
+    project_executor = _executor_with_generated_assets(tmp_path)
+    proxy_path = tmp_path / "proxy-generated.mp4"
+    proxy_path.write_bytes(b"generated-proxy-video")
+    project = project_executor.get_project()
+    project["assets"].append({
+        "id": "proxy-generated", "media_type": "video",
+        "file_name": proxy_path.name, "storage_key": proxy_path.name,
+        "size_bytes": proxy_path.stat().st_size, "duration_us": 2_000_000,
+        "generated": True, "proxy_for_media_id": "source-video",
+    })
+    executor = ProjectToolExecutor(project)
+    uploads = []
+
+    def fake_upload(owner, repo, release_id, token, path, asset_name=None, content_type="video/mp4"):
+        uploads.append((path.name, content_type))
+        return 765432 if path.name == "proxy-generated.mp4" else 98765
+
+    monkeypatch.setattr("cloudflare.runner.upload_release_asset", fake_upload)
+    uploaded = persist_generated_project_assets(
+        executor, tmp_path, "owner", "repo", 1234, "secret"
+    )
+    assert uploaded == [98765, 765432]
+    assert ("proxy-generated.mp4", "video/mp4") in uploads
+    proxy = next(item for item in executor.get_project()["assets"] if item["id"] == "proxy-generated")
+    assert proxy["release_asset_id"] == 765432

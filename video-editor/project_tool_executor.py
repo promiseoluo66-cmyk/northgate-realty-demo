@@ -522,6 +522,8 @@ class ProjectToolExecutor:
             raise ProjectToolExecutionError("Proxy generation requires a configured asset directory.")
         if any(item.get("proxy_for_media_id") == media_id for item in project["assets"]):
             raise ProjectToolExecutionError("A proxy already exists for this video asset.")
+        if len(project["assets"]) >= 100:
+            raise ProjectToolExecutionError("This project has reached the 100-asset limit.")
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries",
              "format=duration:stream=codec_type,width,height",

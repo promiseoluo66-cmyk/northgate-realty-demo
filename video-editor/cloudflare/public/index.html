@@ -424,22 +424,24 @@ async function loadSourcePreview(force=false){
   const video=$("studio-preview");
   if(!video||(!force&&video.dataset.previewMode==="source"&&video.dataset.jobId===activeJobId))return;
   try{
+    const targetMediaId=window.getStudioPreviewMediaId?window.getStudioPreviewMediaId():"source-video";
     const projectData=await api("/api/v1/jobs/"+activeJobId+"/project");
     const assets=Array.isArray(projectData.project?.assets)?projectData.project.assets:[];
-    const proxy=assets.find(item=>item.proxy_for_media_id==="source-video"&&item.release_asset_id);
-    const endpoint=proxy
-      ? "/api/v1/jobs/"+activeJobId+"/assets/"+encodeURIComponent(proxy.id)+"/url"
-      : "/api/v1/jobs/"+activeJobId+"/source-url";
+    const proxy=assets.find(item=>item.proxy_for_media_id===targetMediaId&&item.release_asset_id);
+    const endpoint=targetMediaId==="source-video"&&!proxy
+      ? "/api/v1/jobs/"+activeJobId+"/source-url"
+      : "/api/v1/jobs/"+activeJobId+"/assets/"+encodeURIComponent(proxy?proxy.id:targetMediaId)+"/url";
     const data=await api(endpoint);
     if(!data.source_url)throw new Error("The source preview URL was not returned.");
     video.src=data.source_url;
     video.dataset.jobId=activeJobId;
     video.dataset.previewMode="source";
+    video.dataset.mediaId=targetMediaId;
     video.dataset.previewRevision="";
     video.load();
     const caption=$("studio-preview-caption");
     if(caption)caption.textContent=proxy
-      ? "Low-resolution source proxy preview · 640×360 maximum. The original remains unchanged for final export."
+      ? "Low-resolution proxy preview · 640×360 maximum. The original remains unchanged for final export."
       : "Source-footage preview. Create a 640×360 proxy from the media bin for a lighter preview on slower devices.";
   }catch(e){message("render-status","Source preview: "+e.message,"error");}
 }
