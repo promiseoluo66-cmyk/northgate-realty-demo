@@ -426,8 +426,13 @@ test("failed runner callback persists its latest project checkpoint and history"
     schema_version: 1, id: "project-recovery", name: "Recovered edit", revision: 7,
     timeline_timebase: "microseconds",
     video_profile: { width: 720, height: 1280, frame_rate: { numerator: 30, denominator: 1 } },
-    assets: [], tracks: [], transitions: []
+    assets: [{
+      id: "generated-frame", media_type: "image", file_name: "frame.png",
+      storage_key: "frame.png", size_bytes: 128, release_asset_id: 54321,
+      generated: true
+    }], tracks: [], transitions: []
   };
+  const savedHistory = { undo: [{ revision: 6, assets: [] }], redo: [] };
   let values = null;
   const env = {
     CALLBACK_SECRET: "test-callback-secret",
@@ -448,15 +453,16 @@ test("failed runner callback persists its latest project checkpoint and history"
       body: JSON.stringify({
         status: "failed", message: "Render failed after edit",
         project_json: project, project_revision: 7,
-        history_state: { undo: [], redo: [] }, ai_status: "error", pending_plan: null
+        history_state: savedHistory, ai_status: "error", pending_plan: null
       })
     }), env
   );
   assert.equal(response.status, 200);
   assert.equal(values[0], "failed");
   assert.equal(JSON.parse(values[6]).revision, 7);
+  assert.equal(JSON.parse(values[6]).assets[0].release_asset_id, 54321);
   assert.equal(values[7], 7);
-  assert.deepEqual(JSON.parse(values[9]), { undo: [], redo: [] });
+  assert.deepEqual(JSON.parse(values[9]), savedHistory);
   assert.equal(values[10], 1);
   assert.equal(values[11], null);
 });
