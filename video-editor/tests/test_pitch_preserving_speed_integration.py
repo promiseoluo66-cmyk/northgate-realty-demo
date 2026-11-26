@@ -78,7 +78,7 @@ def _measure_tone_hz(rendered_video: Path) -> float:
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error",
             "-ss", "0.5", "-t", "1.0", "-i", str(rendered_video),
-            "-vn", "-ac", "1", "-ar", "44100", "-f", "s16le", "pipe:1",
+            "-vn", "-ac", "1", "-ar", "11025", "-f", "s16le", "pipe:1",
         ],
         check=True,
         capture_output=True,
@@ -88,13 +88,23 @@ def _measure_tone_hz(rendered_video: Path) -> float:
     samples.frombytes(pcm)
     if sys.byteorder != "little":
         samples.byteswap()
-    if len(samples) < 40_000:
-        raise AssertionError(f"Expected at least 40,000 decoded audio samples, got {len(samples)}.")
-    upward_zero_crossings = sum(
-        1 for previous, current in zip(samples, samples[1:])
-        if previous <= 0 < current
-    )
-    return float(upward_zero_crossings)
+    if len(samples) < 10_000:
+        raise AssertionError("Expected at least 10,000 decoded audio samples.")
+
+    # Autocorrelation is more tolerant than raw zero-crossing counts of AAC
+    # harmonics and phase changes introduced by pitch/time processing.
+    stable = samples[1000:9000]
+    minimum_lag = 11025 // 1000
+    maximum_lag = 11025 // 120
+    correlations = []
+    for lag in range(minimum_lag, maximum_lag + 1):
+        correlation = sum(
+            stable[index] * stable[index + lag]
+            for index in range(len(stable) - lag)
+        )
+        correlations.append((correlation, lag))
+    _, best_lag = max(correlations)
+    return 11025.0 / best_lag
 
 
 class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
