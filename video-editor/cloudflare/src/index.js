@@ -611,6 +611,160 @@ async function importMediaAsset(request, env, id) {
   }
 }
 
+
+async function updateMediaPreview(request, env, id, assetId) {
+  if (!authorized(request, env)) return json({ error: "Unauthorized." }, 401);
+  let body;
+  try { body = await request.json(); } catch (_) { return json({ error: "Send valid JSON." }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Invalid preview metadata." }, 400);
+  const expectedRevision = Number(body.expected_revision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    return json({ error: "A valid expected_revision is required." }, 400);
+  }
+  const allowedKeys = new Set(["expected_revision", "thumbnail_data_url", "waveform"]);
+  if (Object.keys(body).some(key => !allowedKeys.has(key))) return json({ error: "Unsupported preview metadata field." }, 400);
+  if (body.thumbnail_data_url !== undefined &&
+      (typeof body.thumbnail_data_url !== "string" ||
+       body.thumbnail_data_url.length > 12000 ||
+       !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(body.thumbnail_data_url))) {
+    return json({ error: "Thumbnail must be a small base64 JPEG preview." }, 400);
+  }
+  if (body.waveform !== undefined) {
+    const samples = body.waveform && body.waveform.samples;
+    if (!Array.isArray(samples) || samples.length < 1 || samples.length > 128 ||
+        samples.some(value => typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
+      return json({ error: "Waveform must contain 1 to 128 peak values between 0 and 1." }, 400);
+    }
+  }
+  if (body.thumbnail_data_url === undefined && body.waveform === undefined) {
+    return json({ error: "No preview metadata was supplied." }, 400);
+  }
+  const row = await env.DB.prepare(
+    "SELECT status,project_json,project_revision,history_state_json,pending_plan_json FROM jobs WHERE id=?"
+  ).bind(id).first();
+  if (!row) return json({ error: "Project not found." }, 404);
+  if (!["completed", "failed"].includes(row.status) || !row.project_json || row.pending_plan_json) {
+    return json({ error: "Wait until the project is idle before saving media previews." }, 409);
+  }
+  if (Number(row.project_revision) !== expectedRevision) {
+    return json({ error: "Project revision conflict. Reload before saving previews." }, 409);
+  }
+  let project, history;
+  try {
+    project = JSON.parse(row.project_json);
+    history = JSON.parse(row.history_state_json || '{"undo":[],"redo":[]}');
+  } catch (_) { return json({ error: "Saved project or history is invalid." }, 500); }
+  const asset = (project.assets || []).find(item => item.id === assetId);
+  if (!asset) return json({ error: "Media asset not found." }, 404);
+  if (!Array.isArray(history.undo) || !Array.isArray(history.redo)) return json({ error: "Saved project history is invalid." }, 500);
+  const snapshot = JSON.parse(JSON.stringify(project));
+  snapshot.revision = expectedRevision;
+  history.undo.push(snapshot);
+  history.undo = history.undo.slice(-10);
+  history.redo = [];
+  if (body.thumbnail_data_url !== undefined) asset.thumbnail_data_url = body.thumbnail_data_url;
+  if (body.waveform !== undefined) asset.waveform = body.waveform;
+  project.revision = expectedRevision + 1;
+  const update = await env.DB.prepare(
+    "UPDATE jobs SET project_json=?,project_revision=?,history_state_json=?,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
+  ).bind(JSON.stringify(project), project.revision, JSON.stringify(history), new Date().toISOString(), id, expectedRevision).run();
+  if (!update.meta?.changes) return json({ error: "Project changed while saving media previews. Reload and retry." }, 409);
+  return json({ project_revision: project.revision, asset_id: assetId, message: "Media preview metadata saved." });
+}
+
+async function relinkMediaAsset(request, env, id, assetId) {
+  if (!authorized(request, env)) return json({ error: "Unauthorized." }, 401);
+  if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) {
+    return json({ error: "Private media storage is not configured." }, 503);
+  }
+  const length = Number(request.headers.get("x-file-size") || request.headers.get("content-length") || 0);
+  if (!Number.isSafeInteger(length) || length < 1) return json({ error: "A media file with a known size is required." }, 411);
+  if (length > MAX_UPLOAD_BYTES) return json({ error: "Each replacement file is limited to 50 MB." }, 413);
+  if (!request.body) return json({ error: "The replacement media body is missing." }, 400);
+  let filename;
+  try { filename = safeFilename(decodeURIComponent(request.headers.get("x-file-name") || "media.bin")); }
+  catch (_) { return json({ error: "The replacement filename could not be decoded." }, 400); }
+  const extension = fileExtension(filename);
+  const mediaType = String(request.headers.get("x-media-type") || "").toLowerCase();
+  const allowed = {
+    video: new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv"]),
+    audio: new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"]),
+    image: new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"])
+  };
+  if (!allowed[mediaType] || !allowed[mediaType].has(extension)) return json({ error: "Unsupported replacement media type or extension." }, 415);
+  const expectedRevision = Number(request.headers.get("x-expected-revision"));
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) return json({ error: "A valid expected project revision is required." }, 400);
+  const durationHeader = request.headers.get("x-media-duration-us");
+  let durationUs = null;
+  if (durationHeader) {
+    durationUs = Number(durationHeader);
+    if (!Number.isSafeInteger(durationUs) || durationUs < 1) return json({ error: "Replacement duration must be a positive integer." }, 400);
+  }
+  const row = await env.DB.prepare(
+    "SELECT status,release_id,input_asset_id,project_json,project_revision,history_state_json,pending_plan_json FROM jobs WHERE id=?"
+  ).bind(id).first();
+  if (!row) return json({ error: "Project not found." }, 404);
+  if (!["completed", "failed"].includes(row.status) || !row.project_json || row.pending_plan_json) {
+    return json({ error: "Wait until the project is idle before relinking media." }, 409);
+  }
+  if (Number(row.project_revision) !== expectedRevision) return json({ error: "Project revision conflict. Reload before relinking." }, 409);
+  let project, history;
+  try {
+    project = JSON.parse(row.project_json);
+    history = JSON.parse(row.history_state_json || '{"undo":[],"redo":[]}');
+  } catch (_) { return json({ error: "Saved project or history is invalid." }, 500); }
+  const asset = (project.assets || []).find(item => item.id === assetId);
+  if (!asset) return json({ error: "Media asset not found." }, 404);
+  if (asset.media_type !== mediaType) return json({ error: "The replacement file must be the same media type as the missing asset." }, 415);
+  const existingBytes = project.assets.reduce((total, item) =>
+    total + (Number.isSafeInteger(Number(item.size_bytes)) ? Number(item.size_bytes) : 0), 0);
+  const oldBytes = Number(asset.size_bytes || 0);
+  if (existingBytes - oldBytes + length > MAX_PROJECT_MEDIA_BYTES) {
+    return json({ error: "Project media storage is limited to 200 MB total." }, 413);
+  }
+  if (!Array.isArray(history.undo) || !Array.isArray(history.redo)) return json({ error: "Saved project history is invalid." }, 500);
+  const assetIdNew = "relinked-" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  const storageKey = assetIdNew + extension;
+  let newReleaseAssetId = null;
+  try {
+    const uploaded = await uploadReleaseAsset(
+      env, { id: row.release_id }, assetIdNew + "-" + filename, request.body,
+      request.headers.get("content-type") || "application/octet-stream", length
+    );
+    newReleaseAssetId = Number(uploaded.id);
+    if (!Number.isSafeInteger(newReleaseAssetId) || newReleaseAssetId < 1) throw new Error("GitHub returned an invalid replacement asset ID.");
+    const oldReleaseAssetId = Number(asset.release_asset_id || 0);
+    const snapshot = JSON.parse(JSON.stringify(project));
+    snapshot.revision = expectedRevision;
+    history.undo.push(snapshot);
+    history.undo = history.undo.slice(-10);
+    history.redo = [];
+    asset.file_name = filename;
+    asset.storage_key = storageKey;
+    asset.size_bytes = length;
+    asset.release_asset_id = newReleaseAssetId;
+    delete asset.thumbnail_data_url;
+    delete asset.waveform;
+    if (durationUs !== null) asset.duration_us = durationUs;
+    else delete asset.duration_us;
+    project.revision = expectedRevision + 1;
+    const nextInputAssetId = assetId === "source-video" ? newReleaseAssetId : row.input_asset_id;
+    const update = await env.DB.prepare(
+      "UPDATE jobs SET project_json=?,project_revision=?,history_state_json=?,input_asset_id=?,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
+    ).bind(JSON.stringify(project), project.revision, JSON.stringify(history), nextInputAssetId, new Date().toISOString(), id, expectedRevision).run();
+    if (!update.meta?.changes) throw new Error("The project changed during relinking. Reload and retry.");
+    if (oldReleaseAssetId > 0 && oldReleaseAssetId !== newReleaseAssetId) {
+      try { await githubRequest(env, "/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO + "/releases/assets/" + oldReleaseAssetId, { method: "DELETE" }); } catch (_) {}
+    }
+    return json({ asset, project_revision: project.revision, message: "Media relinked. All clips still reference the same project asset." });
+  } catch (error) {
+    if (newReleaseAssetId) {
+      try { await githubRequest(env, "/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO + "/releases/assets/" + newReleaseAssetId, { method: "DELETE" }); } catch (_) {}
+    }
+    return json({ error: "Media relink failed: " + error.message.slice(0, 350) }, 502);
+  }
+}
+
 async function getSourceUrl(request, env, id) {
   if (!authorized(request, env)) return json({ error: "Unauthorized." }, 401);
   if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) {
@@ -794,7 +948,11 @@ export default {
       if (downloadMatch && request.method === "GET") return await downloadJob(request, env, downloadMatch[1]);
       const mediaImportMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/assets$/);
       if (mediaImportMatch && request.method === "POST") return await importMediaAsset(request, env, mediaImportMatch[1]);
-      const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);
+      const previewMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/assets\/([A-Za-z0-9_-]{1,64})\/preview$/);
+      if (previewMatch && request.method === "POST") return await updateMediaPreview(request, env, previewMatch[1], previewMatch[2]);
+      const relinkMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/assets\/([A-Za-z0-9_-]{1,64})\/relink$/);
+      if (relinkMatch && request.method === "PUT") return await relinkMediaAsset(request, env, relinkMatch[1], relinkMatch[2]);
+      const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);      const sourceUrlMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/source-url$/);
       if (sourceUrlMatch && request.method === "GET") return await getSourceUrl(request, env, sourceUrlMatch[1]);
       const manualEditMatch = path.match(/^\/api\/v1\/jobs\/([a-f0-9]{32})\/manual-edit$/);
       if (manualEditMatch && request.method === "POST") return await queueManualEdit(request, env, manualEditMatch[1]);
