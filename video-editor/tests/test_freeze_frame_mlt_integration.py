@@ -21,7 +21,7 @@ def _make_color_video(path: Path, color: str, duration: int) -> None:
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-f", "lavfi", "-i",
-            f"color=c={color}:s=160x120:r=10:d={duration}",
+            f"color=c={color}:s=160x144:r=10:d={duration}",
             "-an", "-c:v", "libx264", "-preset", "ultrafast",
             "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path),
         ],
@@ -41,7 +41,7 @@ def _project_for_freeze_frame(base_video: Path, source_video: Path) -> dict:
         "timeline_timebase": "microseconds",
         "video_profile": {
             "width": 160,
-            "height": 120,
+            "height": 144,
             "frame_rate": {"numerator": 10, "denominator": 1},
         },
         "assets": [
@@ -108,13 +108,13 @@ def _read_center_rgb(video: Path, timestamp_seconds: float) -> tuple[int, int, i
         capture_output=True,
         timeout=60,
     )
-    expected_bytes = 160 * 120 * 3
+    expected_bytes = 160 * 144 * 3
     if len(result.stdout) != expected_bytes:
         raise AssertionError(
             f"Expected one {expected_bytes}-byte RGB frame at "
             f"{timestamp_seconds}s, got {len(result.stdout)} bytes."
         )
-    center_offset = (60 * 160 + 80) * 3
+    center_offset = (72 * 160 + 80) * 3
     return tuple(result.stdout[center_offset:center_offset + 3])
 
 
