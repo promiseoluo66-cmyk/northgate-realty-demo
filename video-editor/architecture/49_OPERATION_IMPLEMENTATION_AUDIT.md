@@ -74,7 +74,7 @@ Status meaning:
 | 49 | `render.export` | Found | test_render_export_operation.py; test_tool_registry.py | AI/backend | PASS |
 | 50 | `media.extract_audio` | Found | test_project_tool_extensions.py | AI/backend | PASS (automated generated-media test) |
 | 51 | `timeline.create_freeze_frame` | Found | test_project_tool_extensions.py | AI/backend | PASS (automated generated-media test) |
-| 52 | `media.create_proxy` | Found | test_project_tool_extensions.py; test_cloudflare_runner.py; test_tool_registry.py | Yes | PASS (real FFmpeg proxy, size/duration checks, undo/redo, cleanup and mocked private MP4 upload; run #118) |
+| 52 | `media.create_proxy` | Found | test_project_tool_extensions.py; test_cloudflare_runner.py; test_tool_registry.py | Yes | PASS (real FFmpeg proxy, size/duration checks, undo/redo, cleanup, mocked private MP4 upload and Worker private-repository guard; run #121) |
 
 ## Offline edge-case audit results and remaining hosted acceptance
 
@@ -87,7 +87,7 @@ The offline audit now covers the following shared and feature-specific dimension
 5. Feature-specific tests cover track locks, overlap conditions, cross-track ripple, group cleanup, markers, keyframes, effects, audio routing, generated media, proxy cleanup and UI/backend integration.
 6. Real MLT integration tests verify freeze-frame pixels and pitch-preserving speed output. The runner verifies generated audio, still and proxy files before private storage upload.
 
-The operation audit additionally verifies stale-revision rejection across all 52 operations, batch rollback, undo/redo and confirmation gates. Task 9 proxy tests verify real FFmpeg output dimensions/duration, duplicate rejection, partial-file cleanup, no-overwrite behaviour, undo/redo and the mocked private MP4 upload path. Task 4/5 tests cover track gain/pan validation and filter configuration, crop-keyframe validation, animated affine geometry, source-boundary rejection and additional easing curves. Run #118 passed (275 Python, 51 Node, D1 migrations). The live Worker/renderer configuration is intentionally not deployed in this test-only lab.
+The operation audit additionally verifies stale-revision rejection across all 52 operations, batch rollback, undo/redo and confirmation gates. Task 9 proxy tests verify real FFmpeg output dimensions/duration, duplicate rejection, partial-file cleanup, no-overwrite behaviour, undo/redo and the mocked private MP4 upload path. Task 4/5 tests cover track gain/pan validation and filter configuration, crop-keyframe validation, animated affine geometry, source-boundary rejection and additional easing curves. Run #121 passed (275 Python, 52 Node, D1 migrations). The live Worker/renderer configuration is intentionally not deployed in this test-only lab.
 
 ## Safety boundary
 

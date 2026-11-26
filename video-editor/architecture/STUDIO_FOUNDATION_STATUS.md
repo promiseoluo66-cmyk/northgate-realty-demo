@@ -2,7 +2,7 @@
 
 **Lab branch:** video-editor-lab  
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
-**Status:** Stage 1 Tasks 1–10 have implementation and offline automated acceptance coverage on `video-editor-lab`. Latest full workflow run #118 passed: 275 Python tests, 51 Node tests and all checked-in D1 migrations. Stage 1 is ready to progress to Stage 2 at the offline/code level. Live Worker-to-runner verification remains pending because deployment has not been authorized.
+**Status:** Stage 1 Tasks 1–10 have implementation and offline automated acceptance coverage on `video-editor-lab`. Latest full workflow run #121 passed: 275 Python tests, 52 Node tests and all checked-in D1 migrations. Stage 1 is ready to progress to Stage 2 at the offline/code level. Live Worker-to-runner verification remains pending because deployment has not been authorized.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -117,7 +117,7 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 - Proxy generation rejects missing/invalid sources, duplicate proxies, projects at the 100-asset limit, output above 50 MB and sources longer than 30 minutes. Partial files are removed on failure.
 - Proxies are normal generated project assets and use the existing private Release upload/checkpoint path. MP4 is now an explicitly supported generated-asset MIME type (`video/mp4`).
 - Studio media cards expose proxy generation and identify existing proxies. Source preview can use the stored proxy for the selected video clip; the edited-composite preview remains separate.
-- The Worker provides authenticated signed-URL lookup for project media assets. The original source remains unchanged and is used for final export.
+- The Worker provides authenticated signed-URL lookup for project media assets and refuses to serve assets unless GitHub confirms the storage repository is private. The original source remains unchanged and is used for final export.
 
 ### Task 10 — Complete 52-operation edge-case audit
 
