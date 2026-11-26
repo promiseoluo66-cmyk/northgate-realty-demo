@@ -52,8 +52,8 @@ class CapabilityCatalogueTests(unittest.TestCase):
         names = [tool["name"] for tool in registry]
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(self.catalogue["audit"]["registered_tool_count"], 34)
-        self.assertEqual(self.catalogue["audit"]["stage1_registered_tool_count"], 51)
-        self.assertEqual(len(names), 51)
+        self.assertEqual(self.catalogue["audit"]["stage1_registered_tool_count"], 52)
+        self.assertEqual(len(names), 52)
         self.assertTrue(self.catalogue["audit"]["registered_tool_names_are_unique"])
         self.assertTrue(self.catalogue["audit"]["stage1_registered_tool_names_are_unique"])
 
@@ -70,7 +70,7 @@ class CapabilityCatalogueTests(unittest.TestCase):
             "timeline.ungroup_clips",
             "timeline.add_marker",
             "timeline.move_marker",
-            "timeline.remove_marker",
+            "timeline.remove_marker", "media.create_proxy",
         }.issubset(names))
 
     def test_six_reference_derived_capabilities_are_present(self):

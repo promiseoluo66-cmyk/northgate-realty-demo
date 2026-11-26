@@ -2,7 +2,7 @@
 
 **Lab branch:** video-editor-lab  
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
-**Status:** Tasks 1–8 have implementation and automated acceptance coverage on `video-editor-lab`. Latest verified full workflow: run #106 (259 Python tests, 47 Node tests, D1 migrations passed). Stage 1 is not complete; proxy/low-resolution preview, the full 51-operation edge-case sign-off, and live hosted verification remain open.
+**Status:** Tasks 1–8 have implementation and automated acceptance coverage on `video-editor-lab`. Latest verified full workflow before proxy work: run #106 (259 Python tests, 47 Node tests, D1 migrations passed). Task 9 proxy/low-resolution preview is implemented in code and its CI verification is pending. Stage 1 is not complete; the full 52-operation edge-case sign-off and live hosted verification remain open.
 
 ## Implemented in this snapshot
 - Responsive mobile Studio workspace with multi-track timeline, ruler, zoom, clip selection and inspector.
@@ -21,7 +21,7 @@
 - Keyframe graph interactions, copy/paste, remove/clear and motion presets.
 - Track-level audio gain and stereo pan on video/overlay/audio tracks, with project validation and renderer filters.
 - Animated crop X/Y/width/height keyframes for video/image clips, expanded easing functions and Studio motion presets.
-- 51 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
+- 52 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
 
 ## Stage 1 task status
 
@@ -111,23 +111,29 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 
 ### Task 9 — Proxy media and low-resolution preview
 
-**Not yet implemented.** This requires a bounded proxy/preview storage lifecycle in the private Release repository. Do not delete original media or user-generated audio/still assets. The replacement/retention policy for older temporary preview assets must be settled before implementation.
+**Implemented in code; latest full CI verification pending.**
 
-### Task 10 — Complete 51-operation edge-case audit
+- Added `media.create_proxy` for video assets, producing an H.264 MP4 proxy at a maximum of 640×360 while preserving the original file and duration.
+- Proxy generation rejects missing/invalid sources, duplicate proxies, projects at the 100-asset limit, output above 50 MB and sources longer than 30 minutes. Partial files are removed on failure.
+- Proxies are normal generated project assets and use the existing private Release upload/checkpoint path. MP4 is now an explicitly supported generated-asset MIME type (`video/mp4`).
+- Studio media cards expose proxy generation and identify existing proxies. Source preview can use the stored proxy for the selected video clip; the edited-composite preview remains separate.
+- The Worker provides authenticated signed-URL lookup for project media assets. The original source remains unchanged and is used for final export.
 
-**In progress.** The current audit confirms 51 unique registered operations, executor dispatch references and feature-test references. Schema hardening now also checks required fields, numeric bounds, unknown arguments and malformed IDs in ID arrays. Final CI verification and the operation-by-operation failure/rollback/confirmation review remain outstanding.
+### Task 10 — Complete 52-operation edge-case audit
+
+**In progress.** The current audit confirms 52 unique registered operations, executor dispatch references and feature-test references. Schema hardening now also checks required fields, numeric bounds, unknown arguments and malformed IDs in ID arrays. Final CI verification and the operation-by-operation failure/rollback/confirmation review remain outstanding.
 
 
 ## Remaining Stage 1 acceptance gaps
 1. Proxy media and low-resolution preview (Task 9).
-2. Complete edge-case and editor-integration sign-off for all 51 registered operations (Task 10).
+2. Complete edge-case and editor-integration sign-off for all 52 registered operations (Task 10).
 3. Successful end-to-end hosted tests against the actual Worker/renderer configuration; deployment remains gated on explicit user authorization.
 
 Optical-flow slow motion remains optional and gated. It must not introduce a paid dependency or hidden fallback.
 
 ## Validation rules
 - The 118-entry catalogue is the product capability target, not 118 implemented tools.
-- The original 42 registered operations remain the required full-audit set. The registry now contains 49 unique operations after seven Task 2–3 additions; all 49 must be included in the final audit.
+- The original 42 registered operations remain part of the expanded full-audit set. The registry now contains 52 unique operations after the Task 2–3 additions and later media/audio operations; all 52 must be included in the final audit.
 - Run Python, Node, Worker/UI and generated-media MLT tests on this public lab branch.
 - Do not merge into Stable or deploy a Worker as part of this lab setup.
 - Do not mark Stage 1 complete until all required acceptance gaps are resolved or explicitly deferred with user approval.

@@ -1,4 +1,4 @@
-# 51-Operation Implementation Audit — Stage 1 Lab
+# 52-Operation Implementation Audit — Stage 1 Lab
 
 **Repository:** promiseoluo66-cmyk/northgate-realty-demo  
 **Branch:** video-editor-lab  
@@ -6,11 +6,11 @@
 
 ## Summary
 
-- 51 unique registered operations found.
-- Executor dispatch reference found for all 51.
-- 48 operations have a feature/subsystem test-file reference in addition to any registry-contract tests.
+- 52 unique registered operations found.
+- Executor dispatch reference found for all 52.
+- 49 operations have a feature/subsystem test-file reference in addition to any registry-contract tests.
 - `render.export` now has direct executor tests for confirmation, valid export dispatch, unsafe filenames, missing configuration, overwrite protection and failure isolation. A generated-video integration test exercises the real MLT renderer and probes the MP4 output.
-- 33 operations are referenced by direct Studio UI code. The remaining operations are available through the AI/backend tool path rather than dedicated direct controls.
+- 34 operations are referenced by direct Studio UI code. The remaining operations are available through the AI/backend tool path rather than dedicated direct controls.
 - This is a source-and-test-reference audit, not a claim that every edge case or live render outcome has been independently proven. All entries remain subject to the edge-case review below.
 
 ## Operation-by-operation inventory
@@ -74,6 +74,7 @@ Status meaning:
 | 49 | `render.export` | Found | test_render_export_operation.py; test_tool_registry.py | AI/backend | PASS |
 | 50 | `media.extract_audio` | Found | test_project_tool_extensions.py | AI/backend | PASS (automated generated-media test) |
 | 51 | `timeline.create_freeze_frame` | Found | test_project_tool_extensions.py | AI/backend | PASS (automated generated-media test) |
+| 52 | `media.create_proxy` | Found | test_project_tool_extensions.py; test_cloudflare_runner.py; test_tool_registry.py | Yes | PASS (generated-media, private upload and undo/redo tests; latest CI pending) |
 
 ## Edge-case and integration audit still required
 
@@ -86,7 +87,7 @@ The source/test-reference scan does not establish all of the following for every
 5. UI/AI/backend integration and error reporting, including operations intentionally exposed only to the AI/backend pathway.
 6. The Python executor's `render.export` path is now directly exercised, including a real generated-media MLT export. The hosted Cloudflare Worker-to-GitHub-runner job lifecycle remains unverified because this lab has no deployed Worker.
 
-The operation audit also now runs a schema-hardening check across all 51 registered operations to ensure unknown arguments are rejected. Task 4/5 tests cover track gain/pan validation and filter configuration, crop-keyframe validation, animated affine geometry, source-boundary rejection, and additional easing curves. The live Worker/renderer configuration is still not deployed in this test-only lab.
+The operation audit now checks all 52 registered operations for closed schemas, required fields, numeric bounds, unknown arguments, malformed track-ID arrays and confirmation gates. Generated proxy coverage includes FFmpeg output dimensions/duration, duplicate rejection, undo/redo and private Release persistence. Task 4/5 tests cover track gain/pan validation and filter configuration, crop-keyframe validation, animated affine geometry, source-boundary rejection, and additional easing curves. The live Worker/renderer configuration is still not deployed in this test-only lab.
 
 ## Safety boundary
 

@@ -33,7 +33,7 @@ Verified engine capabilities include:
 - Timed text/title/caption overlays with transparent RGBA backgrounds and
   still-image overlays, checked using decoded frames.
 
-The combined master catalogue contains **118 capability entries**. This is a product-scope catalogue, not a count of registered tools. The imported Stage 1 Studio implementation has 42 unique registered operations, extending the 34-tool Stable baseline.
+The combined master catalogue contains **118 capability entries**. This is a product-scope catalogue, not a count of registered tools. The Stage 1 Studio implementation has 52 unique registered operations, extending the 34-tool Stable baseline.
 
 The combined master catalogue now contains **118 capability entries**:
 **12 prototype-verified**, **25 partially implemented**, **1 under test**,
