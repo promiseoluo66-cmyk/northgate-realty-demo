@@ -3,9 +3,9 @@
 **Repository:** `promiseoluo66-cmyk/northgate-realty-demo`  
 **Working branch:** `video-editor-lab`  
 **Report date:** 26 November 2026  
-**Implementation status:** **NOT STARTED — design and integration inspection only**  
-**Last verified branch HEAD:** `b1f4d5a28d2ffa2bc3a831645d3c7d2cce3caf58`  
-**Latest confirmed successful CI:** run #63, ID `45843617218`, on the commit above. This run predates Task 6 and does not test Task 6.
+**Implementation status:** **IMPLEMENTED ON THE WORKING BRANCH — FULL REGRESSION RERUN PENDING**  
+**Current working branch HEAD at report update:** `fdd305615619541b7b01f63ee37a179e1355969a`  
+**Latest Task 6 CI evidence:** run #74, ID `45873752276`, executed 252 Python tests: 251 passed and one capability-catalogue count assertion failed because the catalogue still expected 49 operations. That count was corrected to 51 in commit `fdd305615619541b7b01f63ee37a179e1355969a`. Run #76, ID `45873968405`, is queued for the corrected full regression. The Task 6 feature tests were among the 251 passing tests in run #74.
 
 ## 1. Scope and safety decisions
 
@@ -103,34 +103,34 @@ Tests must prove that:
 Task 6 cannot be marked complete until all applicable checks below pass.
 
 ### Audio extraction
-- [ ] Extract audio from a valid video containing audio.
-- [ ] Confirm output is non-empty and FFprobe reports an audio stream.
-- [ ] Confirm duration and expected stream selection.
-- [ ] Reject a video with no audio stream.
+- [x] Extract audio from a valid video containing audio.
+- [x] Confirm output is non-empty and FFprobe reports an audio stream.
+- [x] Confirm duration and expected stream selection.
+- [x] Reject a video with no audio stream.
 - [ ] Reject missing/corrupt source media and invalid format/options.
 - [ ] Simulate FFmpeg failure and verify partial output cleanup.
 - [ ] Verify duplicate names do not overwrite existing assets.
 
 ### Freeze-frame / hold
-- [ ] Extract a still at a known source timestamp.
-- [ ] Verify the generated image is readable and has expected dimensions.
-- [ ] Insert a hold clip with the requested duration.
+- [x] Extract a still at a known source timestamp.
+- [x] Verify the generated image is readable and has expected dimensions.
+- [x] Insert a hold clip with the requested duration.
 - [ ] Render a test project and inspect the resulting frames around the hold.
 - [ ] Reject timestamps outside the source duration and invalid durations.
 - [ ] Verify missing/corrupt input and render failures do not partially mutate the project.
 
 ### Persistence and history
-- [ ] Upload generated audio and image assets to private storage.
-- [ ] Verify project records contain valid Release asset IDs and safe storage keys.
-- [ ] Verify project reload downloads the generated assets successfully.
-- [ ] Verify undo and redo preserve valid media references.
-- [ ] Verify failed upload/checkpoint cleanup and revision-conflict handling.
+- [x] Implement private Release upload for generated audio and image assets (mocked upload acceptance test).
+- [x] Verify project records contain Release asset IDs and safe storage keys.
+- [x] Verify current/undo/redo history assets are included in runner media hydration (mocked download test).
+- [x] Verify undo and redo preserve generated asset references.
+- [x] Verify failed multi-asset upload cleanup and no dangling Release IDs (mocked upload failure test). Checkpoint failure/live Worker conflict path remains unverified without a deployed Worker.
 - [ ] Verify project storage limits are enforced.
 
 ### Full regression
-- [ ] Run all Python tests.
-- [ ] Run all Node, Worker and Studio UI tests.
-- [ ] Run D1 migration validation.
+- [ ] Run all Python tests on the corrected 51-operation catalogue (queued in CI run #76).
+- [ ] Run all Node, Worker and Studio UI tests on the corrected branch.
+- [ ] Run D1 migration validation on the corrected branch.
 - [ ] Run generated-media MLT integration tests.
 - [ ] Run the complete GitHub Actions workflow on `video-editor-lab`.
 - [ ] Inspect the actual run result and relevant logs.
@@ -138,12 +138,10 @@ Task 6 cannot be marked complete until all applicable checks below pass.
 
 ## 5. Current blockers and open engineering work
 
-1. Implement the generated-asset upload-and-register path; the current relink route only replaces an existing asset.
-2. Define and register the extraction and freeze-frame operations without duplicating existing functionality.
-3. Implement safe FFmpeg generation and project transaction integration.
-4. Implement freeze-frame rendering/insertion and verify the output through MLT.
-5. Verify private persistence, project reload and undo/redo across runner sessions.
-6. Add the test coverage listed above and run the complete CI workflow.
+1. Complete the corrected full GitHub Actions regression and fix any failures.
+2. Add a rendered MLT acceptance test proving the still image remains visible for the full hold duration.
+3. Add an explicit partial-FFmpeg-output cleanup test.
+4. Verify the live Worker checkpoint and Release upload path when a Worker deployment is explicitly authorized; no Worker has been deployed.
 
 ## 6. Change log
 
@@ -156,3 +154,13 @@ Task 6 cannot be marked complete until all applicable checks below pass.
 **Task 6 remains OPEN until every required implementation and acceptance check is completed and verified.** Do not infer completion from source references, a successful unrelated CI run, or the existence of a generated file on a temporary runner.
 
 All work remains confined to `video-editor-lab`. The `main` branch and deployed Worker remain untouched.
+
+
+## 8. Implementation change log
+
+| Change | Commit |
+|---|---|
+| Registered `media.extract_audio` and `timeline.create_freeze_frame`; implemented FFmpeg extraction, still generation, image hold clips, and executor persistence metadata attachment. | `579e03fa` / `98f9f93e` |
+| Added private generated-media Release upload, cleanup on upload failure, 200 MB project media limit enforcement, and history-aware asset hydration. | `c652303e` / `513dfc38` / `5290104d` |
+| Added generated-media, undo/redo, private-storage and failure-path tests. | `aacbf71e` / `84867cec` / `9816c5a0` |
+| Updated operation inventory and capability catalogue from 49 to 51. | `bc1032a8` / `fdd30561` |
