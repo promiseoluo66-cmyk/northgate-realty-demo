@@ -615,13 +615,22 @@
         const jump = element("button", "btn secondary", (marker.label || "Marker") + " · " + formatTime(marker.time_us));
         jump.type = "button";
         jump.addEventListener("click", () => setPlayhead(Number(marker.time_us || 0)));
+        const move = element("button", "btn secondary", "Move to playhead");
+        move.type = "button";
+        move.addEventListener("click", () => submitOperations([{
+          name: "timeline.move_marker",
+          arguments: {marker_id: marker.id, time_us: Math.max(0, Math.round(playheadUs))}
+        }]).catch((error) => {
+          const status = byId("render-status");
+          if (status) { status.textContent = error.message; status.className = "status error"; }
+        }));
         const remove = element("button", "btn secondary", "Remove");
         remove.type = "button";
         remove.addEventListener("click", () => submitOperations([{name:"timeline.remove_marker",arguments:{marker_id:marker.id}}]).catch((error) => {
           const status = byId("render-status");
           if (status) { status.textContent = error.message; status.className = "status error"; }
         }));
-        item.append(jump, remove); markerList.append(item);
+        item.append(jump, move, remove); markerList.append(item);
       });
     }
 
@@ -674,8 +683,12 @@
             if (event.shiftKey) {
               if (selectedClipIds.has(clip.id)) selectedClipIds.delete(clip.id);
               else selectedClipIds.add(clip.id);
-              selectedClipId = clip.id;
-              if (!selectedClipIds.size) selectedClipIds.add(clip.id);
+              selectedClipId = selectedClipIds.has(clip.id)
+                ? clip.id : ([...selectedClipIds].pop() || "");
+              if (!selectedClipIds.size) {
+                selectedClipIds.add(clip.id);
+                selectedClipId = clip.id;
+              }
             } else {
               selectedClipIds = new Set([clip.id]);
               selectedClipId = clip.id;
@@ -977,12 +990,22 @@
             const duration = await window.readBrowserMediaDuration(file, asset.media_type);
             headers["X-Media-Duration-Us"] = String(duration);
           }
-          await window.api("/api/v1/jobs/" + jobId + "/assets/" + encodeURIComponent(asset.id) + "/relink", {
+          const relinkResult = await window.api("/api/v1/jobs/" + jobId + "/assets/" + encodeURIComponent(asset.id) + "/relink", {
             method:"PUT", headers, body:file
           });
+          let previewWarning = "";
+          try {
+            const preview = await window.createMediaPreview(file, asset.media_type);
+            if (Object.keys(preview).length) {
+              await window.api("/api/v1/jobs/" + jobId + "/assets/" + encodeURIComponent(asset.id) + "/preview", {
+                method:"POST", headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({expected_revision:relinkResult.project_revision,...preview})
+              });
+            }
+          } catch (previewError) { previewWarning = " Preview regeneration was unavailable."; }
           await window.loadProject(false);
           const status = byId("render-status");
-          if (status) { status.textContent = "Media file relinked. Existing clip references were preserved."; status.className = "status success"; }
+          if (status) { status.textContent = "Media file relinked. Existing clip references were preserved." + previewWarning; status.className = previewWarning ? "status error" : "status success"; }
         } catch (error) {
           const status = byId("render-status");
           if (status) { status.textContent = error.message; status.className = "status error"; }
