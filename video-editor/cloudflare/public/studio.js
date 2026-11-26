@@ -4,6 +4,7 @@
   let currentProject = null;
   let currentRevision = null;
   let selectedClipId = "";
+  let selectedClipIds = new Set();
   let activeView = "timeline";
   let playheadUs = 0;
   let timelinePixelsPerSecond = 46;
@@ -126,20 +127,24 @@
   }
 
   function snapStart(proposedUs, trackId, clipId) {
+    if (byId("timeline-snap-toggle")?.checked === false || !currentProject) return proposedUs;
     let best = proposedUs;
     let bestDistance = 150000;
-    (currentProject.tracks || []).filter((track) => track.id === trackId).forEach((track) => {
-      (track.clips || []).filter((clip) => clip.id !== clipId).forEach((clip) => {
-        const candidates = [Number(clip.start_us || 0),
-          Number(clip.start_us || 0) + Number(clip.duration_us || 0)];
-        candidates.forEach((candidate) => {
-          const distance = Math.abs(candidate - proposedUs);
-          if (distance < bestDistance) {
-            best = candidate;
-            bestDistance = distance;
-          }
-        });
+    const selected = flattenClips(currentProject).find((item) => item.clip.id === clipId);
+    const groupId = selected?.clip.group_id;
+    const excluded = new Set([clipId]);
+    if (groupId) (currentProject.clip_groups || []).filter((g) => g.id === groupId)
+      .forEach((g) => (g.clip_ids || []).forEach((id) => excluded.add(id)));
+    const candidates = [playheadUs, ...(currentProject.markers || []).map((m) => Number(m.time_us || 0))];
+    (currentProject.tracks || []).filter((track) => track.locked !== true).forEach((track) => {
+      (track.clips || []).filter((clip) => !excluded.has(clip.id)).forEach((clip) => {
+        candidates.push(Number(clip.start_us || 0));
+        candidates.push(Number(clip.start_us || 0) + Number(clip.duration_us || 0));
       });
+    });
+    candidates.forEach((candidate) => {
+      const distance = Math.abs(candidate - proposedUs);
+      if (distance < bestDistance) { best = candidate; bestDistance = distance; }
     });
     return best;
   }
@@ -426,10 +431,18 @@
     if (!host) return;
     host.replaceChildren();
     document.querySelectorAll(".timeline-clip").forEach((button) => {
-      const isSelected = button.dataset.clipId === selectedClipId;
+      const isSelected = selectedClipIds.has(button.dataset.clipId) || button.dataset.clipId === selectedClipId;
       button.classList.toggle("selected", isSelected);
       button.setAttribute("aria-pressed", isSelected ? "true" : "false");
     });
+    const groupButton = byId("studio-group-clips");
+    const ungroupButton = byId("studio-ungroup-clips");
+    if (groupButton) groupButton.disabled = selectedClipIds.size < 2;
+    if (ungroupButton) {
+      const grouped = flattenClips(currentProject).some((item) =>
+        selectedClipIds.has(item.clip.id) && Boolean(item.clip.group_id));
+      ungroupButton.disabled = !grouped;
+    }
 
     const selected = findSelectedClip();
     const clipControls = [
@@ -584,7 +597,33 @@
     const rulerPlayhead = element("span", "timeline-playhead");
     rulerPlayhead.setAttribute("aria-hidden", "true");
     rulerLane.append(rulerPlayhead);
+    (currentProject.markers || []).forEach((marker) => {
+      const pin = element("button", "timeline-marker", marker.label || "Marker");
+      pin.type = "button";
+      pin.title = (marker.label || "Marker") + " · " + formatTime(marker.time_us);
+      pin.style.left = (Number(marker.time_us || 0) / 1000000 * pixelsPerSecond) + "px";
+      pin.style.borderColor = marker.colour || "#F5C542";
+      pin.addEventListener("click", () => setPlayhead(Number(marker.time_us || 0)));
+      rulerLane.append(pin);
+    });
     ruler.append(rulerLabel, rulerLane);
+    const markerList = byId("studio-marker-list");
+    if (markerList) {
+      markerList.replaceChildren();
+      (currentProject.markers || []).forEach((marker) => {
+        const item = element("div", "marker-chip");
+        const jump = element("button", "btn secondary", (marker.label || "Marker") + " · " + formatTime(marker.time_us));
+        jump.type = "button";
+        jump.addEventListener("click", () => setPlayhead(Number(marker.time_us || 0)));
+        const remove = element("button", "btn secondary", "Remove");
+        remove.type = "button";
+        remove.addEventListener("click", () => submitOperations([{name:"timeline.remove_marker",arguments:{marker_id:marker.id}}]).catch((error) => {
+          const status = byId("render-status");
+          if (status) { status.textContent = error.message; status.className = "status error"; }
+        }));
+        item.append(jump, remove); markerList.append(item);
+      });
+    }
 
     tracks.forEach((track) => {
       const row = element("div", "timeline-track-row");
@@ -622,7 +661,7 @@
           const width = Math.max(38, Number(clip.duration_us || 0) / 1000000 * pixelsPerSecond);
           button.style.left = left + "px";
           button.style.width = Math.max(0, Math.min(width, laneWidth - left)) + "px";
-          if (clip.id === selectedClipId) button.classList.add("selected");
+          if (selectedClipIds.has(clip.id) || clip.id === selectedClipId) button.classList.add("selected");
           if (clip.kind !== "text") {
             const leftHandle = element("span", "clip-handle clip-handle-left");
             const rightHandle = element("span", "clip-handle clip-handle-right");
@@ -630,9 +669,17 @@
             rightHandle.setAttribute("aria-hidden", "true");
             button.append(leftHandle, rightHandle);
           }
-          button.addEventListener("click", () => {
+          button.addEventListener("click", (event) => {
             if (Date.now() < skipClipClickUntil) return;
-            selectedClipId = clip.id;
+            if (event.shiftKey) {
+              if (selectedClipIds.has(clip.id)) selectedClipIds.delete(clip.id);
+              else selectedClipIds.add(clip.id);
+              selectedClipId = clip.id;
+              if (!selectedClipIds.size) selectedClipIds.add(clip.id);
+            } else {
+              selectedClipIds = new Set([clip.id]);
+              selectedClipId = clip.id;
+            }
             updateInspector();
             renderMediaBin();
           });
@@ -905,7 +952,10 @@
     if (!project || typeof project !== "object" || !Array.isArray(project.tracks)) return;
     currentProject = project;
     currentRevision = revision || project.revision || 1;
-    if (!flattenClips(project).some(({clip}) => clip.id === selectedClipId)) selectedClipId = "";
+    const liveIds = new Set(flattenClips(project).map(({clip}) => clip.id));
+    selectedClipIds = new Set([...selectedClipIds].filter((id) => liveIds.has(id)));
+    if (!liveIds.has(selectedClipId)) selectedClipId = "";
+    if (!selectedClipId && selectedClipIds.size) selectedClipId = [...selectedClipIds][0];
     const meta = byId("studio-project-meta");
     if (meta) {
       const profile = project.video_profile || {};
@@ -982,6 +1032,7 @@
   const clearSelection = byId("studio-clear-selection");
   if (clearSelection) clearSelection.addEventListener("click", () => {
     selectedClipId = "";
+    selectedClipIds.clear();
     updateInspector();
     renderMediaBin();
   });
@@ -1020,6 +1071,21 @@
     });
   };
 
+  click("studio-group-clips", () => {
+    const clipIds = [...selectedClipIds];
+    if (clipIds.length < 2) throw new Error("Hold Shift and select at least two clips first.");
+    return run([{name:"timeline.group_clips",arguments:{clip_ids:clipIds,name:"Linked clips"}}]);
+  });
+  click("studio-ungroup-clips", () => {
+    const clipIds = [...selectedClipIds];
+    if (!clipIds.length) throw new Error("Select grouped clips first.");
+    return run([{name:"timeline.ungroup_clips",arguments:{clip_ids:clipIds}}]);
+  });
+  click("studio-add-marker", () => {
+    const label = byId("timeline-marker-label").value.trim();
+    if (!label) throw new Error("Enter a marker label.");
+    return run([{name:"timeline.add_marker",arguments:{time_us:Math.max(0,Math.round(playheadUs)),label}}]);
+  });
   click("studio-move-clip", () => {
     const item = selected(); if (!item) throw new Error("Select a clip first.");
     return run([{name:"timeline.move_clip",arguments:{clip_id:item.clip.id,start_us:secondsToUs(numeric("clip-start-seconds"))}}]);
