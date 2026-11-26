@@ -269,7 +269,8 @@
     const limits = {
       position_x: [-1000, 1000], position_y: [-1000, 1000],
       scale_x: [0, 4], scale_y: [0, 4], rotation_deg: [-180, 180],
-      opacity: [0, 1], playback_rate: [0.05, 16], volume_db: [-96, 24]
+      opacity: [0, 1], playback_rate: [0.05, 16], volume_db: [-96, 24],
+      crop_x: [0, 1], crop_y: [0, 1], crop_width: [0.001, 1], crop_height: [0.001, 1]
     };
     let [minValue, maxValue] = limits[property] || [0, 1];
     const values = keyframes.map((frame) => Number(frame.value)).filter(Number.isFinite);
@@ -1390,6 +1391,21 @@
       if(!["video","image"].includes(clip.kind))throw new Error("Zoom presets require a video or image clip.");
       add("scale_x",0,0.9,"ease_out");add("scale_x",windowUs,1,"ease_out");
       add("scale_y",0,0.9,"ease_out");add("scale_y",windowUs,1,"ease_out");
+    }else if(preset==="zoom_out"){
+      if(!["video","image"].includes(clip.kind))throw new Error("Zoom presets require a video or image clip.");
+      add("scale_x",0,1.15,"ease_out_quart");add("scale_x",windowUs,1,"ease_out_quart");
+      add("scale_y",0,1.15,"ease_out_quart");add("scale_y",windowUs,1,"ease_out_quart");
+    }else if(preset==="pan_left"||preset==="pan_right"){
+      if(!["video","image"].includes(clip.kind))throw new Error("Pan presets require a video or image clip.");
+      const from=preset==="pan_left"?80:-80;
+      add("position_x",0,from,"ease_in_out");add("position_x",windowUs,0,"ease_in_out");
+    }else if(preset==="crop_reveal"){
+      if(!["video","image"].includes(clip.kind))throw new Error("Animated crop requires a video or image clip.");
+      if(clip.framing)throw new Error("Clear automatic framing before using an animated crop preset.");
+      add("crop_x",0,0.08,"ease_in_out");add("crop_x",windowUs,0,"ease_in_out");
+      add("crop_y",0,0.08,"ease_in_out");add("crop_y",windowUs,0,"ease_in_out");
+      add("crop_width",0,0.84,"ease_in_out");add("crop_width",windowUs,1,"ease_in_out");
+      add("crop_height",0,0.84,"ease_in_out");add("crop_height",windowUs,1,"ease_in_out");
     }else if(preset==="speed_ramp"){
       if(clip.kind!=="video")throw new Error("Speed ramp presets require a video clip.");
       add("playback_rate",0,0.75,"ease_in_out");
@@ -1440,6 +1456,15 @@
     const track=selectedTrack();if(!track)throw new Error("Select a track.");
     return run([{name:"track.set_state",arguments:{track_id:track.id,solo:!Boolean(track.solo)}}]);
   });
+  click("studio-apply-track-audio", () => {
+    const track=selectedTrack();if(!track)throw new Error("Select a track.");
+    if(track.type==="text")throw new Error("Text tracks do not carry an audio signal.");
+    return run([{name:"track.set_state",arguments:{
+      track_id:track.id,
+      audio_gain_db:numeric("track-audio-gain"),
+      audio_pan:numeric("track-audio-pan")
+    }}]);
+  });
   click("studio-remove-track", () => {
     const track = selectedTrack(); if (!track) throw new Error("Select a track.");
     if (!window.confirm("Remove this track and all clips on it?")) return;
@@ -1464,6 +1489,9 @@
     const track = selectedTrack();
     if (track && byId("rename-track")) byId("rename-track").value = track.name;
     if (track && byId("track-order")) byId("track-order").value = String(track.order);
+    if (byId("track-audio-gain")) byId("track-audio-gain").value = String(track?.audio_gain_db ?? 0);
+    if (byId("track-audio-pan")) byId("track-audio-pan").value = String(track?.audio_pan ?? 0);
+    if (byId("studio-apply-track-audio")) byId("studio-apply-track-audio").disabled = !track || track.type === "text";
     if (byId("studio-lock-track")) byId("studio-lock-track").textContent = track?.locked ? "Unlock track" : "Lock track";
     if (byId("studio-toggle-track-enabled")) byId("studio-toggle-track-enabled").textContent = track?.enabled === false ? "Enable track" : "Disable track";
     if (byId("studio-toggle-track-visible")) {
