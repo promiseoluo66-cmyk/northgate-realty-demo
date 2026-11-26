@@ -226,7 +226,7 @@ class Stage1Tasks45Tests(unittest.TestCase):
         })
         self.executor = ProjectToolExecutor(project)
         result = self.executor.execute("effect.remove", {"clip_id": "c1", "effect_id": "fx1"})
-        self.assertEqual(result["result"]["removed_effect_id"], "fx1")
+        self.assertEqual(result["results"][0]["result"]["removed_effect_id"], "fx1")
         self.assertEqual(self.executor.get_project()["tracks"][0]["clips"][0]["effects"], [])
 
 
