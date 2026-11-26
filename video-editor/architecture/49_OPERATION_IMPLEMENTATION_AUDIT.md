@@ -9,7 +9,7 @@
 - 49 unique registered operations found.
 - Executor dispatch reference found for all 49.
 - 48 operations have a feature/subsystem test-file reference in addition to any registry-contract tests.
-- 1 operation, render.export, has a registered contract and an executor branch but still needs a direct operation-level execution test.
+- `render.export` now has direct executor tests for confirmation, valid export dispatch, unsafe filenames, missing configuration, overwrite protection and failure isolation. A generated-video integration test exercises the real MLT renderer and probes the MP4 output.
 - 33 operations are referenced by direct Studio UI code. The remaining operations are available through the AI/backend tool path rather than dedicated direct controls.
 - This is a source-and-test-reference audit, not a claim that every edge case or live render outcome has been independently proven. All entries remain subject to the edge-case review below.
 
@@ -71,7 +71,7 @@ Status meaning:
 | 46 | `audio.set_fade` | Found | test_ai_tool_controller.py; test_tool_registry.py | AI/backend | PASS |
 | 47 | `history.undo` | Found | test_ai_tool_controller.py | Yes | PASS |
 | 48 | `history.redo` | Found | test_ai_tool_controller.py | Yes | PASS |
-| 49 | `render.export` | Found | test_tool_registry.py | AI/backend | PARTIAL |
+| 49 | `render.export` | Found | test_render_export_operation.py; test_tool_registry.py | AI/backend | PASS |
 
 ## Edge-case and integration audit still required
 
@@ -82,9 +82,9 @@ The source/test-reference scan does not establish all of the following for every
 3. Confirmation gates for destructive calls, plus undo/redo history behaviour and stale-revision handling.
 4. Renderer integration and generated output for operations that affect media, not only the resulting project JSON.
 5. UI/AI/backend integration and error reporting, including operations intentionally exposed only to the AI/backend pathway.
-6. Direct tool-level execution of `render.export` through the worker/runner, not just the MLT renderer and registered schema.
+6. The Python executor's `render.export` path is now directly exercised, including a real generated-media MLT export. The hosted Cloudflare Worker-to-GitHub-runner job lifecycle remains unverified because this lab has no deployed Worker.
 
-The new Stage 1 Task 4/5 tests cover track gain/pan validation and filter configuration, crop-keyframe validation, animated affine geometry, source-boundary rejection, and additional easing curves. The live Worker/renderer configuration is still not deployed in this test-only lab.
+The operation audit also now runs a schema-hardening check across all 49 registered operations to ensure unknown arguments are rejected. Task 4/5 tests cover track gain/pan validation and filter configuration, crop-keyframe validation, animated affine geometry, source-boundary rejection, and additional easing curves. The live Worker/renderer configuration is still not deployed in this test-only lab.
 
 ## Safety boundary
 
