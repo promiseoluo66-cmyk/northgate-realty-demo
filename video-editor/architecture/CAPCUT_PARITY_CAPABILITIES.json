@@ -746,8 +746,16 @@
       "under_test": 1
     },
     "duplicate_feature_ids": [],
-    "stage1_registered_tool_count": 49,
+    "stage1_registered_tool_count": 51,
     "stage1_registered_tool_names_are_unique": true,
-    "stage1_task_2_3_added_operations": ["captions.import_subtitles", "timeline.ripple_overwrite_clip", "timeline.group_clips", "timeline.ungroup_clips", "timeline.add_marker", "timeline.move_marker", "timeline.remove_marker"]
+    "stage1_task_2_3_added_operations": [
+      "captions.import_subtitles",
+      "timeline.ripple_overwrite_clip",
+      "timeline.group_clips",
+      "timeline.ungroup_clips",
+      "timeline.add_marker",
+      "timeline.move_marker",
+      "timeline.remove_marker"
+    ]
   }
 }
