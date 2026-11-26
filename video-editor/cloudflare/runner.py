@@ -104,9 +104,28 @@ def download_project_media_assets(
             asset["duration_us"] = _probe_project_asset_duration_us(target, media_type)
 
 
+def require_private_storage_repository(owner: str, repo: str, token: str) -> None:
+    """Fail closed unless the configured Release storage repository is private."""
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{owner}/{repo}",
+        headers={"Authorization": "Bearer " + token,
+                 "Accept": "application/vnd.github+json",
+                 "X-GitHub-Api-Version": "2022-11-28",
+                 "User-Agent": WORKER_USER_AGENT},
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        metadata = json.loads(response.read().decode("utf-8"))
+    if metadata.get("private") is not True:
+        raise ValueError(
+            "Generated media storage must be a private GitHub repository. "
+            "The configured repository is public or its visibility could not be verified."
+        )
+
+
 def upload_release_asset(owner: str, repo: str, release_id: int, token: str,
                          path: Path, asset_name: str | None = None,
                          content_type: str = "video/mp4") -> int:
+    require_private_storage_repository(owner, repo, token)
     size = path.stat().st_size
     if size <= 0 or size > MAX_RENDER_OUTPUT:
         raise ValueError("Edited video is empty or larger than the 300 MB output limit.")
