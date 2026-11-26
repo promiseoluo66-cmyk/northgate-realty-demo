@@ -755,5 +755,134 @@ class EditorToolExpansionTests(unittest.TestCase):
             })
 
 
+
+    def _make_real_media_executor(self, directory, include_audio=True):
+        from pathlib import Path
+        import shutil
+        import subprocess
+        if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+            self.skipTest("FFmpeg/FFprobe are not installed.")
+        root = Path(directory)
+        root.mkdir(parents=True, exist_ok=True)
+        source = root / "source-real.mp4"
+        command = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10",
+        ]
+        if include_audio:
+            command += ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100"]
+        command += ["-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+        if include_audio:
+            command += ["-c:a", "aac", "-shortest"]
+        else:
+            command += ["-an"]
+        command.append(str(source))
+        subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
+        project = make_project()
+        project["assets"][0]["storage_key"] = source.name
+        project["assets"][0]["size_bytes"] = source.stat().st_size
+        project["assets"][0]["duration_us"] = 2_000_000
+        return ProjectToolExecutor(project, asset_root=root), source
+
+    def test_audio_extraction_creates_verified_audio_asset_and_is_undoable(self):
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            executor, source = self._make_real_media_executor(directory)
+            result = executor.execute(
+                "media.extract_audio", {"media_id": "video-asset", "format": "m4a"}
+            )
+            created = result["results"][0]["result"]
+            audio = next(item for item in executor.get_project()["assets"] if item["id"] == created["media_id"])
+            audio_path = Path(directory) / audio["storage_key"]
+            self.assertTrue(audio_path.is_file())
+            self.assertGreater(audio_path.stat().st_size, 0)
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+                 "-of", "json", str(audio_path)],
+                check=True, capture_output=True, text=True,
+            )
+            metadata = json.loads(probe.stdout)
+            self.assertTrue(any(item["codec_type"] == "audio" for item in metadata["streams"]))
+            self.assertGreater(audio["duration_us"], 0)
+            executor.execute("history.undo", {})
+            self.assertFalse(any(item["id"] == audio["id"] for item in executor.get_project()["assets"]))
+            executor.execute("history.redo", {})
+            restored = next(item for item in executor.get_project()["assets"] if item["id"] == audio["id"])
+            self.assertEqual(restored["storage_key"], audio["storage_key"])
+            self.assertTrue(audio_path.is_file())
+
+    def test_audio_extraction_rejects_video_without_audio_and_leaves_project_unchanged(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory, include_audio=False)
+            before = executor.get_project()
+            with self.assertRaisesRegex(ProjectToolExecutionError, "contains no audio stream"):
+                executor.execute("media.extract_audio", {"media_id": "video-asset"})
+            self.assertEqual(executor.get_project(), before)
+            self.assertEqual(executor.revision, 1)
+
+    def test_freeze_frame_creates_real_image_and_hold_clip_with_undo_redo(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory)
+            result = executor.execute("timeline.create_freeze_frame", {
+                "media_id": "video-asset", "track_id": "overlay-track",
+                "timestamp_us": 500_000, "start_us": 1_000_000,
+                "duration_us": 3_000_000,
+            })
+            created = result["results"][0]["result"]
+            project = executor.get_project()
+            image_asset = next(item for item in project["assets"] if item["id"] == created["media_id"])
+            image_path = Path(directory) / image_asset["storage_key"]
+            self.assertTrue(image_path.is_file())
+            self.assertGreater(image_path.stat().st_size, 0)
+            image_probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height", "-of", "json", str(image_path)],
+                check=True, capture_output=True, text=True,
+            )
+            image_stream = __import__("json").loads(image_probe.stdout)["streams"][0]
+            self.assertEqual((image_stream["width"], image_stream["height"]), (160, 120))
+            clip = next(item for item in project["tracks"][1]["clips"] if item["id"] == created["clip_id"])
+            self.assertEqual(clip["duration_us"], 3_000_000)
+            self.assertEqual(clip["kind"], "image")
+            executor.execute("history.undo", {})
+            self.assertFalse(any(item["id"] == image_asset["id"] for item in executor.get_project()["assets"]))
+            executor.execute("history.redo", {})
+            self.assertTrue(any(item["id"] == image_asset["id"] for item in executor.get_project()["assets"]))
+            self.assertTrue(image_path.is_file())
+
+    def test_freeze_frame_rejects_out_of_range_timestamp_without_mutation(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory)
+            before = executor.get_project()
+            with self.assertRaisesRegex(ProjectToolExecutionError, "inside the source video duration"):
+                executor.execute("timeline.create_freeze_frame", {
+                    "media_id": "video-asset", "track_id": "overlay-track",
+                    "timestamp_us": 2_000_000, "start_us": 0, "duration_us": 1_000_000,
+                })
+            self.assertEqual(executor.get_project(), before)
+            self.assertEqual(executor.revision, 1)
+
+    def test_generated_asset_release_id_is_attached_to_current_project_and_redo_history(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            executor, _ = self._make_real_media_executor(directory)
+            result = executor.execute("media.extract_audio", {"media_id": "video-asset"})
+            media_id = result["results"][0]["result"]["media_id"]
+            executor.set_persisted_asset_id(media_id, 987654)
+            asset = next(item for item in executor.get_project()["assets"] if item["id"] == media_id)
+            self.assertEqual(asset["release_asset_id"], 987654)
+            executor.execute("history.undo", {})
+            executor.execute("history.redo", {})
+            restored = next(item for item in executor.get_project()["assets"] if item["id"] == media_id)
+            self.assertEqual(restored["release_asset_id"], 987654)
+
 if __name__ == "__main__":
     unittest.main()
