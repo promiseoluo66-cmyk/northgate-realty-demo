@@ -29,7 +29,7 @@ def _make_test_media(video_path: Path, audio_path: Path) -> None:
     subprocess.run(
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=4",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=4",
             "-c:a", "pcm_s16le", str(audio_path),
         ],
         check=True,
