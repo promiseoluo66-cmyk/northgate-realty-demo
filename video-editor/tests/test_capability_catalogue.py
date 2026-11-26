@@ -52,8 +52,8 @@ class CapabilityCatalogueTests(unittest.TestCase):
         names = [tool["name"] for tool in registry]
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(self.catalogue["audit"]["registered_tool_count"], 34)
-        self.assertEqual(self.catalogue["audit"]["stage1_registered_tool_count"], 49)
-        self.assertEqual(len(names), 49)
+        self.assertEqual(self.catalogue["audit"]["stage1_registered_tool_count"], 51)
+        self.assertEqual(len(names), 51)
         self.assertTrue(self.catalogue["audit"]["registered_tool_names_are_unique"])
         self.assertTrue(self.catalogue["audit"]["stage1_registered_tool_names_are_unique"])
 
