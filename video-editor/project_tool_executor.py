@@ -44,6 +44,20 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:12]}"
 
 
+def _prune_clip_groups(project: dict[str, Any], removed_clip_ids: set[str]) -> None:
+    """Keep linked-group metadata consistent after clips or tracks are removed."""
+    groups = project.get("clip_groups", [])
+    for group in list(groups):
+        group["clip_ids"] = [clip_id for clip_id in group["clip_ids"] if clip_id not in removed_clip_ids]
+        if len(group["clip_ids"]) < 2:
+            remaining = set(group["clip_ids"])
+            for track in project["tracks"]:
+                for clip in track["clips"]:
+                    if clip["id"] in remaining:
+                        clip.pop("group_id", None)
+            groups.remove(group)
+
+
 class ProjectToolExecutor:
     """Execute only the registered project tools against one in-memory project.
 
@@ -567,6 +581,7 @@ class ProjectToolExecutor:
                 raise ProjectToolExecutionError("The selected track is locked.")
             clip_ids = {clip["id"] for clip in track["clips"]}
             project["tracks"].remove(track)
+            _prune_clip_groups(project, clip_ids)
             project["transitions"] = [
                 item for item in project.get("transitions", [])
                 if item["from_clip_id"] not in clip_ids
@@ -1056,6 +1071,8 @@ class ProjectToolExecutor:
             self._ensure_track_compatibility(target_track, source_clip["kind"])
             duplicate = deepcopy(source_clip)
             duplicate["id"] = _new_id("clip")
+            # A duplicate is independent until the user explicitly links it.
+            duplicate.pop("group_id", None)
             duplicate["start_us"] = args["start_us"]
             end_us = int(duplicate["start_us"]) + int(duplicate["duration_us"])
             for existing in target_track["clips"]:
@@ -1175,6 +1192,12 @@ class ProjectToolExecutor:
                 right["source_in_us"] = source_split
                 right["source_out_us"] = old_source_out
             track["clips"].append(right)
+            if right.get("group_id"):
+                group = next((item for item in project.get("clip_groups", [])
+                              if item["id"] == right["group_id"]), None)
+                if group is None:
+                    raise ProjectToolExecutionError("The split clip references a missing linked group.")
+                group["clip_ids"].append(right["id"])
             return {
                 "left_clip_id": left["id"],
                 "right_clip_id": right["id"],
@@ -1184,6 +1207,7 @@ class ProjectToolExecutor:
         if name == "timeline.delete_clip":
             track, clip = self._find_clip(project, args["clip_id"])
             track["clips"].remove(clip)
+            _prune_clip_groups(project, {clip["id"]})
             project["transitions"] = [
                 item for item in project.get("transitions", [])
                 if item["from_clip_id"] != clip["id"]
@@ -1207,6 +1231,7 @@ class ProjectToolExecutor:
                         "Ripple delete requires non-overlapping clips on the target track."
                     )
             track["clips"].remove(clip)
+            _prune_clip_groups(project, {clip["id"]})
             shifted = []
             for other in track["clips"]:
                 if int(other["start_us"]) >= deleted_end:
