@@ -769,6 +769,22 @@
     const activeFolder = folderFilter?.value || "";
     const filtered = assets.filter((asset) => {
       const folder = asset.folder || "Unsorted";
+      const tags = Array.isArray(asset.tags) ? asset.tags : [];
+      const matchesQuery = !query ||
+        String(asset.file_name || "").toLowerCase().includes(query) ||
+        String(asset.media_type || "").toLowerCase().includes(query) ||
+        folder.toLowerCase().includes(query) ||
+        tags.some((tag) => String(tag).toLowerCase().includes(query));
+      return matchesQuery && (!activeFolder || folder === activeFolder);
+    });
+    if (!filtered.length) {
+      host.append(element("p", "hint", assets.length
+        ? "No project media matches these filters."
+        : "No media assets are listed in this project."));
+      return;
+    }
+    filtered.forEach((asset) => {
+      const used = flattenClips(currentProject).filter((item) => item.clip.media_id === asset.id).length;
       const existingProxy = assets.find((item) => item.proxy_for_media_id === asset.id);
       const proxyStatus = asset.proxy_for_media_id
         ? element("p", "hint", "Low-resolution proxy for " + asset.proxy_for_media_id)
@@ -793,22 +809,6 @@
           }
         });
       }
-      const tags = Array.isArray(asset.tags) ? asset.tags : [];
-      const matchesQuery = !query ||
-        String(asset.file_name || "").toLowerCase().includes(query) ||
-        String(asset.media_type || "").toLowerCase().includes(query) ||
-        folder.toLowerCase().includes(query) ||
-        tags.some((tag) => String(tag).toLowerCase().includes(query));
-      return matchesQuery && (!activeFolder || folder === activeFolder);
-    });
-    if (!filtered.length) {
-      host.append(element("p", "hint", assets.length
-        ? "No project media matches these filters."
-        : "No media assets are listed in this project."));
-      return;
-    }
-    filtered.forEach((asset) => {
-      const used = flattenClips(currentProject).filter((item) => item.clip.media_id === asset.id).length;
       const card = element("article", "media-bin-item");
       const title = element("strong", "", asset.file_name || asset.id || "Media asset");
       const preview = element("div", "media-preview");
