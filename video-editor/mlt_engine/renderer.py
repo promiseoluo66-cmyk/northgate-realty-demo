@@ -1281,8 +1281,16 @@ def render_project(
     destination: str | Path,
     *,
     timeout_seconds: int = 120,
+    pitch_preserving: bool = True,
 ) -> dict[str, Any]:
-    """Render the supported project subset through the LGPL MLT Python API."""
+    """Render the supported project subset through the LGPL MLT Python API.
+
+    Pitch correction is enabled by default. The optional switch is exposed to
+    integration tests so MLT's underlying timewarp audio can be compared with
+    its Rubber Band correction path; product renders should retain the default.
+    """
+    if not isinstance(pitch_preserving, bool):
+        raise MltRenderError("pitch_preserving must be a boolean.")
     plan = compile_render_plan(project_document, asset_root)
     target = Path(destination).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1397,7 +1405,8 @@ def render_project(
                         raise MltRenderError(
                             f"MLT timewarp could not open source clip {clip['id']}."
                         )
-                    producer.set("warp_pitch", 1)
+                    if pitch_preserving:
+                        producer.set("warp_pitch", 1)
                 else:
                     producer = mlt.Producer(profile, str(clip["path"]))
                     if not producer.is_valid():
