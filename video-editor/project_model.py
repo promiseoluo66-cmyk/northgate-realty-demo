@@ -19,8 +19,15 @@ _MEDIA_TYPES = {"video", "image", "audio", "font"}
 _KEYFRAME_PROPERTIES = {
     "position_x", "position_y", "scale_x", "scale_y",
     "rotation_deg", "opacity", "volume_db", "playback_rate",
+    "crop_x", "crop_y", "crop_width", "crop_height",
 }
-_INTERPOLATIONS = {"hold", "linear", "ease_in", "ease_out", "ease_in_out", "bezier"}
+_INTERPOLATIONS = {
+    "hold", "linear", "ease_in", "ease_out", "ease_in_out",
+    "ease_in_quad", "ease_out_quad", "ease_in_out_quad",
+    "ease_in_cubic", "ease_out_cubic", "ease_in_out_cubic",
+    "ease_in_quart", "ease_out_quart", "ease_in_out_quart",
+    "smoothstep", "bezier",
+}
 
 
 class ProjectValidationError(ValueError):
@@ -150,6 +157,8 @@ def _validate_keyframes(value: Any, path: str, clip_duration_us: int) -> None:
             "scale_x": (0.001, 100.0), "scale_y": (0.001, 100.0),
             "opacity": (0.0, 1.0), "volume_db": (-96.0, 24.0),
             "playback_rate": (0.05, 16.0),
+            "crop_x": (0.0, 1.0), "crop_y": (0.0, 1.0),
+            "crop_width": (0.001, 1.0), "crop_height": (0.001, 1.0),
             "position_x": (-100000.0, 100000.0),
             "position_y": (-100000.0, 100000.0),
             "rotation_deg": (-360000.0, 360000.0),
@@ -277,6 +286,10 @@ def validate_project(document: Any) -> dict[str, Any]:
         for flag in ("enabled", "locked", "muted", "solo", "visible"):
             if flag in track and not isinstance(track[flag], bool):
                 raise ProjectValidationError(f"{track_path}.{flag} must be true or false.")
+        if track_type == "text" and any(key in track for key in ("audio_gain_db", "audio_pan")):
+            raise ProjectValidationError(f"{track_path} text tracks cannot carry audio routing settings.")
+        _number(track.get("audio_gain_db", 0), f"{track_path}.audio_gain_db", minimum=-96, maximum=24)
+        _number(track.get("audio_pan", 0), f"{track_path}.audio_pan", minimum=-1, maximum=1)
         tracks[track_id] = track
 
         for clip_index, raw_clip in enumerate(_array(track.get("clips"), f"{track_path}.clips")):
@@ -394,6 +407,14 @@ def validate_project(document: Any) -> dict[str, Any]:
                     raise ProjectValidationError(f"{path}.crop cannot be combined with automatic framing.")
                 _validate_crop(clip["crop"], f"{path}.crop")
             _validate_keyframes(clip.get("keyframes", []), f"{path}.keyframes", duration)
+            crop_keyframes = {item["property"] for item in clip.get("keyframes", [])
+                              if item["property"] in {"crop_x", "crop_y", "crop_width", "crop_height"}}
+            if crop_keyframes and kind not in {"video", "image"}:
+                raise ProjectValidationError(f"{path} crop keyframes require a video or image clip.")
+            if crop_keyframes and clip.get("framing"):
+                raise ProjectValidationError(f"{path} crop keyframes cannot be combined with automatic framing.")
+            if crop_keyframes and any(item["property"] == "playback_rate" for item in clip.get("keyframes", [])):
+                raise ProjectValidationError(f"{path} crop keyframes cannot be combined with speed ramps.")
             _validate_effects(clip.get("effects", []), f"{path}.effects")
             clips[clip_id] = clip
             # Keep local values referenced here to make the timing contract explicit.
