@@ -1263,14 +1263,23 @@ class ProjectToolExecutor:
                 if track["type"] == "audio":
                     raise ProjectToolExecutionError("Audio tracks do not support visual visibility.")
                 track["visible"] = args["visible"]
-            if not any(key in args for key in ("enabled", "muted", "solo", "visible")):
-                raise ProjectToolExecutionError("Specify enabled, muted, solo and/or visible.")
+            if "audio_gain_db" in args or "audio_pan" in args:
+                if track["type"] == "text":
+                    raise ProjectToolExecutionError("Text tracks do not carry an audio signal.")
+                if "audio_gain_db" in args:
+                    track["audio_gain_db"] = float(args["audio_gain_db"])
+                if "audio_pan" in args:
+                    track["audio_pan"] = float(args["audio_pan"])
+            if not any(key in args for key in ("enabled", "muted", "solo", "visible", "audio_gain_db", "audio_pan")):
+                raise ProjectToolExecutionError("Specify a track state or audio mix setting.")
             return {
                 "track_id": track["id"],
                 "enabled": track.get("enabled", True),
                 "muted": track.get("muted", False),
                 "solo": track.get("solo", False),
                 "visible": track.get("visible", True),
+                "audio_gain_db": track.get("audio_gain_db", 0),
+                "audio_pan": track.get("audio_pan", 0),
             }, True
 
         if name == "track.rename":
@@ -1397,6 +1406,13 @@ class ProjectToolExecutor:
             if prop == "volume_db":
                 if clip["kind"] != "audio":
                     raise ProjectToolExecutionError("volume_db keyframes require an audio clip.")
+            elif prop in {"crop_x", "crop_y", "crop_width", "crop_height"}:
+                if clip["kind"] not in {"video", "image"}:
+                    raise ProjectToolExecutionError("Animated crop requires a video or image clip.")
+                if clip.get("framing"):
+                    raise ProjectToolExecutionError("Clear automatic framing before animating the crop.")
+                if any(item["property"] == "playback_rate" for item in clip.get("keyframes", [])):
+                    raise ProjectToolExecutionError("Animated crop cannot be combined with speed ramps.")
             elif prop == "playback_rate":
                 if clip["kind"] != "video":
                     raise ProjectToolExecutionError("Playback-speed curves currently require video clips.")
