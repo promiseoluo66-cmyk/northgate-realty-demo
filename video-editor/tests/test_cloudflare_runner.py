@@ -415,3 +415,24 @@ def test_release_upload_refuses_public_storage_repository(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="must be a private GitHub repository"):
         upload_release_asset("owner", "public-repo", 1234, "token", media, content_type="image/png")
     assert calls == ["GET"]
+
+
+def test_generated_media_upload_enforces_project_storage_limit_before_upload(tmp_path, monkeypatch):
+    import pytest
+    from cloudflare.runner import MAX_PROJECT_MEDIA_BYTES, persist_generated_project_assets
+
+    executor = _executor_with_generated_assets(tmp_path)
+    project = executor.get_project()
+    generated = next(item for item in project["assets"] if item.get("generated"))
+    generated["size_bytes"] = MAX_PROJECT_MEDIA_BYTES + 1
+    executor._project = project
+    uploads = []
+    monkeypatch.setattr(
+        "cloudflare.runner.upload_release_asset",
+        lambda *args, **kwargs: uploads.append(args) or 1,
+    )
+    with pytest.raises(ValueError, match="limited to 200 MB"):
+        persist_generated_project_assets(executor, tmp_path, "owner", "repo", 1234, "token")
+    assert uploads == []
+    assert all("release_asset_id" not in item for item in executor.get_project()["assets"]
+               if item.get("generated"))
