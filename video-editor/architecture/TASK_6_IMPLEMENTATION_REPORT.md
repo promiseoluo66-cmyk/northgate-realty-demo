@@ -3,8 +3,8 @@
 **Repository:** `promiseoluo66-cmyk/northgate-realty-demo`  
 **Working branch:** `video-editor-lab`  
 **Status:** **IMPLEMENTED — AUTOMATED ACCEPTANCE TESTS PASS**  
-**Last implementation commit before this report:** `5d24e6fc6ee475e66353fb452a9a250a02fe7d87`  
-**Successful full CI run:** [#90 — 45876486322](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/45876486322)
+**Latest implementation verification:** [Run #104 — 45905829751](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/45905829751)  
+**Verified commit:** `f987af59e8d59cca4016d9c6724a4b3bc1602e6e`
 
 ## Delivered
 
@@ -44,11 +44,11 @@
 
 ## Verification
 
-Successful full CI run #90 tested commit `5d24e6fc6ee475e66353fb452a9a250a02fe7d87`.
+Successful full CI run #104 tested commit `f987af59e8d59cca4016d9c6724a4b3bc1602e6e`.
 
 | Check | Result |
 |---|---:|
-| Python editor, executor, registry, catalogue and MLT tests | **257 passed** |
+| Python editor, executor, registry, catalogue and MLT tests | **259 passed** |
 | Node Worker and Studio tests | **46 passed, 0 failed, 0 skipped** |
 | D1 migrations applied to in-memory SQLite | **Passed** |
 | Complete GitHub Actions workflow | **Passed** |
@@ -63,7 +63,7 @@ The suite includes an end-to-end render test using the installed MLT Python API 
 4. Renders the project through `render_project`.
 5. Decodes output pixels to verify blue before the hold, red during the hold at 1.25s and 2.4s, and blue after the hold.
 
-This test passed in CI run #90.
+This test passed in CI run #104. The separate `tests/test_freeze_frame_mlt_integration.py` test invokes the real MLT renderer and checks decoded RGB pixels before, during and after the generated hold.
 
 ### Persistence and failure tests
 
