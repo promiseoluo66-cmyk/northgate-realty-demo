@@ -13,7 +13,7 @@
 - Multi-file media import, project media bin, filename/type/folder/tag search, folder assignment and insertion at playhead.
 - Manual crop rectangle, flip controls and custom rotation pivot.
 - Keyframe graph interactions, copy/paste, remove/clear and motion presets.
-- 42 unique registered editing operations: the 34-tool Stable baseline plus eight Stage 1 additions.
+- 49 unique registered editing operations: the 34-tool Stable baseline, eight original Studio additions and seven Task 2–3 additions.
 
 ## Stage 1 task status
 
@@ -44,7 +44,7 @@ Optical-flow slow motion remains optional and gated. It must not introduce a pai
 
 ## Validation rules
 - The 118-entry catalogue is the product capability target, not 118 implemented tools.
-- The current Stage 1 registry must contain 42 unique operation names.
+- The original 42 registered operations remain the required full-audit set. The registry now contains 49 unique operations after seven Task 2–3 additions; all 49 must be included in the final audit.
 - Run Python, Node, Worker/UI and generated-media MLT tests on this public lab branch.
 - Do not merge into Stable or deploy a Worker as part of this lab setup.
 - Do not mark Stage 1 complete until all required acceptance gaps are resolved or explicitly deferred with user approval.

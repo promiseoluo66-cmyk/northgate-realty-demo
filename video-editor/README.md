@@ -12,7 +12,7 @@ This folder contains the independently implemented video editor prototype and it
 ## Stage 1 scope
 Mobile Studio and editing foundation: multi-track timeline, media bin, clip inspector, crop/framing, keyframes, track management, project history and editing operations.
 
-The implementation currently has 42 unique registered operations. The separate product catalogue contains 118 capability entries; these numbers are not interchangeable.
+The implementation currently has 49 unique registered operations (the original 42 plus seven Stage 1 Task 2–3 operations). The separate product catalogue contains 118 capability entries; these numbers are not interchangeable.
 
 ## Run tests locally
 From the `video-editor` folder:
