@@ -213,10 +213,14 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
                 f"MLT_warp_pitch=1:{compensated_hz:.1f}Hz "
                 f"MLT_warp_pitch=0:{uncompensated_hz:.1f}Hz"
             )
-            close_to_source = lambda value: 390.0 <= value <= 490.0
-            self.assertTrue(
-                close_to_source(compensated_hz) or close_to_source(uncompensated_hz),
-                "Neither MLT timewarp mode preserved the 440 Hz tone: "
+            self.assertGreater(
+                compensated_hz, 390.0,
+                "MLT pitch compensation did not preserve the 440 Hz tone: "
+                f"pitch_on={compensated_hz:.1f}Hz, pitch_off={uncompensated_hz:.1f}Hz.",
+            )
+            self.assertLess(
+                compensated_hz, 490.0,
+                "MLT pitch compensation did not preserve the 440 Hz tone: "
                 f"pitch_on={compensated_hz:.1f}Hz, pitch_off={uncompensated_hz:.1f}Hz.",
             )
 
