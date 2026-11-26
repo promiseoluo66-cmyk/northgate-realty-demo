@@ -8,6 +8,7 @@ from tool_registry import (
     ToolValidationError,
     _validate_value,
     get_tool_catalog,
+    tool_requires_confirmation,
     validate_tool_call,
 )
 
@@ -92,6 +93,21 @@ class OperationInventoryAuditTests(unittest.TestCase):
             "duration_us": 1,
         })
         self.assertEqual(accepted["ripple_track_ids"], ["track-safe", "track-secondary"])
+
+    def test_only_the_four_destructive_or_export_operations_require_confirmation(self):
+        expected = {
+            "timeline.remove_track",
+            "timeline.delete_clip",
+            "timeline.ripple_delete_clip",
+            "render.export",
+        }
+        actual = {
+            item["name"] for item in get_tool_catalog()
+            if item["requires_confirmation"]
+        }
+        self.assertEqual(actual, expected)
+        for name in expected:
+            self.assertTrue(tool_requires_confirmation(name))
 
 
 if __name__ == "__main__":
