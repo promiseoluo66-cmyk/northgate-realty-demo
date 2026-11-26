@@ -3,7 +3,7 @@
 import inspect
 import unittest
 
-from project_tool_executor import ProjectToolExecutor
+from project_tool_executor import ProjectRevisionConflict, ProjectToolExecutionError, ProjectToolExecutor
 from tool_registry import (
     ToolValidationError,
     _validate_value,
@@ -93,6 +93,99 @@ class OperationInventoryAuditTests(unittest.TestCase):
             "duration_us": 1,
         })
         self.assertEqual(accepted["ripple_track_ids"], ["track-safe", "track-secondary"])
+
+    def test_every_registered_operation_is_blocked_by_stale_revision_without_mutation(self):
+        project = {
+            "schema_version": 1,
+            "id": "operation-audit-project",
+            "name": "Operation audit",
+            "revision": 1,
+            "timeline_timebase": "microseconds",
+            "video_profile": {
+                "width": 320, "height": 240,
+                "frame_rate": {"numerator": 25, "denominator": 1},
+            },
+            "assets": [],
+            "tracks": [{
+                "id": "track-main", "type": "video", "name": "Main",
+                "order": 0, "locked": False, "clips": [],
+            }],
+            "transitions": [],
+        }
+        for item in get_tool_catalog():
+            with self.subTest(operation=item["name"]):
+                executor = ProjectToolExecutor(project)
+                before = executor.get_project()
+                with self.assertRaises(ProjectRevisionConflict):
+                    executor.execute(
+                        item["name"], {}, expected_revision=0, confirmed=True
+                    )
+                self.assertEqual(executor.get_project(), before)
+                self.assertEqual(executor.revision, 1)
+
+    def test_failed_multi_operation_batch_rolls_back_earlier_valid_mutation(self):
+        project = {
+            "schema_version": 1,
+            "id": "operation-atomicity-audit",
+            "name": "Atomicity audit",
+            "revision": 1,
+            "timeline_timebase": "microseconds",
+            "video_profile": {
+                "width": 320, "height": 240,
+                "frame_rate": {"numerator": 25, "denominator": 1},
+            },
+            "assets": [],
+            "tracks": [{
+                "id": "track-main", "type": "video", "name": "Main",
+                "order": 0, "locked": False, "clips": [],
+            }],
+            "transitions": [],
+        }
+        executor = ProjectToolExecutor(project)
+        before = executor.get_project()
+        with self.assertRaises(ProjectToolExecutionError):
+            executor.execute_batch([
+                {"name": "timeline.add_track", "arguments": {
+                    "track_type": "audio", "name": "Temporary audio"
+                }},
+                {"name": "timeline.move_clip", "arguments": {
+                    "clip_id": "missing-clip", "start_us": 1000000
+                }},
+            ], expected_revision=1)
+        self.assertEqual(executor.get_project(), before)
+        self.assertEqual(executor.revision, 1)
+
+    def test_undo_redo_restores_project_state_as_separate_revisioned_transactions(self):
+        project = {
+            "schema_version": 1,
+            "id": "operation-history-audit",
+            "name": "History audit",
+            "revision": 1,
+            "timeline_timebase": "microseconds",
+            "video_profile": {
+                "width": 320, "height": 240,
+                "frame_rate": {"numerator": 25, "denominator": 1},
+            },
+            "assets": [],
+            "tracks": [{
+                "id": "track-main", "type": "video", "name": "Main",
+                "order": 0, "locked": False, "clips": [],
+            }],
+            "transitions": [],
+        }
+        executor = ProjectToolExecutor(project)
+        before = executor.get_project()
+        executor.execute(
+            "timeline.add_track",
+            {"track_type": "audio", "name": "Audio"},
+            expected_revision=1,
+        )
+        self.assertEqual(len(executor.get_project()["tracks"]), 2)
+        executor.execute("history.undo", {}, expected_revision=2)
+        self.assertEqual(executor.get_project()["tracks"], before["tracks"])
+        executor.execute("history.redo", {}, expected_revision=3)
+        self.assertEqual(len(executor.get_project()["tracks"]), 2)
+        self.assertEqual(executor.revision, 4)
 
     def test_only_the_four_destructive_or_export_operations_require_confirmation(self):
         expected = {
