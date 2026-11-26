@@ -708,6 +708,12 @@ def _validate_identifier_values(value: Any, path: str = "arguments") -> None:
                     raise ToolValidationError(
                         f"{item_path} must be a valid project identifier."
                     )
+            if key.endswith("_ids") and isinstance(item, list):
+                for index, identifier in enumerate(item):
+                    if isinstance(identifier, str) and not _IDENTIFIER_RE.fullmatch(identifier):
+                        raise ToolValidationError(
+                            f"{item_path}[{index}] must be a valid project identifier."
+                        )
             _validate_identifier_values(item, item_path)
     elif isinstance(value, list):
         for index, item in enumerate(value):
