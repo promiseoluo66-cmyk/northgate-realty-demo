@@ -562,6 +562,13 @@ test("private media asset URL returns a signed URL only for a stored project ass
     }
   };
   globalThis.fetch = async (url, options) => {
+    if (String(url) === "https://api.github.com/repos/owner/private-media") {
+      assert.equal(options.headers.authorization, "Bearer github-private-token");
+      const response = new Response(JSON.stringify({ private: true }), {
+        status: 200, headers: { "Content-Type": "application/json" }
+      });
+      return response;
+    }
     assert.equal(String(url), "https://api.github.com/repos/owner/private-media/releases/assets/4567");
     assert.equal(options.headers.authorization, "Bearer github-private-token");
     assert.equal(options.headers.accept, "application/octet-stream");
@@ -582,6 +589,53 @@ test("private media asset URL returns a signed URL only for a stored project ass
     const payload = await response.json();
     assert.equal(payload.source_url, "https://signed-private-assets.example/proxy-123.mp4");
     assert.equal(payload.expires_soon, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("private media asset URL refuses a public storage repository", async () => {
+  const originalFetch = globalThis.fetch;
+  const jobId = "f".repeat(32);
+  const project = {
+    assets: [{ id: "proxy-public-check", media_type: "video", release_asset_id: 789 }]
+  };
+  let assetFetchCalled = false;
+  const env = {
+    APP_API_TOKEN: "test-app-token",
+    GITHUB_TOKEN: "github-private-token",
+    GITHUB_OWNER: "owner",
+    GITHUB_REPO: "media-repository",
+    DB: {
+      prepare() {
+        return { bind() {
+          return { first: async () => ({
+            input_asset_id: 123,
+            project_json: JSON.stringify(project)
+          }) };
+        }};
+      }
+    }
+  };
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.github.com/repos/owner/media-repository") {
+      return new Response(JSON.stringify({ private: false }), {
+        status: 200, headers: { "Content-Type": "application/json" }
+      });
+    }
+    assetFetchCalled = true;
+    throw new Error("A public storage repository must not be used for media delivery.");
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://studio.test/api/v1/jobs/" + jobId + "/assets/proxy-public-check/url", {
+        headers: { Authorization: "Bearer test-app-token" }
+      }),
+      env
+    );
+    assert.equal(response.status, 503);
+    assert.equal(assetFetchCalled, false);
   } finally {
     globalThis.fetch = originalFetch;
   }

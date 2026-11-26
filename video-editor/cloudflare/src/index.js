@@ -802,6 +802,24 @@ async function getAssetUrl(request, env, id, assetId) {
   if (!Number.isSafeInteger(Number(releaseAssetId)) || Number(releaseAssetId) < 1) {
     return json({ error: "This media asset has not been saved to private storage yet." }, 409);
   }
+  const repositoryEndpoint = "https://api.github.com/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO;
+  const repositoryResponse = await fetch(repositoryEndpoint, {
+    headers: {
+      authorization: "Bearer " + env.GITHUB_TOKEN,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "independent-video-editor"
+    }
+  });
+  if (!repositoryResponse.ok) {
+    return json({ error: "Could not verify private media repository visibility." }, 503);
+  }
+  let repository;
+  try { repository = await repositoryResponse.json(); }
+  catch (_) { return json({ error: "Private media repository metadata was invalid." }, 503); }
+  if (repository.private !== true) {
+    return json({ error: "Private media storage must be a private GitHub repository." }, 503);
+  }
   const endpoint = "https://api.github.com/repos/" + env.GITHUB_OWNER + "/" + env.GITHUB_REPO +
     "/releases/assets/" + Number(releaseAssetId);
   const response = await fetch(endpoint, {
