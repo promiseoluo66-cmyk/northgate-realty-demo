@@ -131,16 +131,15 @@ Automated tests cover ripple insert/overwrite, locked-track and incompatible-sou
 - This is offline acceptance evidence. It does not claim every possible parameter combination has been tested or prove a live Worker deployment.
 
 
-## Remaining Stage 1 acceptance gaps
-1. Proxy media and low-resolution preview (Task 9).
-2. Complete edge-case and editor-integration sign-off for all 52 registered operations (Task 10).
-3. Successful end-to-end hosted tests against the actual Worker/renderer configuration; deployment remains gated on explicit user authorization.
+## Remaining Stage 1 production acceptance gate
+
+- Successful end-to-end hosted tests against the actual Worker/renderer configuration, including a real private Release upload and Worker checkpoint. Deployment remains gated on explicit user authorization. Tasks 1–10 are complete at the offline implementation and CI level.
 
 Optical-flow slow motion remains optional and gated. It must not introduce a paid dependency or hidden fallback.
 
 ## Validation rules
 - The 118-entry catalogue is the product capability target, not 118 implemented tools.
-- The original 42 registered operations remain part of the expanded full-audit set. The registry now contains 52 unique operations after the Task 2–3 additions and later media/audio operations; all 52 must be included in the final audit.
+- The original 42 registered operations remain part of the expanded full-audit set. The current 52-operation registry has passed the offline schema, revision, transaction, confirmation and feature-test audit.
 - Run Python, Node, Worker/UI and generated-media MLT tests on this public lab branch.
 - Do not merge into Stable or deploy a Worker as part of this lab setup.
 - Stage 1 offline implementation is complete. Do not claim production acceptance until the hosted Worker-to-runner test is completed after explicit deployment authorization.
