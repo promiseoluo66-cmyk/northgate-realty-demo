@@ -760,6 +760,26 @@
       const used = flattenClips(currentProject).filter((item) => item.clip.media_id === asset.id).length;
       const card = element("article", "media-bin-item");
       const title = element("strong", "", asset.file_name || asset.id || "Media asset");
+      const preview = element("div", "media-preview");
+      if (asset.thumbnail_data_url) {
+        const image = element("img", "media-thumbnail");
+        image.src = asset.thumbnail_data_url;
+        image.alt = "Preview of " + (asset.file_name || "media asset");
+        image.loading = "lazy";
+        preview.append(image);
+      } else {
+        preview.append(element("span", "media-thumbnail-placeholder", String(asset.media_type || "MEDIA").toUpperCase() + " · preview unavailable"));
+      }
+      if (asset.waveform && Array.isArray(asset.waveform.samples)) {
+        const waveform = element("div", "media-waveform");
+        waveform.setAttribute("aria-label", "Audio waveform preview");
+        asset.waveform.samples.forEach((peak) => {
+          const bar = element("span", "media-waveform-bar");
+          bar.style.height = Math.max(3, Math.round(Number(peak) * 28)) + "px";
+          waveform.append(bar);
+        });
+        preview.append(waveform);
+      }
       const tags = Array.isArray(asset.tags) ? asset.tags : [];
       const meta = element("p", "hint", [
         String(asset.media_type || "media").toUpperCase(),
@@ -838,6 +858,29 @@
           if (status) { status.textContent = error.message; status.className = "status error"; }
         }
       });
+      const overwrite = element("button", "btn secondary", "Replace & ripple");
+      overwrite.type = "button";
+      overwrite.disabled = !target || target.track.locked === true || target.clip.kind !== asset.media_type;
+      overwrite.title = overwrite.disabled
+        ? "Select an unlocked clip and a same-type media asset."
+        : "Replace the selected clip and shift later clips by the duration difference.";
+      overwrite.addEventListener("click", async () => {
+        try {
+          const selected = findSelectedClip();
+          if (!selected) throw new Error("Select a clip on the timeline first.");
+          if (selected.track.locked || selected.clip.kind !== asset.media_type) {
+            throw new Error("Choose an unlocked clip and same-type replacement media.");
+          }
+          const args = {clip_id:selected.clip.id,media_id:asset.id};
+          if (Number.isSafeInteger(Number(asset.duration_us)) && Number(asset.duration_us) > 0) {
+            args.duration_us = Number(asset.duration_us);
+          }
+          await submitOperations([{name:"timeline.ripple_overwrite_clip",arguments:args}]);
+        } catch (error) {
+          const status = byId("render-status");
+          if (status) { status.textContent = error.message; status.className = "status error"; }
+        }
+      });
       const insert = element("button", "btn secondary", "Insert & ripple");
       insert.type = "button";
       const compatibleTypes = asset.media_type === "audio"
@@ -873,6 +916,7 @@
           }
           const args = {
             track_id:targetTrack.id,
+            ripple_track_ids:orderedTracks.filter((track) => track.locked !== true).map((track) => track.id),
             kind:asset.media_type,
             media_id:asset.id,
             start_us:Math.max(0, Math.round(playheadUs)),
@@ -887,6 +931,49 @@
           if (status) { status.textContent = error.message; status.className = "status error"; }
         }
       });
+      const relinkInput = document.createElement("input");
+      relinkInput.type = "file";
+      relinkInput.hidden = true;
+      relinkInput.accept = asset.media_type === "video" ? "video/*" :
+        asset.media_type === "audio" ? "audio/*" : "image/*";
+      const relink = element("button", "btn secondary", "Relink missing file");
+      relink.type = "button";
+      relink.addEventListener("click", () => relinkInput.click());
+      relinkInput.addEventListener("change", async () => {
+        const file = relinkInput.files && relinkInput.files[0];
+        if (!file) return;
+        try {
+          const extension = (file.name.split(".").pop() || "").toLowerCase();
+          const supported = asset.media_type === "video"
+            ? ["mp4","mov","m4v","webm","mkv"]
+            : asset.media_type === "audio"
+              ? ["mp3","wav","m4a","aac","ogg","flac"]
+              : ["jpg","jpeg","png","webp","gif"];
+          if (!supported.includes(extension)) throw new Error("Choose a supported " + asset.media_type + " file.");
+          if (file.size < 1 || file.size > 50 * 1024 * 1024) throw new Error("The replacement must be 1 byte to 50 MB.");
+          const projectResponse = await window.api("/api/v1/jobs/" + window.activeJobId + "/project");
+          const headers = {
+            "Content-Type":file.type || "application/octet-stream",
+            "X-File-Name":encodeURIComponent(file.name),
+            "X-File-Size":String(file.size),
+            "X-Media-Type":asset.media_type,
+            "X-Expected-Revision":String(projectResponse.revision)
+          };
+          if (asset.media_type !== "image") {
+            const duration = await window.readBrowserMediaDuration(file, asset.media_type);
+            headers["X-Media-Duration-Us"] = String(duration);
+          }
+          await window.api("/api/v1/jobs/" + window.activeJobId + "/assets/" + encodeURIComponent(asset.id) + "/relink", {
+            method:"PUT", headers, body:file
+          });
+          await window.loadProject(false);
+          const status = byId("render-status");
+          if (status) { status.textContent = "Media file relinked. Existing clip references were preserved."; status.className = "status success"; }
+        } catch (error) {
+          const status = byId("render-status");
+          if (status) { status.textContent = error.message; status.className = "status error"; }
+        } finally { relinkInput.value = ""; }
+      });
       const place = element("button", "btn secondary", "Place at playhead");
       place.type = "button";
       place.addEventListener("click", async () => {
@@ -900,7 +987,7 @@
           if (status) { status.textContent = error.message; status.className = "status error"; }
         }
       });
-      card.append(title, meta, editor, replace, insert, place);
+      card.append(title, preview, meta, editor, replace, overwrite, insert, relinkInput, relink, place);
       host.append(card);
     });
   }
