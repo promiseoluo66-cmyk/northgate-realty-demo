@@ -94,6 +94,25 @@ test("Keyframe graph supports editing, clipboard and motion presets", () => {
   assert.match(studioScript, /speed_ramp/);
 });
 
+test("Task 2 media previews, relinking and subtitle import are wired", () => {
+  assert.match(studioScript, /thumbnail_data_url/);
+  assert.match(studioScript, /waveform.samples/);
+  assert.match(studioScript, /\/relink/);
+  assert.match(html, /captions.import_subtitles/);
+  assert.match(html, /SRT or VTT/);
+});
+
+test("Task 3 linked groups, cross-track ripple, markers and snapping are wired", () => {
+  assert.match(studioScript, /timeline\.ripple_overwrite_clip/);
+  assert.match(studioScript, /ripple_track_ids/);
+  assert.match(studioScript, /timeline\.group_clips/);
+  assert.match(studioScript, /timeline\.ungroup_clips/);
+  assert.match(studioScript, /timeline\.move_marker/);
+  assert.match(studioScript, /timeline\.add_marker/);
+  assert.match(studioScript, /timeline\.remove_marker/);
+  assert.match(studioScript, /snapStart/);
+});
+
 test("Track reorder is wired to a registered editor operation", () => {
   assert.match(html, /id="studio-reorder-track"/);
   assert.match(studioScript, /track\.reorder/);

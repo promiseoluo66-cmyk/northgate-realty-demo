@@ -90,6 +90,19 @@ test("AI destructive-operation confirmation endpoint rejects missing app token",
   assert.equal(response.status, 401);
 });
 
+test("media preview metadata and relink routes require the app token", async () => {
+  const id = "c".repeat(32);
+  const preview = await worker.fetch(new Request("https://studio.test/api/v1/jobs/" + id + "/assets/media-1/preview", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({expected_revision:1,thumbnail_data_url:"data:image/jpeg;base64,QUJD"})
+  }), {});
+  assert.equal(preview.status, 401);
+  const relink = await worker.fetch(new Request("https://studio.test/api/v1/jobs/" + id + "/assets/media-1/relink", {
+    method: "PUT", headers: {"Content-Type":"application/octet-stream"}, body: "file"
+  }), {});
+  assert.equal(relink.status, 401);
+});
+
 test("source preview URL requires the app token", async () => {
   const response = await worker.fetch(
     new Request("https://studio.test/api/v1/jobs/" + "b".repeat(32) + "/source-url"), {}

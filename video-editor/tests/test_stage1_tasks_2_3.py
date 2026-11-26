@@ -113,6 +113,24 @@ class Stage1Tasks23Tests(unittest.TestCase):
         self.assertEqual(clips["o1"]["group_id"], group_id)
         self.assertEqual(clips["a1c"]["group_id"], group_id)
 
+    def test_splitting_a_grouped_clip_adds_the_new_segment_to_its_group(self):
+        self.run_tool("timeline.group_clips", {"clip_ids": ["c1", "o1"]})
+        split = self.run_tool("timeline.split_clip", {"clip_id": "c1", "at_us": 1000000})
+        right_id = split["results"][0]["result"]["right_clip_id"]
+        project = self.executor.get_project()
+        group = project["clip_groups"][0]
+        self.assertIn(right_id, group["clip_ids"])
+        clips = {clip["id"]: clip for track in project["tracks"] for clip in track["clips"]}
+        self.assertEqual(clips[right_id]["group_id"], group["id"])
+
+    def test_deleting_a_grouped_clip_cleans_up_single_member_group(self):
+        self.run_tool("timeline.group_clips", {"clip_ids": ["c1", "o1"]})
+        self.executor.execute("timeline.delete_clip", {"clip_id": "c1"}, confirmed=True)
+        project = self.executor.get_project()
+        remaining = next(clip for track in project["tracks"] for clip in track["clips"] if clip["id"] == "o1")
+        self.assertNotIn("group_id", remaining)
+        self.assertEqual(project.get("clip_groups", []), [])
+
     def test_markers_can_be_added_moved_and_removed(self):
         added = self.run_tool("timeline.add_marker", {"time_us": 1250000, "label": "Beat"})
         marker_id = added["results"][0]["result"]["id"]

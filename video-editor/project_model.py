@@ -410,13 +410,16 @@ def validate_project(document: Any) -> dict[str, Any]:
             raise ProjectValidationError(f"{path}.id is duplicated.")
         group_ids.add(group_id)
         _string(group.get("name", "Linked group"), f"{path}.name", max_length=80)
-        member_ids = _array(group.get("clip_ids"), f"{path}.clip_ids")
-        if not 2 <= len(member_ids) <= 40:
+        raw_member_ids = _array(group.get("clip_ids"), f"{path}.clip_ids")
+        if not 2 <= len(raw_member_ids) <= 40:
             raise ProjectValidationError(f"{path}.clip_ids must contain 2 to 40 clips.")
+        member_ids = [
+            _identifier(raw_clip_id, f"{path}.clip_ids[{member_index}]")
+            for member_index, raw_clip_id in enumerate(raw_member_ids)
+        ]
         if len(set(member_ids)) != len(member_ids):
             raise ProjectValidationError(f"{path}.clip_ids must not contain duplicates.")
-        for member_index, raw_clip_id in enumerate(member_ids):
-            member_id = _identifier(raw_clip_id, f"{path}.clip_ids[{member_index}]")
+        for member_index, member_id in enumerate(member_ids):
             if member_id not in clips:
                 raise ProjectValidationError(f"{path}.clip_ids references a missing clip.")
             if member_id in grouped_clips:
@@ -427,6 +430,10 @@ def validate_project(document: Any) -> dict[str, Any]:
     for clip_id, clip in clips.items():
         if clip.get("group_id") is not None and clip["group_id"] not in group_ids:
             raise ProjectValidationError(f"Clip {clip_id!r} references a missing clip group.")
+        if clip.get("group_id") is not None and clip_id not in next(
+            group["clip_ids"] for group in groups if group["id"] == clip["group_id"]
+        ):
+            raise ProjectValidationError(f"Clip {clip_id!r} is not listed in its linked group.")
 
     markers = _array(project.get("markers", []), "project.markers")
     marker_ids: set[str] = set()
