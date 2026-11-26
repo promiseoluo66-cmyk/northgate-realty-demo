@@ -68,9 +68,18 @@ def download_project_media_assets(
     job: dict[str, Any], project: dict[str, Any], output_dir: Path,
     owner: str, repo: str, token: str,
 ) -> None:
-    """Download private media-bin assets into the renderer's guarded asset directory."""
+    """Download current and history-referenced private assets for render and redo."""
     root = output_dir.resolve()
-    for asset in project.get("assets", []):
+    documents = [project]
+    history = job.get("history_state") or {}
+    for key in ("undo", "redo"):
+        documents.extend(item for item in history.get(key, []) if isinstance(item, dict))
+    assets_by_id = {}
+    for document in documents:
+        for asset in document.get("assets", []):
+            if asset.get("release_asset_id") is not None:
+                assets_by_id[asset.get("id")] = asset
+    for asset in assets_by_id.values():
         release_asset_id = asset.get("release_asset_id")
         if release_asset_id is None:
             continue
@@ -95,7 +104,8 @@ def download_project_media_assets(
 
 
 def upload_release_asset(owner: str, repo: str, release_id: int, token: str,
-                         path: Path, asset_name: str | None = None) -> int:
+                         path: Path, asset_name: str | None = None,
+                         content_type: str = "video/mp4") -> int:
     size = path.stat().st_size
     if size <= 0 or size > MAX_RENDER_OUTPUT:
         raise ValueError("Edited video is empty or larger than the 300 MB output limit.")
@@ -104,11 +114,77 @@ def upload_release_asset(owner: str, repo: str, release_id: int, token: str,
         f"https://uploads.github.com/repos/{owner}/{repo}/releases/{release_id}/assets?name={name}",
         data=path.read_bytes(), method="POST",
         headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
-                 "Content-Type":"video/mp4","Content-Length":str(size),
+                 "Content-Type":content_type,"Content-Length":str(size),
                  "X-GitHub-Api-Version":"2022-11-28","User-Agent":"independent-video-editor"})
     with urllib.request.urlopen(request, timeout=600) as response:
         result = json.loads(response.read().decode("utf-8"))
     return int(result["id"])
+
+def delete_release_asset(owner: str, repo: str, asset_id: int, token: str) -> None:
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{owner}/{repo}/releases/assets/{asset_id}",
+        method="DELETE",
+        headers={"Authorization": "Bearer " + token,
+                 "Accept": "application/vnd.github+json",
+                 "X-GitHub-Api-Version": "2022-11-28",
+                 "User-Agent": "independent-video-editor"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60):
+            pass
+    except Exception:
+        # Orphan cleanup is best-effort; never hide the original transaction error.
+        pass
+
+
+def persist_generated_project_assets(
+    executor: ProjectToolExecutor, output_dir: Path, owner: str, repo: str,
+    release_id: int, token: str,
+) -> list[int]:
+    """Upload generated media privately, then attach IDs to the current project/history."""
+    root = output_dir.resolve()
+    uploaded: list[int] = []
+    pending = [
+        item for item in executor.get_project().get("assets", [])
+        if item.get("generated") is True and item.get("release_asset_id") is None
+    ]
+    try:
+        for asset in pending:
+            storage_key = asset.get("storage_key")
+            if not isinstance(storage_key, str) or not storage_key or Path(storage_key).name != storage_key:
+                raise ValueError("Generated media contains an unsafe storage key.")
+            path = (root / storage_key).resolve()
+            try:
+                path.relative_to(root)
+            except ValueError as exc:
+                raise ValueError("Generated media path escapes the private asset directory.") from exc
+            if not path.is_file():
+                raise ValueError("Generated media file is missing before private upload.")
+            size = path.stat().st_size
+            if size <= 0 or size > MAX_INPUT_VIDEO:
+                raise ValueError("Each generated project asset must be between 1 byte and 50 MB.")
+            extension = path.suffix.lower()
+            content_types = {
+                ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+            }
+            content_type = content_types.get(extension)
+            if content_type is None:
+                raise ValueError("Generated media format is not supported for private storage.")
+            remote_id = upload_release_asset(
+                owner, repo, release_id, token, path,
+                asset_name="project-" + str(asset["id"]) + "-" + path.name,
+                content_type=content_type,
+            )
+            uploaded.append(remote_id)
+            executor.set_persisted_asset_id(str(asset["id"]), remote_id)
+    except Exception:
+        for remote_id in uploaded:
+            delete_release_asset(owner, repo, remote_id, token)
+        raise
+    return uploaded
+
 
 def callback(worker_url: str, secret: str, job_id: str, status: str, message: str,
              output_asset_id: int | None = None, **extra: Any) -> None:
@@ -378,7 +454,13 @@ def main()->int:
         if not result.get("ok"):
             raise RuntimeError(result.get("error") or "The AI edit could not be applied safely.")
         execution=result["execution"]
-        project_document=execution["project"]
+        # Generated audio/still assets must reach private Release storage before
+        # their project references are checkpointed. The executor attaches the
+        # returned IDs to current state and history snapshots for later undo/redo.
+        persist_generated_project_assets(
+            executor, output_dir, owner, repo, int(job["release_id"]), github_token
+        )
+        project_document=executor.get_project()
 
         # Durable autosave boundary: persist the fully validated edit transaction
         # before rendering. If export or upload fails, this revision remains recoverable.
