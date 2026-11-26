@@ -13,15 +13,24 @@ from mlt_engine.renderer import render_project
 from project_tool_executor import ProjectToolExecutor
 
 
-def _make_video_with_tone(path: Path) -> None:
+def _make_test_media(video_path: Path, audio_path: Path) -> None:
     subprocess.run(
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "color=c=blue:s=160x144:r=10:d=4",
+            "-f", "lavfi", "-i", "color=c=blue:s=160x144:r=10:d=2",
+            "-an", "-c:v", "libx264", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p", str(video_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=4",
-            "-map", "0:v:0", "-map", "1:a:0", "-t", "4",
-            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "128k", "-shortest", str(path),
+            "-c:a", "pcm_s16le", str(audio_path),
         ],
         check=True,
         capture_output=True,
@@ -30,7 +39,49 @@ def _make_video_with_tone(path: Path) -> None:
     )
 
 
-def _tone_project(source: Path) -> dict:
+def _tone_project(video_path: Path, audio_path: Path) -> dict:
+    assets = [
+        {
+            "id": "base-video",
+            "media_type": "video",
+            "file_name": video_path.name,
+            "storage_key": video_path.name,
+            "size_bytes": video_path.stat().st_size,
+            "duration_us": 2_000_000,
+        },
+        {
+            "id": "tone-audio",
+            "media_type": "audio",
+            "file_name": audio_path.name,
+            "storage_key": audio_path.name,
+            "size_bytes": audio_path.stat().st_size,
+            "duration_us": 4_000_000,
+        },
+    ]
+    base_clip = {
+        "id": "base-clip",
+        "kind": "video",
+        "media_id": "base-video",
+        "start_us": 0,
+        "duration_us": 2_000_000,
+        "source_in_us": 0,
+        "source_out_us": 2_000_000,
+        "playback_rate": 1.0,
+        "effects": [],
+        "keyframes": [],
+    }
+    tone_clip = {
+        "id": "speed-clip",
+        "kind": "audio",
+        "media_id": "tone-audio",
+        "start_us": 0,
+        "duration_us": 2_000_000,
+        "source_in_us": 0,
+        "source_out_us": 4_000_000,
+        "playback_rate": 2.0,
+        "effects": [],
+        "keyframes": [],
+    }
     return {
         "schema_version": 1,
         "id": "pitch-speed-integration",
@@ -42,33 +93,25 @@ def _tone_project(source: Path) -> dict:
             "height": 144,
             "frame_rate": {"numerator": 10, "denominator": 1},
         },
-        "assets": [{
-            "id": "tone-video",
-            "media_type": "video",
-            "file_name": source.name,
-            "storage_key": source.name,
-            "size_bytes": source.stat().st_size,
-            "duration_us": 4_000_000,
-        }],
-        "tracks": [{
-            "id": "main-video",
-            "type": "video",
-            "name": "Video with 440 Hz tone",
-            "order": 0,
-            "locked": False,
-            "clips": [{
-                "id": "speed-clip",
-                "kind": "video",
-                "media_id": "tone-video",
-                "start_us": 0,
-                "duration_us": 2_000_000,
-                "source_in_us": 0,
-                "source_out_us": 4_000_000,
-                "playback_rate": 2.0,
-                "effects": [],
-                "keyframes": [],
-            }],
-        }],
+        "assets": assets,
+        "tracks": [
+            {
+                "id": "main-video",
+                "type": "video",
+                "name": "Video",
+                "order": 0,
+                "locked": False,
+                "clips": [base_clip],
+            },
+            {
+                "id": "main-audio",
+                "type": "audio",
+                "name": "440 Hz tone (2x)",
+                "order": 1,
+                "locked": False,
+                "clips": [tone_clip],
+            },
+        ],
         "transitions": [],
     }
 
@@ -114,9 +157,10 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="pitch-speed-mlt-test-") as directory:
             root = Path(directory)
-            source = root / "tone-source.mp4"
+            video = root / "blue-video.mp4"
+            audio = root / "tone-source.wav"
             output = root / "double-speed-render.mp4"
-            _make_video_with_tone(source)
+            _make_test_media(video, audio)
 
             # MLT's timewarp producer delegates pitch correction to rbpitch.
             import mlt7 as mlt
@@ -127,13 +171,16 @@ class PitchPreservingSpeedIntegrationTests(unittest.TestCase):
                 "The installed MLT runtime does not provide its required pitch filter.",
             )
 
-            executor = ProjectToolExecutor(_tone_project(source), asset_root=root)
+            executor = ProjectToolExecutor(
+                _tone_project(video, audio),
+                asset_root=root,
+            )
             executor.execute("clip.set_speed", {
                 "clip_id": "speed-clip",
                 "playback_rate": 2.0,
             })
             project = executor.get_project()
-            self.assertEqual(project["tracks"][0]["clips"][0]["playback_rate"], 2.0)
+            self.assertEqual(project["tracks"][1]["clips"][0]["playback_rate"], 2.0)
 
             result = render_project(project, root, output)
             self.assertEqual(result["backend"], "MLT Python API")
