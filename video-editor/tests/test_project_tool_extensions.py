@@ -1697,6 +1697,7 @@ class ExpandedTextStyleTests(unittest.TestCase):
             "shadow_x": 4,
             "shadow_y": 5,
             "shadow_opacity": 0.7,
+            "shadow_blur": 1.5,
             "letter_spacing_px": 3.5,
             "line_spacing_px": 12,
         }
@@ -1732,8 +1733,37 @@ class ExpandedTextStyleTests(unittest.TestCase):
                 "clip_id": "style-title-clip",
                 "text_style": {"shadow_opacity": 2},
             })
+        with self.assertRaises(ToolValidationError):
+            validate_tool_call("text.update_clip", {
+                "clip_id": "style-title-clip",
+                "text_style": {"shadow_blur": 11},
+            })
         invalid = self.executor.get_project()
         invalid["tracks"][-1]["clips"][0]["text"]["bgopacity"] = 1.1
         from project_model import validate_project
         with self.assertRaises(ProjectValidationError):
             validate_project(invalid)
+        invalid["tracks"][-1]["clips"][0]["text"]["bgopacity"] = 0.45
+        invalid["tracks"][-1]["clips"][0]["text"]["shadow_blur"] = 11
+        with self.assertRaises(ProjectValidationError):
+            validate_project(invalid)
+
+    def test_advanced_text_styles_route_through_ass_renderer(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from mlt_engine.renderer import _make_text_overlay_image
+
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "advanced.png"
+            with patch(
+                "mlt_engine.renderer._make_ass_text_overlay_image",
+                return_value=output,
+            ) as advanced_renderer:
+                result = _make_text_overlay_image(
+                    {"content": "A title", "weight": 700},
+                    320, 240, output, Path(directory),
+                )
+
+        self.assertEqual(result, output)
+        advanced_renderer.assert_called_once()
