@@ -10,6 +10,7 @@ from copy import deepcopy
 import json
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -43,6 +44,53 @@ class ToolConfirmationRequired(ProjectToolExecutionError):
 def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:12]}"
 
+
+def _transcript_terms(value: str, *, case_sensitive: bool = False) -> list[str]:
+    normalized = unicodedata.normalize("NFKC", value)
+    if not case_sensitive:
+        normalized = normalized.casefold()
+    return re.findall(r"[^\W_]+(?:['’][^\W_]+)*", normalized, flags=re.UNICODE)
+
+
+def _map_source_range_to_timeline(
+    project: dict[str, Any], media_id: str, start_us: int, end_us: int
+) -> list[dict[str, Any]]:
+    locations: list[dict[str, Any]] = []
+    for track in project["tracks"]:
+        for clip in track["clips"]:
+            if clip.get("media_id") != media_id or clip.get("kind") not in {"video", "audio"}:
+                continue
+            source_in = int(clip.get("source_in_us", 0))
+            rate = float(clip.get("playback_rate", 1.0))
+            source_out = int(clip.get("source_out_us", source_in + round(
+                int(clip["duration_us"]) * rate
+            )))
+            overlap_start = max(start_us, source_in)
+            overlap_end = min(end_us, source_out)
+            if overlap_end <= overlap_start:
+                continue
+            common = {
+                "clip_id": clip["id"],
+                "track_id": track["id"],
+                "partial_source_match": overlap_start != start_us or overlap_end != end_us,
+            }
+            if any(frame.get("property") == "playback_rate" for frame in clip.get("keyframes", [])):
+                locations.append({**common, "mapping_supported": False, "reason": "animated_speed_curve"})
+                continue
+            clip_start = int(clip["start_us"])
+            clip_end = clip_start + int(clip["duration_us"])
+            timeline_start = clip_start + round((overlap_start - source_in) / rate)
+            timeline_end = clip_start + round((overlap_end - source_in) / rate)
+            timeline_start = min(max(timeline_start, clip_start), clip_end)
+            timeline_end = min(max(timeline_end, clip_start), clip_end)
+            if timeline_end > timeline_start:
+                locations.append({
+                    **common,
+                    "mapping_supported": True,
+                    "timeline_start_us": timeline_start,
+                    "timeline_end_us": timeline_end,
+                })
+    return locations
 
 def _prune_clip_groups(project: dict[str, Any], removed_clip_ids: set[str]) -> None:
     """Keep linked-group metadata consistent after clips or tracks are removed."""
@@ -696,6 +744,59 @@ class ProjectToolExecutor:
             # the same batch, without exposing server filesystem paths.
             return self._inspect_document(project), False
 
+        if name == "transcript.search":
+            transcript = next(
+                (item for item in project.get("transcripts", [])
+                 if item["id"] == args["transcript_id"]),
+                None,
+            )
+            if transcript is None:
+                raise ProjectToolExecutionError("The selected transcript does not exist.")
+            case_sensitive = bool(args.get("case_sensitive", False))
+            query_terms = _transcript_terms(args["query"], case_sensitive=case_sensitive)
+            if not query_terms:
+                raise ProjectToolExecutionError("Enter a search term containing at least one letter or number.")
+            if len(query_terms) > 10:
+                raise ProjectToolExecutionError("Search up to 10 words or phrase terms at a time.")
+            indexed_terms: list[tuple[str, int]] = []
+            for word_index, word in enumerate(transcript["words"]):
+                indexed_terms.extend(
+                    (term, word_index)
+                    for term in _transcript_terms(word["text"], case_sensitive=case_sensitive)
+                )
+            matches = []
+            final_offset = len(indexed_terms) - len(query_terms)
+            for offset in range(max(0, final_offset + 1)):
+                actual = [item[0] for item in indexed_terms[offset:offset + len(query_terms)]]
+                if actual != query_terms:
+                    continue
+                first_index = indexed_terms[offset][1]
+                last_index = indexed_terms[offset + len(query_terms) - 1][1]
+                first_word = transcript["words"][first_index]
+                last_word = transcript["words"][last_index]
+                start_us = int(first_word["start_us"])
+                end_us = int(last_word["end_us"])
+                matches.append({
+                    "word_start_index": first_index,
+                    "word_end_index": last_index,
+                    "text": " ".join(
+                        item["text"] for item in transcript["words"][first_index:last_index + 1]
+                    ),
+                    "start_us": start_us,
+                    "end_us": end_us,
+                    "timeline_locations": _map_source_range_to_timeline(
+                        project, transcript["source_media_id"], start_us, end_us
+                    ),
+                })
+            limit = int(args.get("limit", 25))
+            return {
+                "transcript_id": transcript["id"],
+                "source_media_id": transcript["source_media_id"],
+                "query": args["query"],
+                "match_count": len(matches),
+                "matches": matches[:limit],
+                "truncated": len(matches) > limit,
+            }, False
         if name == "media.list":
             media_type = args.get("media_type")
             folder = args.get("folder")
@@ -1098,6 +1199,29 @@ class ProjectToolExecutor:
             track["clips"].append(clip)
             return {"clip_id": clip["id"], "track_id": track["id"]}, True
 
+        if name == "transcript.import_words":
+            asset = self._asset(project, args["media_id"])
+            if asset.get("media_type") not in {"video", "audio"}:
+                raise ProjectToolExecutionError("Timed transcripts require a video or audio source asset.")
+            transcripts = project.setdefault("transcripts", [])
+            if len(transcripts) >= 100:
+                raise ProjectToolExecutionError("This project has reached its 100-transcript limit.")
+            transcript_name = (args.get("name") or asset.get("file_name") or "Transcript").strip()
+            transcript = {
+                "id": _new_id("transcript"),
+                "name": transcript_name[:120],
+                "source_media_id": asset["id"],
+                "language": args.get("language", "und"),
+                "words": deepcopy(args["words"]),
+            }
+            transcripts.append(transcript)
+            return {
+                "transcript_id": transcript["id"],
+                "source_media_id": asset["id"],
+                "language": transcript["language"],
+                "word_count": len(transcript["words"]),
+                "transcription_performed": False,
+            }, True
         if name == "captions.add_word_timed":
             track = self._find_track(project, args["track_id"])
             if track.get("locked", False) or track["type"] != "text":
