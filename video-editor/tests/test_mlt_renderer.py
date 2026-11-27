@@ -1368,26 +1368,55 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
             receipt = render_project(self.project, self.root, output, timeout_seconds=120)
         self.assertTrue(receipt["ok"], receipt)
 
-        def bright_glyph_pixels(timestamp):
+        def decoded_frame(timestamp):
             decoded = subprocess.run([
                 "ffmpeg", "-hide_banner", "-loglevel", "error",
                 "-ss", f"{timestamp:.3f}", "-i", str(output),
                 "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
             ], check=True, capture_output=True, timeout=60)
             self.assertEqual(len(decoded.stdout), 320 * 240 * 3)
+            return decoded.stdout
+
+        def bright_glyph_pixels(frame):
             return sum(
                 1 for red, green, blue in zip(
-                    decoded.stdout[0::3], decoded.stdout[1::3], decoded.stdout[2::3]
+                    frame[0::3], frame[1::3], frame[2::3]
                 )
                 if red > 190 and green > 190 and blue > 190
             )
 
-        early = bright_glyph_pixels(0.5)
-        fully_visible = bright_glyph_pixels(0.9)
-        after_clip = bright_glyph_pixels(1.4)
-        self.assertLess(early, fully_visible, "Text should become brighter during its fade-in.")
+        def title_region_red_green_mean(frame):
+            samples = [
+                (frame[(y * 320 + x) * 3] + frame[(y * 320 + x) * 3 + 1]) / 2
+                for y in range(80, 160)
+                for x in range(16, 304)
+            ]
+            return sum(samples) / len(samples)
+
+        early_frame = decoded_frame(0.5)
+        visible_frame = decoded_frame(0.9)
+        after_frame = decoded_frame(1.4)
+        early = bright_glyph_pixels(early_frame)
+        fully_visible = bright_glyph_pixels(visible_frame)
+        after_clip = bright_glyph_pixels(after_frame)
+        early_mean = title_region_red_green_mean(early_frame)
+        visible_mean = title_region_red_green_mean(visible_frame)
+        after_mean = title_region_red_green_mean(after_frame)
+        print(
+            "MLT_TEXT_FADE_FRAME_DIAGNOSTIC "
+            f"bright_pixels={{'early': {early}, 'visible': {fully_visible}, 'after': {after_clip}}} "
+            f"title_region_rg_mean={{'early': {early_mean:.4f}, 'visible': {visible_mean:.4f}, 'after': {after_mean:.4f}}}"
+        )
+        self.assertLess(
+            early_mean, visible_mean,
+            "Text should become brighter during its fade-in; see frame diagnostics above.",
+        )
         self.assertGreater(fully_visible, 20, "Fully faded text should be visible in decoded frames.")
         self.assertEqual(after_clip, 0, "Text must disappear after its clip ends.")
+        self.assertAlmostEqual(
+            after_mean, 0.0, delta=2.0,
+            msg="The title region should return to the blue background after the clip ends.",
+        )
 
 
 class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
