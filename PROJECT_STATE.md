@@ -339,6 +339,8 @@ The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not star
 **Latest implementation commit:** `6efb39b23a4c011428201ed1a9c0ec3c92bd2c11`  
 **Fresh verification:** [GitHub Actions run #46078537336](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46078537336) — success.
 
+- Documentation/status commit: `a0b5c39f9e93fd5f5b38dab119b2c3ec25ddb761`; capability-audit reconciliation commit: `ebbeb1438023d61f2fd26c3c191668b2d3be6b52`. These update the Stage 2 ledger, capability states/counts, feature catalogue and approved Task 2.7 plan.
+- The first documentation-only run #46078809283 caught stale `audit.status_counts`; the counts were corrected in `ebbeb1438023d61f2fd26c3c191668b2d3be6b52`. Final documentation commit verification: [run #46078938454](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46078938454) — **338 Python passed, 73 Node passed, D1 migrations passed**.
 - Full workflow result: **338 Python tests passed**, **73 Studio/Worker Node tests passed**, **0 Node tests skipped**, and every checked-in D1 migration applied successfully to in-memory SQLite. The Python test suite also reported no skips.
 - Text animation reuses the canonical `animation.set_keyframe` operation for opacity, position, scale and rotation. Text opacity is linear; transforms use supported easing and bounded FFmpeg expressions. Output dimensions are capped at 8192 pixels.
 - Studio now exposes text transform keyframes, fade-in/fade-out, three-cycle pulse/float loop presets, and a karaoke highlight-colour control. Presets compile to canonical keyframes.
