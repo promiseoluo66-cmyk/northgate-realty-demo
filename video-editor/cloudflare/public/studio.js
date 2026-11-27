@@ -452,6 +452,10 @@
     const textControlIds = [
       "studio-text-content", "studio-text-family", "studio-text-size",
       "studio-text-fgcolour", "studio-text-olcolour", "studio-text-outline",
+      "studio-text-weight", "studio-text-background-fill", "studio-text-bgcolour",
+      "studio-text-bgopacity", "studio-text-pad", "studio-text-shadow-color",
+      "studio-text-shadow-x", "studio-text-shadow-y", "studio-text-shadow-opacity",
+      "studio-text-letter-spacing", "studio-text-line-spacing",
       "studio-text-halign", "studio-text-valign", "studio-text-x", "studio-text-y",
       "studio-text-width", "studio-text-height", "studio-save-text"
     ];
@@ -554,6 +558,17 @@
     setValue("studio-text-fgcolour", textData.fgcolour || "#FFFFFF");
     setValue("studio-text-olcolour", textData.olcolour || "#000000");
     setValue("studio-text-outline", textData.outline ?? 1);
+    setValue("studio-text-weight", textData.weight ?? 400);
+    if (byId("studio-text-background-fill")) byId("studio-text-background-fill").checked = Boolean(textData.background_fill);
+    setValue("studio-text-bgcolour", textData.bgcolour || "#000000");
+    setValue("studio-text-bgopacity", textData.bgopacity ?? 0.45);
+    setValue("studio-text-pad", textData.pad ?? 12);
+    setValue("studio-text-shadow-color", textData.shadow_color || "#000000");
+    setValue("studio-text-shadow-x", textData.shadow_x ?? 0);
+    setValue("studio-text-shadow-y", textData.shadow_y ?? 0);
+    setValue("studio-text-shadow-opacity", textData.shadow_opacity ?? 0.7);
+    setValue("studio-text-letter-spacing", textData.letter_spacing_px ?? 0);
+    setValue("studio-text-line-spacing", textData.line_spacing_px ?? 0);
     setValue("studio-text-halign", textData.halign || textData.align || "center");
     setValue("studio-text-valign", textData.valign || "middle");
     setValue("studio-text-x", textData.x_percent ?? 5);
@@ -1405,6 +1420,17 @@
       fgcolour: byId("studio-text-fgcolour").value.trim(),
       olcolour: byId("studio-text-olcolour").value.trim(),
       outline: Math.round(numeric("studio-text-outline")),
+      weight: Math.round(numeric("studio-text-weight")),
+      background_fill: Boolean(byId("studio-text-background-fill").checked),
+      bgcolour: byId("studio-text-bgcolour").value,
+      bgopacity: numeric("studio-text-bgopacity"),
+      pad: Math.round(numeric("studio-text-pad")),
+      shadow_color: byId("studio-text-shadow-color").value,
+      shadow_x: Math.round(numeric("studio-text-shadow-x")),
+      shadow_y: Math.round(numeric("studio-text-shadow-y")),
+      shadow_opacity: numeric("studio-text-shadow-opacity"),
+      letter_spacing_px: numeric("studio-text-letter-spacing"),
+      line_spacing_px: Math.round(numeric("studio-text-line-spacing")),
       halign: byId("studio-text-halign").value,
       valign: byId("studio-text-valign").value,
       x_percent: numeric("studio-text-x"),
@@ -1413,7 +1439,8 @@
       height_percent: numeric("studio-text-height")
     };
     const colourPattern = /^(#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?|0x[0-9a-fA-F]{8}|white|black|red|green|blue)$/i;
-    if (!colourPattern.test(textStyle.fgcolour) || !colourPattern.test(textStyle.olcolour)) {
+    if (!colourPattern.test(textStyle.fgcolour) || !colourPattern.test(textStyle.olcolour) ||
+        !colourPattern.test(textStyle.bgcolour) || !colourPattern.test(textStyle.shadow_color)) {
       throw new Error("Use a supported colour name or a hex colour such as #FFFFFF.");
     }
     if (textStyle.x_percent + textStyle.width_percent > 100 ||

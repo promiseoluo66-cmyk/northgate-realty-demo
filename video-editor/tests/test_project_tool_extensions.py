@@ -1668,8 +1668,9 @@ class MeasuredSilenceCutSafetyTests(unittest.TestCase):
 class ExpandedTextStyleTests(unittest.TestCase):
     def setUp(self):
         self.project = make_project()
+        text_order = max(track["order"] for track in self.project["tracks"]) + 1
         self.project["tracks"].append({
-            "id": "track-text", "type": "text", "name": "Titles", "order": 1,
+            "id": "track-text", "type": "text", "name": "Titles", "order": text_order,
             "clips": [{
                 "id": "title-clip", "kind": "text", "start_us": 0,
                 "duration_us": 2_000_000,

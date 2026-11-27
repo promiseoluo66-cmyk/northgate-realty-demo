@@ -1053,6 +1053,156 @@ def _ffmpeg_text_color(value: str, fallback: str) -> str:
     raise MltRenderError(f"Unsupported text colour {color!r}.")
 
 
+def _parse_text_colour(value: Any, fallback: str = "#FFFFFF") -> tuple[int, int, int, float]:
+    """Return RGB and normalized opacity for supported editor colour values."""
+    colour = str(value or fallback).strip()
+    named = {
+        "white": (255, 255, 255), "black": (0, 0, 0),
+        "red": (255, 0, 0), "green": (0, 128, 0),
+        "blue": (0, 0, 255), "yellow": (255, 255, 0),
+    }
+    if colour.lower() in named:
+        return (*named[colour.lower()], 1.0)
+    raw = colour[1:] if colour.startswith("#") else colour[2:] if colour.lower().startswith("0x") else ""
+    if len(raw) not in {6, 8} or not re.fullmatch(r"[0-9A-Fa-f]+", raw):
+        raise MltRenderError(f"Unsupported text colour {colour!r}.")
+    red, green, blue = (int(raw[index:index + 2], 16) for index in (0, 2, 4))
+    alpha = int(raw[6:8], 16) / 255.0 if len(raw) == 8 else 1.0
+    return red, green, blue, alpha
+
+
+def _ass_colour(value: Any, opacity: float = 1.0, fallback: str = "#FFFFFF") -> tuple[str, str]:
+    red, green, blue, embedded_alpha = _parse_text_colour(value, fallback)
+    effective_alpha = max(0.0, min(1.0, embedded_alpha * float(opacity)))
+    alpha_byte = round((1.0 - effective_alpha) * 255)
+    rgb = f"{blue:02X}{green:02X}{red:02X}"
+    return f"&H{rgb}&", f"&H{alpha_byte:02X}&"
+
+
+def _ass_escape_text(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
+
+def _requires_ass_text_renderer(text_spec: dict[str, Any]) -> bool:
+    return (
+        int(text_spec.get("weight", 400)) != 400
+        or bool(text_spec.get("background_fill", False))
+        or float(text_spec.get("shadow_x", 0)) != 0
+        or float(text_spec.get("shadow_y", 0)) != 0
+        or float(text_spec.get("letter_spacing_px", 0)) != 0
+        or int(text_spec.get("line_spacing_px", 0)) != 0
+        or float(text_spec.get("opacity", 1)) != 1
+        or text_spec.get("style", "normal") == "italic"
+        or bool(text_spec.get("underline", False))
+        or bool(text_spec.get("strikethrough", False))
+    )
+
+
+def _make_ass_text_overlay_image(
+    text_spec: dict[str, Any],
+    width: int,
+    height: int,
+    output_path: Path,
+    text_directory: Path,
+) -> Path:
+    """Render advanced typography through libass onto a transparent RGBA frame."""
+    if _requires_ass_text_renderer(text_spec):
+        return _make_ass_text_overlay_image(text_spec, width, height, output_path, text_directory)
+    text_directory.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    content = str(text_spec.get("content", ""))
+    lines = content.splitlines() or [""]
+    family = re.sub(r"[^A-Za-z0-9 _-]", "", str(text_spec.get("family", "Sans")))[:80] or "Sans"
+    size = int(text_spec.get("size", 48))
+    weight = max(100, min(900, int(round(int(text_spec.get("weight", 400)) / 100) * 100)))
+    opacity = float(text_spec.get("opacity", 1.0))
+    foreground, foreground_alpha = _ass_colour(text_spec.get("fgcolour", "#FFFFFF"), opacity)
+    outline_colour, outline_alpha = _ass_colour(text_spec.get("olcolour", "#000000"), opacity)
+    shadow_colour, shadow_alpha = _ass_colour(
+        text_spec.get("shadow_color", "#000000"),
+        float(text_spec.get("shadow_opacity", 0.7)),
+    )
+    outline = int(text_spec.get("outline", 0))
+    shadow_x = int(text_spec.get("shadow_x", 0))
+    shadow_y = int(text_spec.get("shadow_y", 0))
+    spacing = float(text_spec.get("letter_spacing_px", 0))
+    line_spacing = int(text_spec.get("line_spacing_px", 0))
+    line_height = max(1, round(size * 1.2 + line_spacing))
+    box_x = round(float(text_spec.get("x_percent", 5)) * width / 100)
+    box_y = round(float(text_spec.get("y_percent", 68)) * height / 100)
+    box_width = round(float(text_spec.get("width_percent", 90)) * width / 100)
+    box_height = round(float(text_spec.get("height_percent", 25)) * height / 100)
+    horizontal = text_spec.get("halign", text_spec.get("align", "center"))
+    vertical = text_spec.get("valign", "middle")
+    anchor = {"left": 7, "center": 8, "right": 9}.get(horizontal, 8)
+    x = box_x if horizontal == "left" else box_x + box_width // 2 if horizontal == "center" else box_x + box_width
+    text_height = line_height * len(lines)
+    y = box_y if vertical == "top" else box_y + (box_height - text_height) // 2 if vertical == "middle" else box_y + box_height - text_height
+
+    ass_colour_script = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {width}
+PlayResY: {height}
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,{family},{size},{foreground},&H000000FF&,{outline_colour},&HFF000000&,0,0,0,0,100,100,{spacing:.2f},0,1,{outline},0,5,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    event_lines = []
+    for index, line in enumerate(lines):
+        y_position = y + index * line_height
+        tags = (
+            f"\\an{anchor}\\pos({x},{y_position})\\fn{family}\\fs{size}"
+            f"\\b{weight}\\fsp{spacing:.2f}\\1c{foreground}\\1a{foreground_alpha}"
+            f"\\bord{outline}\\3c{outline_colour}\\3a{outline_alpha}"
+            f"\\xshad{shadow_x}\\yshad{shadow_y}\\4c{shadow_colour}\\4a{shadow_alpha}"
+        )
+        if text_spec.get("style") == "italic":
+            tags += "\\i1"
+        if text_spec.get("underline"):
+            tags += "\\u1"
+        if text_spec.get("strikethrough"):
+            tags += "\\s1"
+        event_lines.append(
+            f"Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,{{{tags}}}{_ass_escape_text(line)}"
+        )
+    ass_path = text_directory / f"{output_path.stem}.ass"
+    ass_path.write_text(ass_colour_script + "\n".join(event_lines) + "\n", encoding="utf-8")
+
+    filters = ["format=rgba"]
+    if text_spec.get("background_fill"):
+        red, green, blue, bg_alpha = _parse_text_colour(text_spec.get("bgcolour", "#000000"), "#000000")
+        bg_alpha *= float(text_spec.get("bgopacity", 0.5))
+        pad = int(text_spec.get("pad", 8))
+        rect_x = max(0, box_x - pad)
+        rect_y = max(0, box_y - pad)
+        rect_width = min(width - rect_x, box_width + 2 * pad)
+        rect_height = min(height - rect_y, box_height + 2 * pad)
+        filters.append(
+            f"drawbox=x={rect_x}:y={rect_y}:w={rect_width}:h={rect_height}:"
+            f"color=0x{red:02X}{green:02X}{blue:02X}@{max(0.0, min(1.0, bg_alpha)):.4f}:t=fill"
+        )
+    ass_file = str(ass_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    filters.append(f"ass=filename='{ass_file}':alpha=1")
+    command = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "lavfi", "-i", f"color=c=black@0.0:s={width}x{height}:r=1:d=1",
+        "-vf", ",".join(filters), "-frames:v", "1", "-c:v", "png",
+        "-pix_fmt", "rgba", str(output_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0 or not output_path.is_file():
+        raise MltRenderError(
+            "Advanced text rendering failed: " + (result.stderr or "FFmpeg did not create the overlay.")[-600:]
+        )
+    return output_path
+
+
 def _make_text_overlay_image(
     text_spec: dict[str, Any],
     width: int,

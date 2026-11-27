@@ -383,13 +383,13 @@ def validate_project(document: Any) -> dict[str, Any]:
                     _integer(text_data["size"], f"{path}.text.size", minimum=8, maximum=256)
                 if "weight" in text_data:
                     _integer(text_data["weight"], f"{path}.text.weight", minimum=100, maximum=1000)
-                for colour_key in ("fgcolour", "bgcolour", "olcolour"):
+                for colour_key in ("fgcolour", "bgcolour", "olcolour", "shadow_color"):
                     if colour_key in text_data:
                         colour = _string(text_data[colour_key], f"{path}.text.{colour_key}", max_length=16)
                         if not (
                             re.fullmatch(r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?", colour)
                             or re.fullmatch(r"0x[0-9A-Fa-f]{8}", colour)
-                            or colour.lower() in {"white", "black", "red", "green", "blue"}
+                            or colour.lower() in {"white", "black", "red", "green", "blue", "yellow"}
                         ):
                             raise ProjectValidationError(
                                 f"{path}.text.{colour_key} must be a supported colour value."
@@ -398,6 +398,18 @@ def validate_project(document: Any) -> dict[str, Any]:
                     _integer(text_data["outline"], f"{path}.text.outline", minimum=0, maximum=3)
                 if "pad" in text_data:
                     _integer(text_data["pad"], f"{path}.text.pad", minimum=0, maximum=128)
+                if "background_fill" in text_data and not isinstance(text_data["background_fill"], bool):
+                    raise ProjectValidationError(f"{path}.text.background_fill must be true or false.")
+                for opacity_key in ("bgopacity", "shadow_opacity"):
+                    if opacity_key in text_data:
+                        _number(text_data[opacity_key], f"{path}.text.{opacity_key}", minimum=0, maximum=1)
+                for offset_key in ("shadow_x", "shadow_y"):
+                    if offset_key in text_data:
+                        _integer(text_data[offset_key], f"{path}.text.{offset_key}", minimum=-32, maximum=32)
+                if "letter_spacing_px" in text_data:
+                    _number(text_data["letter_spacing_px"], f"{path}.text.letter_spacing_px", minimum=-10, maximum=40)
+                if "line_spacing_px" in text_data:
+                    _integer(text_data["line_spacing_px"], f"{path}.text.line_spacing_px", minimum=-40, maximum=120)
                 for align_key in ("align", "halign"):
                     if align_key in text_data:
                         align_value = _string(text_data[align_key], f"{path}.text.{align_key}", max_length=12)
