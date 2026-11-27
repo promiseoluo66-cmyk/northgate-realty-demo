@@ -113,6 +113,38 @@ class CompilePlanTests(unittest.TestCase):
         self.assertEqual(text_track["clips"][0]["text"]["content"], "AI EDITED TITLE")
         self.assertEqual(plan["total_frames"], 50)
 
+    def test_compiles_text_opacity_keyframes_for_overlay_rendering(self):
+        self.project["tracks"].append({
+            "id": "captions", "type": "text", "name": "Captions", "order": 1,
+            "clips": [{
+                "id": "animated-caption", "kind": "text", "start_us": 400_000,
+                "duration_us": 800_000, "text": {"content": "Fade me"},
+                "effects": [], "keyframes": [
+                    {"property": "opacity", "time_us": 0, "value": 0.0,
+                     "interpolation": "ease_out"},
+                    {"property": "opacity", "time_us": 400_000, "value": 1.0,
+                     "interpolation": "ease_out"},
+                ],
+            }],
+        })
+        plan = self.compile()
+        text_clip = plan["tracks"][1]["clips"][0]
+        self.assertEqual(text_clip["keyframes"], self.project["tracks"][1]["clips"][0]["keyframes"])
+
+    def test_rejects_unsupported_text_transform_keyframes(self):
+        self.project["tracks"].append({
+            "id": "captions", "type": "text", "name": "Captions", "order": 1,
+            "clips": [{
+                "id": "animated-caption", "kind": "text", "start_us": 400_000,
+                "duration_us": 800_000, "text": {"content": "No unsafe transform"},
+                "effects": [], "keyframes": [
+                    {"property": "scale_x", "time_us": 0, "value": 1.0},
+                ],
+            }],
+        })
+        with self.assertRaisesRegex(MltRenderError, "only opacity keyframes"):
+            self.compile()
+
     def test_compiles_still_image_overlay(self):
         image = self.root / "overlay.png"
         image.write_bytes(b"generated-image-placeholder")
