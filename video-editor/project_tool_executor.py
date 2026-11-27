@@ -2252,13 +2252,21 @@ class ProjectToolExecutor:
                     )
             else:
                 if clip["kind"] == "text":
-                    if prop != "opacity":
+                    if prop not in {
+                        "position_x", "position_y", "scale_x", "scale_y",
+                        "rotation_deg", "opacity",
+                    }:
                         raise ProjectToolExecutionError(
-                            "Text clips currently support opacity keyframes only."
+                            "Text clips support position, scale, rotation and opacity keyframes only."
                         )
-                    if args.get("interpolation", "linear") != "linear":
+                    interpolation = args.get("interpolation", "linear")
+                    if prop == "opacity" and interpolation != "linear":
                         raise ProjectToolExecutionError(
                             "Text opacity keyframes currently support linear interpolation only."
+                        )
+                    if prop != "opacity" and interpolation == "bezier":
+                        raise ProjectToolExecutionError(
+                            "Bezier interpolation is not supported for text transforms."
                         )
                 elif clip["kind"] not in {"video", "image"}:
                     raise ProjectToolExecutionError("Visual keyframes require a video/image clip.")
