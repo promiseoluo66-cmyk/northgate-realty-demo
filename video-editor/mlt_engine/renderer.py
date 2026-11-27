@@ -1424,7 +1424,7 @@ def _apply_text_overlay_images_ffmpeg(
         if keyframes:
             opacity_filters = _ffmpeg_text_opacity_filters(keyframes, fps_num, fps_den)
             filters.append(
-                f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB),format=yuva444p,"
+                f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB)+{start:.9f}/TB,format=yuva444p,"
                 + ",".join(opacity_filters)
                 + f",format=rgba,scale={int(plan['width'])}:{int(plan['height'])},"
                 + f"format=rgba{prepared}"
