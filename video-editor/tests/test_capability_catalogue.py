@@ -53,8 +53,8 @@ class CapabilityCatalogueTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(self.catalogue["audit"]["registered_tool_count"], 34)
         self.assertEqual(self.catalogue["audit"]["stage1_registered_tool_count"], 52)
-        self.assertEqual(self.catalogue["audit"]["stage2_registered_tool_count"], 56)
-        self.assertEqual(len(names), 56)
+        self.assertEqual(self.catalogue["audit"]["stage2_registered_tool_count"], 58)
+        self.assertEqual(len(names), 58)
         self.assertTrue(self.catalogue["audit"]["registered_tool_names_are_unique"])
         self.assertTrue(self.catalogue["audit"]["stage1_registered_tool_names_are_unique"])
 
@@ -69,6 +69,7 @@ class CapabilityCatalogueTests(unittest.TestCase):
             "timeline.ripple_overwrite_clip",
             "timeline.group_clips",
             "timeline.ungroup_clips",
+            "transcript.review_silence", "transcript.apply_silence_cut",
             "timeline.add_marker",
             "timeline.move_marker",
             "timeline.remove_marker", "media.create_proxy",
