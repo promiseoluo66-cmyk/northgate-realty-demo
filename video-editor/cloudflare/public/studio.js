@@ -1146,8 +1146,116 @@
     if (editor) editor.classList.remove("hidden");
     renderTimeline();
     renderMediaBin();
+    renderSilenceTranscriptSelector();
     setView(activeView);
   }
+
+  function renderSilenceTranscriptSelector() {
+    const select = byId("studio-silence-transcript");
+    const reviewButton = byId("studio-review-silence");
+    if (!select || !currentProject) return;
+    const previous = select.value;
+    const transcripts = Array.isArray(currentProject.transcripts) ? currentProject.transcripts : [];
+    select.replaceChildren();
+    if (!transcripts.length) {
+      const option = element("option", "", "No timed transcript loaded");
+      option.value = "";
+      select.append(option);
+      select.disabled = true;
+      if (reviewButton) reviewButton.disabled = true;
+      return;
+    }
+    transcripts.forEach((transcript) => {
+      const option = element(
+        "option", "",
+        (transcript.name || "Transcript") +
+          (transcript.language ? " · " + transcript.language : "") +
+          " · " + (transcript.words || []).length + " words"
+      );
+      option.value = transcript.id;
+      select.append(option);
+    });
+    if (transcripts.some((item) => item.id === previous)) select.value = previous;
+    select.disabled = false;
+    if (reviewButton) reviewButton.disabled = false;
+  }
+
+  function handleStudioAnalysisResult(analysisResult) {
+    const payload = (analysisResult?.results || []).find(
+      (item) => item.name === "transcript.review_silence"
+    )?.result;
+    if (!payload) return;
+    const status = byId("studio-silence-status");
+    const host = byId("studio-silence-candidates");
+    if (!host || !status) return;
+    host.replaceChildren();
+    const coverage = Number(payload.analysis_coverage_seconds || 0).toFixed(1);
+    status.textContent = payload.measurement_status === "measured"
+      ? payload.candidate_count + " measured candidate(s). Scanned " + coverage +
+        " seconds" + (payload.full_duration_scanned ? " (full source)." : " (partial scan).")
+      : "Silence review unavailable: " + String(payload.measurement_status || "unknown") + ".";
+    (payload.limitations || []).forEach((limitation) => {
+      host.append(element("p", "hint", limitation));
+    });
+    if (!payload.candidates?.length) {
+      host.append(element("p", "hint", "No measured silence gaps between adjacent transcript words met the selected minimum duration."));
+      return;
+    }
+    payload.candidates.forEach((candidate) => {
+      const card = element("article", "silence-candidate");
+      const heading = element("strong", "", "Measured gap · " +
+        formatTime(candidate.source_start_us) + "–" + formatTime(candidate.source_end_us));
+      const detail = element("p", "hint",
+        "Between “" + candidate.adjacent_words.before + "” and “" +
+        candidate.adjacent_words.after + "” · " +
+        (Number(candidate.measured_duration_us || 0) / 1000).toFixed(0) + " ms");
+      const assessment = element("p", "hint",
+        "Semantic assessment: " + String(candidate.semantic_assessment || "not_evaluated") +
+        ". This does not decide whether the pause is unwanted.");
+      card.append(heading, detail, assessment);
+      if (candidate.blockers?.length) {
+        card.append(element("p", "hint", "Cannot apply: " + candidate.blockers.join(", ")));
+      }
+      const approve = element("button", "btn secondary",
+        candidate.can_apply ? "Approve and apply this cut" : "Cut unavailable");
+      approve.type = "button";
+      approve.disabled = !candidate.can_apply;
+      approve.addEventListener("click", async () => {
+        const seconds = Number(byId("studio-silence-analysis-seconds")?.value || 600);
+        const threshold = Number(byId("studio-silence-threshold")?.value || -50);
+        const minimumUs = Math.round(Number(byId("studio-silence-minimum-ms")?.value || 100) * 1000);
+        const question = "Remove only the measured " +
+          (Number(candidate.measured_duration_us || 0) / 1000).toFixed(0) +
+          " ms silence between “" + candidate.adjacent_words.before + "” and “" +
+          candidate.adjacent_words.after + "”?";
+        if (!window.confirm(question)) return;
+        approve.disabled = true;
+        try {
+          await submitOperations([{
+            name: "transcript.apply_silence_cut",
+            arguments: {
+              transcript_id: payload.transcript_id,
+              clip_id: payload.clip_id,
+              source_start_us: candidate.source_start_us,
+              source_end_us: candidate.source_end_us,
+              analysis_seconds: seconds,
+              silence_threshold_db: threshold,
+              minimum_silence_us: minimumUs
+            }
+          }], ["transcript.apply_silence_cut"]);
+          status.textContent = "Approved cut queued. The edited project will be saved and rendered.";
+          host.replaceChildren();
+        } catch (error) {
+          status.textContent = error.message;
+          approve.disabled = false;
+        }
+      });
+      card.append(approve);
+      host.append(card);
+    });
+  }
+
+  window.handleStudioAnalysisResult = handleStudioAnalysisResult;
 
   function selectedClipInstruction() {
     const selected = findSelectedClip();
@@ -1254,6 +1362,35 @@
       }
     });
   };
+
+  click("studio-review-silence", async () => {
+    const item = selected();
+    if (!item || !["video", "audio"].includes(item.clip.kind)) {
+      throw new Error("Select a video or audio source clip first.");
+    }
+    const transcriptId = byId("studio-silence-transcript")?.value;
+    if (!transcriptId) throw new Error("Load or import a timed transcript first.");
+    const seconds = numeric("studio-silence-analysis-seconds");
+    const threshold = numeric("studio-silence-threshold");
+    const minimumUs = Math.round(numeric("studio-silence-minimum-ms") * 1000);
+    if (seconds < 1 || seconds > 600) throw new Error("Audio scan limit must be 1–600 seconds.");
+    if (threshold < -80 || threshold > -10) throw new Error("Silence threshold must be -80 to -10 dB.");
+    if (minimumUs < 20000 || minimumUs > 10000000) throw new Error("Minimum silence must be 20–10,000 milliseconds.");
+    const status = byId("studio-silence-status");
+    const host = byId("studio-silence-candidates");
+    if (host) host.replaceChildren();
+    if (status) status.textContent = "Silence measurement queued. This runs in the cloud without rendering a new video.";
+    await submitOperations([{
+      name: "transcript.review_silence",
+      arguments: {
+        transcript_id: transcriptId,
+        clip_id: item.clip.id,
+        analysis_seconds: seconds,
+        silence_threshold_db: threshold,
+        minimum_silence_us: minimumUs
+      }
+    }]);
+  });
 
   click("studio-save-text", () => {
     const item = selected();

@@ -447,12 +447,15 @@ def main()->int:
         if isinstance(pending_plan,str):
             pending_plan=json.loads(pending_plan)
         manual_mode=isinstance(pending_plan,dict) and pending_plan.get("mode")=="manual"
+        analysis_only=is_read_only_analysis_plan(pending_plan)
         if not manual_mode:
             if not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GROQ_API_KEY"):
                 raise RuntimeError("No visual AI provider is configured. Add GEMINI_API_KEY or GROQ_API_KEY to GitHub Actions secrets.")
             if not os.environ.get("GONKA_ROUTER_API_KEY"):
                 raise RuntimeError("GONKA_ROUTER_API_KEY is missing. Add it to GitHub Actions secrets to enable DeepSeek editing intelligence.")
         callback(worker_url,callback_secret,job_id,"running",
+            "Measuring silence for the selected transcript."
+            if analysis_only else
             "Applying your direct Studio editing operation and rendering the updated project."
             if manual_mode else
             "Visual AI is analysing the video; DeepSeek is preparing the registered editing operations.",
@@ -496,6 +499,28 @@ def main()->int:
         if not result.get("ok"):
             raise RuntimeError(result.get("error") or "The AI edit could not be applied safely.")
         execution=result["execution"]
+        if analysis_only:
+            analysis_result = {
+                "revision": executor.revision,
+                "changed": bool(execution.get("changed", False)),
+                "results": execution.get("results", []),
+            }
+            project_document = executor.get_project()
+            callback(
+                worker_url, callback_secret, job_id, "completed",
+                "Measured silence review completed. Inspect each candidate in Studio.",
+                project_json=project_document,
+                project_revision=project_document["revision"],
+                history_state=executor.get_history_state(),
+                ai_status="applied", pending_plan=None,
+                analysis_result=analysis_result,
+            )
+            print(json.dumps({
+                "job_id": job_id, "status": "analysis_completed",
+                "analysis_result": analysis_result,
+            }))
+            return 0
+
         # Generated audio/still assets must reach private Release storage before
         # their project references are checkpointed. The executor attaches the
         # returned IDs to current state and history snapshots for later undo/redo.

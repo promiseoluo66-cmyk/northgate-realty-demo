@@ -218,6 +218,20 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
   </div>
 </section>
 
+<section class="edit-panel" aria-label="Transcript silence review">
+  <h3>Review measured silence</h3>
+  <p class="hint">Silence is a measured signal, not a filler-word verdict. Select a source clip and timed transcript, inspect each measured gap, then approve cuts one at a time.</p>
+  <div class="edit-grid">
+    <label for="studio-silence-transcript">Timed transcript<select id="studio-silence-transcript"><option value="">No transcript loaded</option></select></label>
+    <label for="studio-silence-analysis-seconds">Audio scan limit (seconds)<input id="studio-silence-analysis-seconds" type="number" min="1" max="600" step="1" value="600"></label>
+    <label for="studio-silence-threshold">Silence threshold (dB)<input id="studio-silence-threshold" type="number" min="-80" max="-10" step="1" value="-50"></label>
+    <label for="studio-silence-minimum-ms">Minimum gap (milliseconds)<input id="studio-silence-minimum-ms" type="number" min="20" max="10000" step="10" value="100"></label>
+  </div>
+  <div class="edit-actions"><button class="btn secondary" id="studio-review-silence" type="button" disabled>Measure and review silence</button></div>
+  <p id="studio-silence-status" class="hint" aria-live="polite">Import or add a timed transcript, select its source clip, then review silence.</p>
+  <div id="studio-silence-candidates" class="media-bin" aria-live="polite" aria-label="Measured silence candidates"></div>
+</section>
+
 <section class="edit-panel" aria-label="Text and caption editing">
   <h3>Text and caption editor</h3>
   <p class="hint">Select a text or caption clip on the timeline. Changes use the existing revision-checked text editing operation.</p>
@@ -416,6 +430,7 @@ async function refreshJob(){
   if(!activeJobId)return;
   try{
     const data=await api("/api/v1/jobs/"+activeJobId);
+    if(data.analysis_result&&window.handleStudioAnalysisResult)window.handleStudioAnalysisResult(data.analysis_result);
     $("job-card").classList.remove("hidden");
     $("job-details").textContent="Job ID: "+data.job_id+"\nStatus: "+data.status+"\nRevision: "+(data.project_revision||"not initialized")+"\n"+data.message+((data.status==="failed"&&data.project_revision)?"\nRecovery checkpoint available. You can continue editing from the last saved revision.":"");
     if(data.download_url)$("download-link").classList.remove("hidden");

@@ -243,7 +243,7 @@ async function createJob(request, env) {
 async function getJob(request, env, id) {
   if (!authorized(request, env)) return json({ error: "Unauthorized. Enter your app/API token." }, 401);
   const row = await env.DB.prepare(
-    "SELECT id,status,message,instruction,skill_id,created_at,updated_at,run_url,artifact_url,output_asset_id,project_revision,ai_status,pending_plan_json FROM jobs WHERE id=?"
+    "SELECT id,status,message,instruction,skill_id,created_at,updated_at,run_url,artifact_url,output_asset_id,project_revision,ai_status,pending_plan_json,analysis_result_json FROM jobs WHERE id=?"
   ).bind(id).first();
   if (!row) return json({ error: "Job not found." }, 404);
   return json({
@@ -253,6 +253,7 @@ async function getJob(request, env, id) {
     instruction: row.instruction, skill_id: row.skill_id,
     project_revision: row.project_revision || null,
     pending_plan: row.pending_plan_json ? JSON.parse(row.pending_plan_json) : null,
+    analysis_result: row.analysis_result_json ? JSON.parse(row.analysis_result_json) : null,
     created_at: row.created_at, updated_at: row.updated_at,
     run_url: row.run_url, artifact_url: row.artifact_url,
     download_url: row.output_asset_id ? "/api/v1/jobs/" + row.id + "/download" : null
@@ -345,7 +346,7 @@ async function saveSkill(env, skill) {
 async function internalJob(request, env, id) {
   if (!callbackAuthorized(request, env)) return json({ error: "Unauthorized worker." }, 401);
   const row = await env.DB.prepare(
-    "SELECT id,status,message,instruction,skill_id,skill_json,release_id,release_tag,input_asset_id,input_filename,project_json,project_revision,pending_plan_json,confirmed_tools_json,history_state_json FROM jobs WHERE id=?"
+    "SELECT id,status,message,instruction,skill_id,skill_json,release_id,release_tag,input_asset_id,input_filename,project_json,project_revision,pending_plan_json,confirmed_tools_json,history_state_json,analysis_result_json FROM jobs WHERE id=?"
   ).bind(id).first();
   if (!row) return json({ error: "Job not found." }, 404);
   return json({
@@ -358,7 +359,8 @@ async function internalJob(request, env, id) {
     project_revision: row.project_revision || null,
     pending_plan: row.pending_plan_json ? JSON.parse(row.pending_plan_json) : null,
     confirmed_tools: JSON.parse(row.confirmed_tools_json || "[]"),
-    history_state: JSON.parse(row.history_state_json || '{"undo":[],"redo":[]}')
+    history_state: JSON.parse(row.history_state_json || '{"undo":[],"redo":[]}'),
+    analysis_result: row.analysis_result_json ? JSON.parse(row.analysis_result_json) : null
   });
 }
 
@@ -369,7 +371,18 @@ async function internalCallback(request, env, id) {
   const status = String(body.status || "");
   if (!["running", "completed", "failed"].includes(status)) return json({ error: "Invalid job status." }, 400);
   const outputAssetId = body.output_asset_id ? Number(body.output_asset_id) : null;
-  if (status === "completed" && (!Number.isInteger(outputAssetId) || outputAssetId <= 0)) return json({ error: "Completed jobs must include a valid output asset ID." }, 400);
+  let analysisResultJson = null;
+  if (body.analysis_result !== undefined) {
+    if (!body.analysis_result || typeof body.analysis_result !== "object" || Array.isArray(body.analysis_result)) {
+      return json({ error: "analysis_result must be a JSON object." }, 400);
+    }
+    analysisResultJson = JSON.stringify(body.analysis_result);
+    if (analysisResultJson.length > 100000) return json({ error: "Analysis result exceeds the 100 KB limit." }, 413);
+  }
+  if (status === "completed" &&
+      ((!Number.isInteger(outputAssetId) || outputAssetId <= 0) && !analysisResultJson)) {
+    return json({ error: "Completed render jobs need an output asset; analysis-only jobs need an analysis result." }, 400);
+  }
   let projectJson = null, projectRevision = null;
   if (body.project_json !== undefined && body.project_json !== null) {
     if (!body.project_json || typeof body.project_json !== "object" || Array.isArray(body.project_json)) return json({ error: "project_json must be a project object." }, 400);
@@ -395,10 +408,10 @@ async function internalCallback(request, env, id) {
   if (pendingPlanJson && pendingPlanJson.length > 100000) return json({ error: "Pending AI plan exceeds the allowed size." }, 413);
   const now = new Date().toISOString();
   const result = await env.DB.prepare(
-    "UPDATE jobs SET status=?,message=?,output_asset_id=COALESCE(?,output_asset_id),run_url=COALESCE(?,run_url),artifact_url=COALESCE(?,artifact_url),updated_at=?,project_json=COALESCE(?,project_json),project_revision=COALESCE(?,project_revision),ai_status=COALESCE(?,ai_status),history_state_json=COALESCE(?,history_state_json),pending_plan_json=CASE WHEN ?=1 THEN ? ELSE pending_plan_json END WHERE id=?"
+    "UPDATE jobs SET status=?,message=?,output_asset_id=COALESCE(?,output_asset_id),run_url=COALESCE(?,run_url),artifact_url=COALESCE(?,artifact_url),updated_at=?,project_json=COALESCE(?,project_json),project_revision=COALESCE(?,project_revision),ai_status=COALESCE(?,ai_status),history_state_json=COALESCE(?,history_state_json),pending_plan_json=CASE WHEN ?=1 THEN ? ELSE pending_plan_json END,analysis_result_json=COALESCE(?,analysis_result_json) WHERE id=?"
   ).bind(status, cleanText(body.message, 500), outputAssetId,
     cleanText(body.run_url, 500) || null, cleanText(body.artifact_url, 500) || null,
-    now, projectJson, projectRevision, aiStatus, historyStateJson, hasPendingPlan ? 1 : 0, pendingPlanJson, id).run();
+    now, projectJson, projectRevision, aiStatus, historyStateJson, hasPendingPlan ? 1 : 0, pendingPlanJson, analysisResultJson, id).run();
   if (!result.meta?.changes) return json({ error: "Job not found." }, 404);
   return json({ ok: true, project_revision: projectRevision });
 }
@@ -861,15 +874,19 @@ async function queueManualEdit(request, env, id) {
       Array.isArray(call.arguments) || Object.keys(call).some(key => !["name", "arguments"].includes(key)))) {
     return json({ error: "Each operation must contain only a tool name and an arguments object." }, 400);
   }
+  const analysisOnly = calls.length === 1 && calls[0].name === "transcript.review_silence";
   const readOnly = new Set([
     "project.inspect", "media.list", "quality.inspect_media",
-    "audio.analyze_media", "media.detect_scenes", "render.export"
+    "audio.analyze_media", "media.detect_scenes", "render.export",
+    "transcript.review_silence"
   ]);
-  if (calls.some(call => readOnly.has(call.name))) {
+  if (calls.some(call => readOnly.has(call.name) &&
+      !(analysisOnly && call.name === "transcript.review_silence"))) {
     return json({ error: "This endpoint accepts editing operations only; inspection and export are handled separately." }, 400);
   }
   const needsApproval = new Set([
-    "timeline.delete_clip", "timeline.ripple_delete_clip", "timeline.remove_track"
+    "timeline.delete_clip", "timeline.ripple_delete_clip", "timeline.remove_track",
+    "transcript.apply_cut", "transcript.apply_silence_cut"
   ]);
   const required = [...new Set(calls.filter(call => needsApproval.has(call.name)).map(call => call.name))].sort();
   const supplied = Array.isArray(body.confirmed_tools) ? [...new Set(body.confirmed_tools)].sort() : [];
@@ -895,11 +912,11 @@ async function queueManualEdit(request, env, id) {
   }
   const pending = {
     mode: "manual",
-    summary: "Apply direct Studio editing operations.",
+    summary: analysisOnly ? "Measure silence for the selected transcript." : "Apply direct Studio editing operations.",
     tool_calls: calls
   };
   const update = await env.DB.prepare(
-    "UPDATE jobs SET status='queued',message='Direct Studio edit queued.',instruction='Apply the manually selected Studio operations.',ai_status='queued',pending_plan_json=?,confirmed_tools_json=?,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
+    "UPDATE jobs SET status='queued',message='Direct Studio operation queued.',instruction='Apply the manually selected Studio operation.',ai_status='queued',pending_plan_json=?,confirmed_tools_json=?,analysis_result_json=NULL,updated_at=? WHERE id=? AND status IN ('completed','failed') AND project_revision=? AND pending_plan_json IS NULL"
   ).bind(
     JSON.stringify(pending), JSON.stringify(supplied), new Date().toISOString(), id, expectedRevision
   ).run();
@@ -911,7 +928,7 @@ async function queueManualEdit(request, env, id) {
       .bind("Could not start Studio edit: " + error.message.slice(0, 350), new Date().toISOString(), id).run();
     return json({ error: "The Studio edit could not be queued. " + error.message }, 502);
   }
-  return json({ job_id: id, status: "queued", message: "Studio edit queued. The cloud editor will apply it and save a new project revision." }, 202);
+  return json({ job_id: id, status: "queued", message: analysisOnly ? "Silence review queued. The cloud worker will return measured candidates without rendering a new video." : "Studio edit queued. The cloud editor will apply it and save a new project revision." }, 202);
 }
 
 async function requestAiEdit(request, env, id) {
@@ -951,7 +968,7 @@ async function confirmAiEdit(request, env, id) {
   const required = Array.isArray(plan.required_confirmations) ? [...new Set(plan.required_confirmations)] : [];
   const supplied = Array.isArray(body.confirmed_tools) ? [...new Set(body.confirmed_tools)] : [];
   if (!required.length || required.length !== supplied.length || required.some(name => !supplied.includes(name))) return json({ error: "Approval must match every operation listed in the pending plan." }, 400);
-  const permitted = new Set(["timeline.delete_clip", "timeline.ripple_delete_clip", "timeline.remove_track"]);
+  const permitted = new Set(["timeline.delete_clip", "timeline.ripple_delete_clip", "timeline.remove_track", "transcript.apply_cut", "transcript.apply_silence_cut"]);
   if (supplied.some(name => !permitted.has(name))) return json({ error: "The pending plan requested an unsupported approval." }, 400);
   await env.DB.prepare("UPDATE jobs SET status='queued',message='Approved AI edit queued for execution.',ai_status='queued',confirmed_tools_json=?,updated_at=? WHERE id=?")
     .bind(JSON.stringify(supplied), new Date().toISOString(), id).run();
