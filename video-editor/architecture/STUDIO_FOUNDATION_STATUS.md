@@ -143,3 +143,20 @@ Optical-flow slow motion remains optional and gated. It must not introduce a pai
 - Run Python, Node, Worker/UI and generated-media MLT tests on this public lab branch.
 - Do not merge into Stable or deploy a Worker as part of this lab setup.
 - Stage 1 offline implementation is complete. Do not claim production acceptance until the hosted Worker-to-runner test is completed after explicit deployment authorization.
+
+
+## Stage 2 — initial progress
+
+### Task 2.1 — subtitle editing and SRT/VTT round-trip
+
+**Offline implementation and CI accepted on `video-editor-lab`.**
+
+- Added a shared SRT/WebVTT parser and exporter with BOM/newline handling, cue identifiers, WebVTT headers/settings, multiline cue text and safe entity handling.
+- Retained the 1 MiB upload cap and 500-cue cap; validated positive timestamps, non-overlapping cues and sidecar millisecond precision.
+- Added Studio editing controls for selected title/caption text and supported font, colour, outline, alignment and placement settings. Updates use the existing `text.update_clip` operation and normal revision-checked edit path.
+- Added SRT/VTT export for a selected text track. Export rejects invalid/overlapping cues and unsafe millisecond rounding rather than producing a sidecar that cannot be re-imported.
+- Added parser/round-trip/security tests and a real MLT render integration test that edits a caption, renders the output, decodes a frame and verifies visible changed yellow caption pixels.
+
+**GitHub Actions evidence:** run #45983414095 passed on commit `70385fca459b08a7bf6e8957233919bc40347cce`: 276 Python tests, 64 Node tests, 0 Node failures and all checked-in D1 migrations passed.
+
+This is offline/code acceptance only. No Worker deployment, live private Release upload, hosted end-to-end test or Android usability test was performed. Remaining Stage 2 tasks are still open.

@@ -14,7 +14,7 @@ A feature is complete only after its data contract, permission and validation ru
 
 | Task | Capability IDs | Work and acceptance evidence | Status |
 |---|---|---|---|
-| 2.1 | `manual_subtitles`, `subtitle_import_export` | Edit existing caption text in Studio; import and export SRT/VTT; preserve cue text/timestamps across round-trip; reject bad timing and unsafe/oversized input; verify UI wiring. Reuse `captions.import_subtitles` and `text.update_clip`. | In progress |
+| 2.1 | `manual_subtitles`, `subtitle_import_export` | Edit existing caption text in Studio; import/export SRT/VTT; preserve cue text/timestamps to millisecond precision; reject malformed, overlapping and oversized cues; verify real MLT rendered edits. Reuse `captions.import_subtitles` and `text.update_clip`. | **Offline CI accepted** — run #45983414095 (276 Python, 64 Node, D1 migrations; real MLT caption render passed). Hosted/Android acceptance remains separate. |
 | 2.2 | `word_timing` | Define validated transcript records with word text, start/end timestamps and source asset; ingest user-supplied timing; search exact words/phrases and map matches to media time. | Planned |
 | 2.3 | `transcript_driven_editing` | Select timed word ranges, correct words and build a reviewable cut proposal; preserve original transcript and source asset. | Planned |
 | 2.4 | `transcript_driven_editing` | Combine transcript timing with measured silence candidates; never label technical silence as a filler word; show before/after timing in a reviewable cut list. | Planned |
