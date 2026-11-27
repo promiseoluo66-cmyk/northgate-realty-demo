@@ -114,6 +114,7 @@ _TEXT_UPDATE_SCHEMA = {
         "shadow_x": _field("integer", minimum=-32, maximum=32),
         "shadow_y": _field("integer", minimum=-32, maximum=32),
         "shadow_opacity": _field("number", minimum=0, maximum=1),
+        "shadow_blur": _field("number", minimum=0, maximum=10),
         "letter_spacing_px": _field("number", minimum=-10, maximum=40),
         "line_spacing_px": _field("integer", minimum=-40, maximum=120),
         "opacity": _field("number", minimum=0, maximum=1),

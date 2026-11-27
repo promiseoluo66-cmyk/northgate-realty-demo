@@ -1200,7 +1200,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ass_path = text_directory / f"{output_path.stem}.ass"
     ass_path.write_text(ass_colour_script + "\n".join(event_lines) + "\n", encoding="utf-8")
 
-    filters = ["format=rgba"]
+    filters = []
     if text_spec.get("background_fill"):
         red, green, blue, bg_alpha = _parse_text_colour(text_spec.get("bgcolour", "#000000"), "#000000")
         bg_alpha *= float(text_spec.get("bgopacity", 0.5))
@@ -1217,7 +1217,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     filters.append(f"ass=filename='{ass_file}':alpha=1")
     command = [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", f"color=c=black@0.0:s={width}x{height}:r=1:d=1",
+        "-f", "lavfi", "-i", f"color=c=black@0.0:s={width}x{height}:r=1:d=1,format=rgba",
         "-vf", ",".join(filters), "-frames:v", "1", "-c:v", "png",
         "-pix_fmt", "rgba", str(output_path),
     ]

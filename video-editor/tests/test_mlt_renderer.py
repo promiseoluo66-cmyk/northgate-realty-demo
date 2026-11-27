@@ -1400,6 +1400,7 @@ class AdvancedTextOverlayTests(unittest.TestCase):
             "ffmpeg", "-hide_banner", "-loglevel", "error",
             "-i", str(output), "-f", "rawvideo", "-pix_fmt", "rgba", "-",
         ], check=True, capture_output=True, timeout=30)
+        self.assertEqual(decoded.stdout[(8 * 320 + 8) * 4 + 3], 0)
         return decoded.stdout
 
     def bbox(self, raw, threshold=16):
