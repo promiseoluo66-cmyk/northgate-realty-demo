@@ -1,6 +1,6 @@
 # Project State — New-Chat Handoff
 
-**Last reconciled:** 2026-11-27  
+**Last reconciled:** 2026-11-27 (final audit and continuous-update instructions added)  
 **Repository:** `promiseoluo66-cmyk/northgate-realty-demo`  
 **Working branch:** `video-editor-lab`  
 **Project status:** Stage 1 implementation/offline acceptance recorded; Stage 2 in progress; Stage 3 not started.
@@ -89,8 +89,8 @@ The records disagree:
 
 ## 7. Required ChatGPT workflow and tools
 
-- Use Superpowers for brainstorming, design approval, planning, test-driven implementation, systematic debugging, code review, and final verification.
-- Use Context7 to check current technical documentation when APIs, libraries, frameworks, or platform behaviour matter.
+- Follow the Superpowers workflow recorded in this repository for brainstorming, design approval, planning, test-driven implementation, systematic debugging, code review, and final verification. The repository's `docs/superpowers/WORKFLOW.md`, design spec and review checklist were re-read during the 2026-11-27 audit. This ChatGPT session did not expose a separate Superpowers skill/tool namespace; do not claim a dedicated Superpowers tool was invoked. Use the documented workflow honestly, and use a dedicated skill only when it is actually available.
+- Context7 is available in the connected tools. During the 2026-11-27 audit, Cloudflare Workers documentation was resolved (`/cloudflare/workers-sdk`) and queried for D1 bindings, Miniflare testing and local D1 migrations. The returned guidance included `getD1Database`, Miniflare `dispatchFetch`/`dispose`, and `wrangler d1 migrations apply --local`. Re-check current docs for the exact API involved whenever implementation depends on changing external behaviour.
 - Use GitHub as the source of truth for files, branches, commits, and CI evidence.
 - The current ChatGPT environment does **not** expose a verified independent-agent runtime. Specialist architecture, research, implementation, debugging, testing, security, and QA checks are perspectives performed by the same ChatGPT session. Never claim separate agents were launched.
 - Follow `AGENTS.md`, `docs/superpowers/WORKFLOW.md`, and `docs/superpowers/REVIEW_CHECKLIST.md`.
@@ -106,9 +106,11 @@ When this project is opened in a new ChatGPT conversation:
 5. Reconcile the Task 2.4 conflict before touching it.
 6. Report what is already complete, what remains, the next permitted task, and any changed facts.
 7. Do not make the user repeat information already recorded here.
-8. Before ending any session that changes project state, update this file with completed work, remaining work, decisions, blockers, exact commit(s), and test evidence. Read the updated file back from GitHub.
+8. **Continuously maintain this handoff.** After each meaningful implementation milestone or completed task, update the relevant status/ledger and this `PROJECT_STATE.md` on `video-editor-lab`. Record what changed, exact paths, decisions, remaining work, blockers, commit SHA/URL, and the actual test evidence (including failures/skips and whether evidence is historical or fresh). Do not wait until the very end of a long session if several milestones have been completed.
+9. Before ending any session that changed project state, update this file with the final state, exact commit(s), and test evidence; read the updated file back from GitHub and verify its content SHA and commit. If the handoff update or read-back fails, report that explicitly and do not claim the handoff is current.
+10. Keep this file concise but complete. Preserve prior decisions and unresolved conflicts; never silently convert a planned, gated, blocked, or historically tested item into complete.
 
-**Suggested message for a new chat:**  
+**Suggested message for a new chat (copy the complete prompt):**  
 “Continue the video-editor project in `promiseoluo66-cmyk/northgate-realty-demo`. First read `PROJECT_STATE.md` on branch `video-editor-lab` and follow its new-chat startup instructions. Verify the live GitHub state before changing anything. Do not ask me to repeat information already recorded in the handoff.”
 
 ## 9. Source documents
@@ -123,3 +125,76 @@ When this project is opened in a new ChatGPT conversation:
 - Stage 1 implementation and verification status: `video-editor/architecture/STUDIO_FOUNDATION_STATUS.md`
 - Operation audit: `video-editor/architecture/49_OPERATION_IMPLEMENTATION_AUDIT.md`
 - Editor overview: `video-editor/README.md`
+
+
+## 10. Continuous handoff maintenance — mandatory
+
+This file is the persistent memory for the project across ChatGPT conversations. Every ChatGPT session working on this repository must maintain it as a living project record.
+
+### Update triggers
+
+Update `PROJECT_STATE.md` whenever any of the following happens:
+- A task, subtask, implementation milestone, test gate, review, or research decision is completed.
+- A source file, test, configuration, plan, capability ledger, or architecture document is changed.
+- A test passes, fails, is skipped, or cannot be run.
+- A blocker, scope change, user decision, approval, cost/licence finding, or technical limitation is discovered.
+- A commit is created or the branch head changes.
+
+### Required update contents
+
+For each meaningful update, record:
+- Task ID and status: planned / in progress / blocked / gated / implemented / verified / accepted.
+- Exact files changed and a short description of what changed.
+- Commit SHA and GitHub URL.
+- Verification performed, exact result/counts, and whether it is fresh evidence or historical evidence.
+- What remains, next permitted action, and any user approval still required.
+- Any changed technical assumptions, risks, cost/licence constraints, or unresolved contradictions.
+
+Update the relevant detailed plan/ledger as well as this summary when appropriate. Do not mark a task complete merely because code exists or a checkbox was ticked.
+
+### Required end-of-session procedure
+
+1. Inspect the live GitHub branch and current handoff before editing.
+2. Work only on `video-editor-lab` in this repository.
+3. After changes, update this handoff using the latest fetched blob SHA.
+4. Read `PROJECT_STATE.md` back from GitHub.
+5. Verify the resulting commit, changed-file list and final handoff content.
+6. Report the handoff commit SHA and link, plus any work that remains.
+7. If no project files changed, do not create a meaningless handoff commit; report that no update was needed.
+
+### Copy-and-paste master prompt for future ChatGPT sessions
+
+```text
+Continue the video-editor project in promiseoluo66-cmyk/northgate-realty-demo.
+
+FIRST: Read PROJECT_STATE.md on branch video-editor-lab, then read AGENTS.md, docs/superpowers/WORKFLOW.md, docs/superpowers/REVIEW_CHECKLIST.md, the approved workflow design, the Stage 2 completion plan, and the Stage 2 capability ledger. Treat the live GitHub repository as the source of truth. Verify the current branch head and inspect relevant files and existing test evidence before making changes. Do not ask me to repeat information already recorded in these files.
+
+NON-NEGOTIABLE BOUNDARIES:
+- Use only promiseoluo66-cmyk/northgate-realty-demo.
+- Work only on video-editor-lab. Never modify main.
+- Do not use sparkle-clean-co.
+- Current budget is $0. Do not activate billing, add paid services/APIs, or introduce hidden costs.
+- Do not deploy, merge, publish, release, send messages, or perform irreversible external actions without my explicit permission.
+- Do not trigger GitHub Actions unnecessarily.
+- Preserve working features and the existing architecture; do not duplicate functionality.
+- Do not begin Stage 2 Task 2.4 unless I explicitly resolve the documented conflict and authorise it.
+- Finish Stage 2 only; stop before Stage 3 until I explicitly approve it.
+
+DEVELOPMENT PROCESS:
+- Follow the repository's Superpowers workflow: inspect, brainstorm/design, get approval where required, plan, test-first implementation, systematic debugging, specialist reviews, security review and final verification.
+- Use Context7 for current authoritative technical documentation whenever an API, library, framework or platform behaviour matters.
+- Be truthful about tool availability. Do not claim independent agents or separate workers were launched unless a real agent runtime is exposed. Specialist reviews can be performed as distinct review perspectives by this ChatGPT session.
+- Make small, reviewable changes. Read files before updating them. Use exact GitHub paths and branch.
+- For code, write/adjust tests first, observe the expected failure where feasible, implement the smallest safe change, then run the relevant tests. Never hide failures.
+- Distinguish fresh test results from historical CI evidence. Do not claim Android/hosted acceptance or deployment unless actually performed.
+
+MANDATORY CONTINUOUS HANDOFF RULE:
+- Keep PROJECT_STATE.md updated throughout the work, not just at the end.
+- After EVERY meaningful implementation milestone/task, update the detailed task ledger/plan as appropriate AND update PROJECT_STATE.md on video-editor-lab.
+- Record completed work, exact files, decisions, blockers, remaining tasks, commit SHA/URL, and actual test results (including failures, skips, and historical-vs-fresh status).
+- Before ending the session, fetch PROJECT_STATE.md again, update it with the final state, commit it to video-editor-lab, read it back from GitHub, and verify the resulting commit and content.
+- If the handoff cannot be updated or verified, tell me clearly. Never claim it is current when it is not.
+- Do not create empty/no-op handoff commits when no project state changed.
+
+START by reporting: current branch head, what is complete, what remains, the next permitted task, blockers/conflicts, and the exact evidence. Then continue only within the approved scope. Do not start Stage 3.
+```
