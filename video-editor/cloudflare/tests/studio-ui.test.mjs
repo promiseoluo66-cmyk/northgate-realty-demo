@@ -305,9 +305,15 @@ test("Studio exposes expanded editable title styling controls", () => {
 });
 
 
-test("Text clips expose only the supported opacity keyframe property and fade presets", () => {
-  assert.match(studioScript, /option\.disabled = clip\.kind === "text" && option\.value !== "opacity"/);
-  assert.match(studioScript, /\["video","image","text"\]\.includes\(clip\.kind\)/);
+test("Text clips expose canonical transform keyframes and bounded loop presets", () => {
+  assert.match(studioScript, /textAnimationProperties = new Set/);
+  for (const property of ["position_x", "position_y", "scale_x", "scale_y", "rotation_deg", "opacity"]) {
+    assert.ok(studioScript.includes(property), "Missing text animation property " + property);
+  }
+  assert.match(studioScript, /preset==="pulse_loop"\|\|preset==="float_loop"/);
+  assert.match(studioScript, /for\(let cycle=0;cycle<3;cycle\+\+\)/);
+  assert.match(html, /value="pulse_loop"/);
+  assert.match(html, /value="float_loop"/);
   assert.match(studioScript, /fade_in/);
 });
 
