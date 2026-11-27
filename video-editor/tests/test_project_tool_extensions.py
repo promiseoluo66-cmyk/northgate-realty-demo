@@ -161,6 +161,30 @@ class EditorToolExpansionTests(unittest.TestCase):
             {"opacity", "scale_x", "scale_y", "position_x", "position_y", "rotation_deg"},
         )
 
+    def test_word_timed_caption_clips_use_supplied_timing_and_highlight_style(self):
+        result = self.run_tool("captions.add_word_timed", {
+            "track_id": "title-track",
+            "words": [
+                {"text": "HELLO", "start_us": 100_000, "end_us": 450_000},
+                {"text": "WORLD", "start_us": 500_000, "end_us": 900_000},
+            ],
+            "text_style": {"fgcolour": "#FFD700", "size": 48},
+        })
+        created = result["results"][0]["result"]["caption_clips"]
+        self.assertEqual(len(created), 2)
+        clips = {
+            clip["id"]: clip
+            for track in self.executor.get_project()["tracks"]
+            for clip in track["clips"]
+        }
+        first, second = (clips[item["clip_id"]] for item in created)
+        self.assertEqual((first["start_us"], first["duration_us"]), (100_000, 350_000))
+        self.assertEqual((second["start_us"], second["duration_us"]), (500_000, 400_000))
+        self.assertEqual(first["text"]["content"], "HELLO")
+        self.assertEqual(second["text"]["content"], "WORLD")
+        self.assertEqual(first["text"]["fgcolour"], "#FFD700")
+        self.assertEqual(second["text"]["fgcolour"], "#FFD700")
+
     def test_animation_keyframes_can_be_reset_for_property_or_entire_clip(self):
         for property_name in ("opacity", "scale_x"):
             self.run_tool("animation.set_keyframe", {
