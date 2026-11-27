@@ -1346,13 +1346,11 @@ class TranscriptCutProposalTests(unittest.TestCase):
         self.assertEqual(redone["next-clip"]["start_us"], 1_600_000)
 
     def test_apply_supports_cut_from_early_in_clip(self):
-        self.apply(start=0, end=0, confirmed=True)
+        result = self.apply(start=0, end=0, confirmed=True)
         project = self.executor.get_project()
         clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
         self.assertEqual(clips["main-clip"]["duration_us"], 100_000)
-        remaining = clips[next(
-            clip["id"] for clip in project["tracks"][0]["clips"] if clip["id"] != "main-clip" and clip["kind"] == "video"
-        )]
+        remaining = clips[result["results"][0]["result"]["after_clip_id"]]
         self.assertEqual(remaining["source_in_us"], 250_000)
         self.assertEqual(remaining["start_us"], 100_000)
         self.assertEqual(clips["next-clip"]["start_us"], 1_850_000)
