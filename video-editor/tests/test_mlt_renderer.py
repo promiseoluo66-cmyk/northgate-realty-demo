@@ -1296,6 +1296,86 @@ class EditedCaptionMltRenderTests(unittest.TestCase):
         )
 
 
+class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
+    """Decode real output frames to verify text fades and clip boundaries."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.project = make_project(self.root)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_text_opacity_keyframes_fade_in_without_leaking_past_clip(self):
+        import subprocess
+        from mlt_engine.renderer import render_project
+
+        source = self.root / "source.mp4"
+        output = self.root / "animated-text-opacity.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=25:d=2",
+            "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ], check=True, capture_output=True, text=True, timeout=120)
+        self.project["assets"][0].update({
+            "size_bytes": source.stat().st_size, "duration_us": 2_000_000,
+        })
+        self.project["tracks"][0]["clips"][0].update({
+            "duration_us": 2_000_000, "source_out_us": 2_000_000,
+        })
+        self.project["tracks"].append({
+            "id": "captions", "type": "text", "name": "Animated title",
+            "order": 1, "locked": False, "clips": [{
+                "id": "fade-title", "kind": "text",
+                "start_us": 400_000, "duration_us": 800_000,
+                "text": {
+                    "content": "FADE TITLE", "family": "Sans", "size": 42,
+                    "weight": 700, "fgcolour": "#FFFFFF", "olcolour": "#000000",
+                    "outline": 1, "halign": "center", "valign": "middle",
+                    "x_percent": 5, "y_percent": 35,
+                    "width_percent": 90, "height_percent": 30,
+                },
+                "effects": [], "keyframes": [
+                    {"property": "opacity", "time_us": 0, "value": 0.0,
+                     "interpolation": "linear"},
+                    {"property": "opacity", "time_us": 400_000, "value": 1.0,
+                     "interpolation": "linear"},
+                ],
+            }],
+        })
+
+        receipt = render_project(self.project, self.root, output, timeout_seconds=120)
+        self.assertTrue(receipt["ok"], receipt)
+
+        def bright_glyph_pixels(timestamp):
+            decoded = subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-ss", f"{timestamp:.3f}", "-i", str(output),
+                "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+            ], check=True, capture_output=True, timeout=60)
+            self.assertEqual(len(decoded.stdout), 320 * 240 * 3)
+            return sum(
+                1 for red, green, blue in zip(
+                    decoded.stdout[0::3], decoded.stdout[1::3], decoded.stdout[2::3]
+                )
+                if red > 190 and green > 190 and blue > 190
+            )
+
+        early = bright_glyph_pixels(0.5)
+        fully_visible = bright_glyph_pixels(0.9)
+        after_clip = bright_glyph_pixels(1.4)
+        self.assertLess(early, fully_visible, "Text should become brighter during its fade-in.")
+        self.assertGreater(fully_visible, 20, "Fully faded text should be visible in decoded frames.")
+        self.assertEqual(after_clip, 0, "Text must disappear after its clip ends.")
+
+
 class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
