@@ -556,12 +556,20 @@ class ProjectToolExecutor:
     def _analyze_audio_media(
         self, project: dict[str, Any], media_id: str,
         analysis_seconds: int, silence_threshold_db: float,
+        minimum_silence_seconds: float = 0.2,
     ) -> dict[str, Any]:
         """Measure audio metadata, silence and loudness without project mutation."""
         if self._asset_root is None:
             raise ProjectToolExecutionError(
                 "Audio analysis requires a configured asset directory."
             )
+        if (
+            isinstance(minimum_silence_seconds, bool)
+            or not isinstance(minimum_silence_seconds, (int, float))
+            or not math.isfinite(float(minimum_silence_seconds))
+            or not 0.02 <= float(minimum_silence_seconds) <= 10.0
+        ):
+            raise ProjectToolExecutionError("Minimum silence duration must be 0.02–10 seconds.")
         asset = self._asset(project, media_id)
         if asset.get("media_type") not in {"video", "audio"}:
             raise ProjectToolExecutionError(
@@ -634,7 +642,7 @@ class ProjectToolExecutor:
             return base
 
         filter_chain = (
-            f"silencedetect=n={silence_threshold_db:.2f}dB:d=0.20,"
+            f"silencedetect=n={silence_threshold_db:.2f}dB:d={float(minimum_silence_seconds):.3f},"
             "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json"
         )
         measured = subprocess.run(
@@ -1072,6 +1080,7 @@ class ProjectToolExecutor:
             analysis = self._analyze_audio_media(
                 project, transcript["source_media_id"],
                 int(args["analysis_seconds"]), float(args["silence_threshold_db"]),
+                int(args["minimum_silence_us"]) / 1_000_000,
             )
             coverage_us = round(float(analysis.get("analysis_coverage_seconds", 0)) * 1_000_000)
             minimum_silence_us = int(args["minimum_silence_us"])
@@ -1149,6 +1158,7 @@ class ProjectToolExecutor:
                 project, transcript["source_media_id"],
                 int(args.get("analysis_seconds", 600)),
                 float(args.get("silence_threshold_db", -50)),
+                minimum_silence_us / 1_000_000,
             )
             if analysis.get("measurement_status") != "measured":
                 raise ProjectToolExecutionError("Fresh audio analysis did not confirm an audio stream.")
