@@ -149,6 +149,26 @@ class CompilePlanTests(unittest.TestCase):
         text_clip = plan["tracks"][1]["clips"][0]
         self.assertEqual(text_clip["keyframes"], self.project["tracks"][1]["clips"][0]["keyframes"])
 
+    def test_unsupported_legacy_text_transform_falls_back_to_static_overlay(self):
+        self.project["tracks"].append({
+            "id": "captions", "type": "text", "name": "Captions", "order": 1,
+            "clips": [{
+                "id": "legacy-transformed-caption", "kind": "text",
+                "start_us": 400_000, "duration_us": 800_000,
+                "text": {"content": "Static fallback"},
+                "transform": {
+                    "position": {"x": 40, "y": 20},
+                    "scale": {"x": 1.2, "y": 1.2},
+                    "rotation_deg": 12, "opacity": 0.8,
+                },
+                "effects": [], "keyframes": [],
+            }],
+        })
+        plan = self.compile()
+        self.assertEqual(
+            plan["tracks"][1]["clips"][0]["text"]["content"], "Static fallback"
+        )
+
     def test_compiles_text_visual_transform_keyframes(self):
         self.project["tracks"].append({
             "id": "captions", "type": "text", "name": "Captions", "order": 1,
