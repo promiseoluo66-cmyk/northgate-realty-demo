@@ -1287,6 +1287,7 @@ class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
 
         source = self.root / "source.mp4"
         output = self.root / "silence-cut-render.mp4"
+        project = make_project(self.root)
         subprocess.run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=25:d=2.5",
@@ -1300,7 +1301,6 @@ class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
         ], check=True, capture_output=True, text=True, timeout=120)
         original_source = source.read_bytes()
 
-        project = make_project(self.root)
         project["assets"][0].update({
             "size_bytes": source.stat().st_size, "duration_us": 2_500_000,
         })
@@ -1368,7 +1368,7 @@ class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
         samples.frombytes(decoded.stdout)
         self.assertGreater(len(samples), 1000)
         crossings = sum(1 for left, right in zip(samples, samples[1:]) if left <= 0 < right)
-        measured_frequency = crossings / (len(samples) / 48_000) / 2
+        measured_frequency = crossings / (len(samples) / 48_000)
         self.assertGreater(measured_frequency, 700)
         self.assertLess(measured_frequency, 1_000)
         self.assertEqual(source.read_bytes(), original_source)
