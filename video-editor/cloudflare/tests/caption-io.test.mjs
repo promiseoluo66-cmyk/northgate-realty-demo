@@ -72,7 +72,7 @@ test("parser rejects malformed timestamps, empty cues and non-positive durations
 test("parser rejects overlapping cues and unsupported extensions", () => {
   const source = "1\n00:00:00,000 --> 00:00:02,000\nOne\n\n2\n00:00:01,000 --> 00:00:03,000\nTwo";
   assert.throws(() => parseSubtitleFile(source, "bad.srt"), /overlap/);
-  assert.throws(() => parseSubtitleFile(source, "captions.txt"), /SRT or VTT/);
+  assert.throws(() => parseSubtitleFile(source, "captions.txt"), /\.SRT or \.VTT/);
 });
 
 test("parser enforces 500-cue and 2,000-character limits", () => {
