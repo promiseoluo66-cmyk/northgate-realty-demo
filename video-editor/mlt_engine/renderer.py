@@ -1200,7 +1200,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ass_path = text_directory / f"{output_path.stem}.ass"
     ass_path.write_text(ass_colour_script + "\n".join(event_lines) + "\n", encoding="utf-8")
 
-    filters = []
+    ass_file = str(ass_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    canvas_source = f"color=c=black@0.0:s={width}x{height}:r=1:d=1,format=rgba"
     if text_spec.get("background_fill"):
         red, green, blue, bg_alpha = _parse_text_colour(text_spec.get("bgcolour", "#000000"), "#000000")
         bg_alpha *= float(text_spec.get("bgopacity", 0.5))
@@ -1209,18 +1210,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         rect_y = max(0, box_y - pad)
         rect_width = min(width - rect_x, box_width + 2 * pad)
         rect_height = min(height - rect_y, box_height + 2 * pad)
-        filters.append(
+        background_filter = (
             f"drawbox=x={rect_x}:y={rect_y}:w={rect_width}:h={rect_height}:"
             f"color=0x{red:02X}{green:02X}{blue:02X}@{max(0.0, min(1.0, bg_alpha)):.4f}:t=fill"
         )
-    ass_file = str(ass_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-    filters.append(f"ass=filename='{ass_file}':alpha=1")
-    command = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", f"color=c=black@0.0:s={width}x{height}:r=1:d=1,format=rgba",
-        "-vf", ",".join(filters), "-frames:v", "1", "-c:v", "png",
-        "-pix_fmt", "rgba", str(output_path),
-    ]
+        filter_complex = (
+            f"[0:v]{background_filter}[background];"
+            f"[1:v]ass=filename='{ass_file}':alpha=1[text];"
+            "[background][text]overlay=x=0:y=0:format=auto:shortest=1,format=rgba[out]"
+        )
+        command = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", canvas_source,
+            "-f", "lavfi", "-i", canvas_source,
+            "-filter_complex", filter_complex, "-map", "[out]",
+            "-frames:v", "1", "-c:v", "png", "-pix_fmt", "rgba", str(output_path),
+        ]
+    else:
+        command = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", canvas_source,
+            "-vf", f"ass=filename='{ass_file}':alpha=1",
+            "-frames:v", "1", "-c:v", "png", "-pix_fmt", "rgba", str(output_path),
+        ]
     result = subprocess.run(command, capture_output=True, text=True, timeout=60)
     if result.returncode != 0 or not output_path.is_file():
         raise MltRenderError(
