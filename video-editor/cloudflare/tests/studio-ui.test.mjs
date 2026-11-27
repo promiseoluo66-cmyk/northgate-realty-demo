@@ -289,3 +289,17 @@ test("Studio exposes measured silence review with individual human approval", ()
   assert.match(html, /Silence is a measured signal, not a filler-word verdict/);
   assert.match(html, /analysis_result/);
 });
+
+
+test("Studio exposes expanded editable title styling controls", () => {
+  for (const id of [
+    "studio-text-weight", "studio-text-background-fill", "studio-text-bgcolour",
+    "studio-text-bgopacity", "studio-text-pad", "studio-text-shadow-color",
+    "studio-text-shadow-x", "studio-text-shadow-y", "studio-text-shadow-opacity",
+    "studio-text-letter-spacing", "studio-text-line-spacing"
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  for (const property of [
+    "weight", "background_fill", "bgcolour", "bgopacity", "shadow_color",
+    "shadow_x", "shadow_y", "shadow_opacity", "letter_spacing_px", "line_spacing_px"
+  ]) assert.ok(studioScript.includes(property), "Missing style property " + property);
+});

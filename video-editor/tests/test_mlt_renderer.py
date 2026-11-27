@@ -1372,3 +1372,85 @@ class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
         self.assertGreater(measured_frequency, 700)
         self.assertLess(measured_frequency, 1_000)
         self.assertEqual(source.read_bytes(), original_source)
+
+
+class AdvancedTextOverlayTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def render(self, name, **style):
+        import subprocess
+        from mlt_engine.renderer import _make_text_overlay_image
+        output = self.root / (name + ".png")
+        text_spec = {
+            "content": "WIDE\\nTEXT", "size": 34, "weight": 400,
+            "fgcolour": "#FFFFFF", "olcolour": "#000000", "outline": 0,
+            "halign": "left", "valign": "top",
+            "x_percent": 10, "y_percent": 10,
+            "width_percent": 80, "height_percent": 80,
+        }
+        text_spec.update(style)
+        _make_text_overlay_image(text_spec, 320, 240, output, self.root)
+        self.assertTrue(output.is_file())
+        decoded = subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", str(output), "-f", "rawvideo", "-pix_fmt", "rgba", "-",
+        ], check=True, capture_output=True, timeout=30)
+        return decoded.stdout
+
+    def bbox(self, raw, threshold=16):
+        points = []
+        for y in range(240):
+            for x in range(320):
+                if raw[(y * 320 + x) * 4 + 3] > threshold:
+                    points.append((x, y))
+        self.assertTrue(points, "Expected non-transparent rendered text pixels.")
+        return (
+            min(x for x, _ in points), min(y for _, y in points),
+            max(x for x, _ in points), max(y for _, y in points),
+        )
+
+    def test_letter_spacing_line_spacing_weight_background_and_shadow_render(self):
+        import subprocess
+        filters = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-filters"],
+            check=True, capture_output=True, text=True, timeout=30,
+        ).stdout
+        if " ass " not in filters:
+            self.skipTest("FFmpeg was built without the libass filter.")
+
+        normal = self.render("normal", content="WIDE\\nTEXT")
+        spaced = self.render("spaced", content="WIDE\\nTEXT", letter_spacing_px=8)
+        normal_box, spaced_box = self.bbox(normal), self.bbox(spaced)
+        self.assertGreater(spaced_box[2] - spaced_box[0], normal_box[2] - normal_box[0] + 8)
+
+        tight_lines = self.render("tight-lines", content="A\\nB", line_spacing_px=0)
+        loose_lines = self.render("loose-lines", content="A\\nB", line_spacing_px=20)
+        self.assertGreater(self.bbox(loose_lines)[3] - self.bbox(loose_lines)[1],
+                           self.bbox(tight_lines)[3] - self.bbox(tight_lines)[1] + 10)
+
+        no_shadow = self.render("no-shadow", content="A", shadow_x=0, shadow_y=0, shadow_opacity=0)
+        with_shadow = self.render("with-shadow", content="A", shadow_x=8, shadow_y=8,
+                                  shadow_color="#000000", shadow_opacity=1)
+        self.assertGreater(self.bbox(with_shadow)[2], self.bbox(no_shadow)[2] + 3)
+        self.assertGreater(self.bbox(with_shadow)[3], self.bbox(no_shadow)[3] + 3)
+
+        normal_weight = self.render("normal-weight", content="BOLD", weight=400)
+        bold_weight = self.render("bold-weight", content="BOLD", weight=700)
+        self.assertNotEqual(normal_weight, bold_weight)
+
+        background = self.render(
+            "background", content="A", background_fill=True,
+            bgcolour="#FF0000", bgopacity=0.5, pad=0,
+        )
+        pixel = (200 * 320 + 280) * 4
+        red, green, blue, alpha = background[pixel:pixel + 4]
+        self.assertGreater(alpha, 90)
+        self.assertLess(alpha, 170)
+        self.assertGreater(red, 180)
+        self.assertLess(green, 60)
+        self.assertLess(blue, 60)

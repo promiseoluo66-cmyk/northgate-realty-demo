@@ -1663,3 +1663,76 @@ class MeasuredSilenceCutSafetyTests(unittest.TestCase):
                 plan = self.plan(project)
                 self.assertFalse(plan["can_apply"])
                 self.assertIn(blocker, plan["blockers"])
+
+
+class ExpandedTextStyleTests(unittest.TestCase):
+    def setUp(self):
+        self.project = make_project()
+        self.project["tracks"].append({
+            "id": "track-text", "type": "text", "name": "Titles", "order": 1,
+            "clips": [{
+                "id": "title-clip", "kind": "text", "start_us": 0,
+                "duration_us": 2_000_000,
+                "text": {
+                    "content": "A title", "size": 48, "weight": 400,
+                    "fgcolour": "#FFFFFF", "outline": 0,
+                    "halign": "center", "valign": "middle",
+                    "x_percent": 5, "y_percent": 5,
+                    "width_percent": 90, "height_percent": 90,
+                },
+                "effects": [], "keyframes": [],
+            }],
+        })
+        self.executor = ProjectToolExecutor(self.project)
+
+    def expanded_style(self):
+        return {
+            "weight": 700,
+            "background_fill": True,
+            "bgcolour": "#FF0000",
+            "bgopacity": 0.45,
+            "pad": 12,
+            "shadow_color": "#000000",
+            "shadow_x": 4,
+            "shadow_y": 5,
+            "shadow_opacity": 0.7,
+            "letter_spacing_px": 3.5,
+            "line_spacing_px": 12,
+        }
+
+    def test_text_update_schema_accepts_all_expanded_style_properties(self):
+        style = self.expanded_style()
+        validated = validate_tool_call("text.update_clip", {
+            "clip_id": "title-clip", "text_style": style,
+        })
+        self.assertEqual(validated["text_style"], style)
+
+    def test_text_update_persists_expanded_style_without_flattening_text(self):
+        style = self.expanded_style()
+        result = self.executor.execute("text.update_clip", {
+            "clip_id": "title-clip", "text_style": style,
+        })
+        saved = next(
+            clip for track in result["project"]["tracks"]
+            for clip in track["clips"] if clip["id"] == "title-clip"
+        )
+        self.assertEqual(saved["text"]["content"], "A title")
+        for key, value in style.items():
+            self.assertEqual(saved["text"][key], value)
+
+    def test_expanded_text_style_bounds_are_validated(self):
+        with self.assertRaises(ToolValidationError):
+            validate_tool_call("text.update_clip", {
+                "clip_id": "title-clip",
+                "text_style": {"letter_spacing_px": 100},
+            })
+        with self.assertRaises(ToolValidationError):
+            validate_tool_call("text.update_clip", {
+                "clip_id": "title-clip",
+                "text_style": {"shadow_opacity": 2},
+            })
+        invalid = self.executor.get_project()
+        invalid["tracks"][1]["clips"][0]["text"]["bgopacity"] = 1.1
+        from project_model import validate_project
+        with self.assertRaises(ProjectValidationError):
+            validate_project(invalid)
