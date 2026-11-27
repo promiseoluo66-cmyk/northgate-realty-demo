@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import math
 import re
 import subprocess
 import unicodedata

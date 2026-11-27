@@ -1262,3 +1262,113 @@ class EditedCaptionMltRenderTests(unittest.TestCase):
             yellow_glyph_pixels, 20,
             "The edited caption's requested yellow text should be visible in the actual render.",
         )
+
+
+class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_approved_measured_silence_cut_changes_real_render_and_is_undoable(self):
+        import array
+        import json
+        import subprocess
+        from project_tool_executor import ProjectToolExecutor
+        from mlt_engine.renderer import render_project
+
+        source = self.root / "source.mp4"
+        output = self.root / "silence-cut-render.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=25:d=2.5",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono:d=0.5",
+            "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000:duration=1",
+            "-filter_complex", "[1:a][2:a][3:a]concat=n=3:v=0:a=1[a]",
+            "-map", "0:v:0", "-map", "[a]",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "96k", "-shortest", str(source),
+        ], check=True, capture_output=True, text=True, timeout=120)
+        original_source = source.read_bytes()
+
+        project = make_project(self.root)
+        project["assets"][0].update({
+            "size_bytes": source.stat().st_size, "duration_us": 2_500_000,
+        })
+        project["tracks"][0]["clips"][0].update({
+            "duration_us": 2_500_000, "source_out_us": 2_500_000,
+        })
+        executor = ProjectToolExecutor(project, asset_root=self.root, output_dir=self.root)
+        imported = executor.execute("transcript.import_words", {
+            "media_id": "asset-video", "language": "en",
+            "words": [
+                {"text": "first", "start_us": 200_000, "end_us": 700_000},
+                {"text": "second", "start_us": 1_700_000, "end_us": 2_200_000},
+            ],
+        })
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        review = executor.execute("transcript.review_silence", {
+            "transcript_id": transcript_id, "clip_id": "clip-main",
+            "analysis_seconds": 600, "silence_threshold_db": -40,
+            "minimum_silence_us": 300_000,
+        })
+        payload = review["results"][0]["result"]
+        self.assertEqual(payload["measurement_status"], "measured")
+        self.assertEqual(len(payload["candidates"]), 1, payload)
+        candidate = payload["candidates"][0]
+        self.assertTrue(candidate["can_apply"], candidate["blockers"])
+        self.assertEqual(candidate["adjacent_words"], {"before": "first", "after": "second"})
+
+        applied = executor.execute("transcript.apply_silence_cut", {
+            "transcript_id": transcript_id, "clip_id": "clip-main",
+            "source_start_us": candidate["source_start_us"],
+            "source_end_us": candidate["source_end_us"],
+            "analysis_seconds": 600, "silence_threshold_db": -40,
+            "minimum_silence_us": 300_000,
+        }, expected_revision=executor.revision, confirmed=True)
+        self.assertTrue(applied["results"][0]["result"]["applied"])
+        cut_project = executor.get_project()
+        self.assertEqual(len(cut_project["tracks"][0]["clips"]), 2)
+        self.assertEqual(len(cut_project["transcripts"][0]["words"]), 2)
+
+        executor.execute("history.undo", {})
+        self.assertEqual(len(executor.get_project()["tracks"][0]["clips"]), 1)
+        executor.execute("history.redo", {})
+        self.assertEqual(len(executor.get_project()["tracks"][0]["clips"]), 2)
+
+        receipt = render_project(
+            executor.get_project(), self.root, output, timeout_seconds=120
+        )
+        self.assertTrue(receipt["ok"], receipt)
+        self.assertTrue(output.is_file())
+        probe = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries",
+            "format=duration:stream=codec_type", "-of", "json", str(output),
+        ], check=True, capture_output=True, text=True, timeout=60)
+        metadata = json.loads(probe.stdout)
+        duration = float(metadata["format"]["duration"])
+        self.assertAlmostEqual(duration, 2.0, delta=0.15)
+        self.assertTrue(any(stream.get("codec_type") == "audio" for stream in metadata["streams"]))
+
+        decoded = subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-ss", "1.1", "-i", str(output), "-t", "0.1",
+            "-vn", "-ac", "1", "-ar", "48000", "-f", "s16le", "-",
+        ], check=True, capture_output=True, timeout=60)
+        samples = array.array("h")
+        samples.frombytes(decoded.stdout)
+        self.assertGreater(len(samples), 1000)
+        crossings = sum(1 for left, right in zip(samples, samples[1:]) if left <= 0 < right)
+        measured_frequency = crossings / (len(samples) / 48_000) / 2
+        self.assertGreater(measured_frequency, 700)
+        self.assertLess(measured_frequency, 1_000)
+        self.assertEqual(source.read_bytes(), original_source)
