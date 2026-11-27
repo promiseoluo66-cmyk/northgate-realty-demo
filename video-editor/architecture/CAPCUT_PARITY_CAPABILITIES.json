@@ -739,9 +739,9 @@
     },
     "capability_entry_count": 118,
     "status_counts": {
-      "partially_implemented": 22,
-      "planned": 47,
-      "prototype_verified": 17,
+      "partially_implemented": 23,
+      "planned": 44,
+      "prototype_verified": 19,
       "gated_optional": 31,
       "under_test": 1
     },
@@ -804,6 +804,27 @@
         "no automatic multi-track audio/video sync",
         "pause and filler review are separate pending work"
       ]
+    },
+    "stage2_task_2_7": {
+      "status": "offline_ci_passed",
+      "workflow_run_id": 46078537336,
+      "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46078537336",
+      "commit": "6efb39b23a4c011428201ed1a9c0ec3c92bd2c11",
+      "python_tests_passed": 338,
+      "node_tests_passed": 73,
+      "node_tests_failed": 0,
+      "d1_migrations": "passed",
+      "generated_media_tests": [
+        "text fade-in and fade-out boundary frames",
+        "animated text position, scale and rotation",
+        "three bounded pulse-loop cycles",
+        "ASS karaoke word-highlight transitions from supplied word timings",
+        "text overlay clip-boundary disappearance",
+        "unsupported legacy text transform static fallback"
+      ],
+      "hosted_worker_and_android_acceptance": "not_performed",
+      "new_registered_operations": 0,
+      "new_d1_migrations": 0
     }
   },
   "stage2_task_2_4": {
