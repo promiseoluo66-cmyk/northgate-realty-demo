@@ -133,19 +133,29 @@ class CompilePlanTests(unittest.TestCase):
         text_clip = plan["tracks"][1]["clips"][0]
         self.assertEqual(text_clip["keyframes"], self.project["tracks"][1]["clips"][0]["keyframes"])
 
-    def test_rejects_unsupported_text_transform_keyframes(self):
+    def test_compiles_text_visual_transform_keyframes(self):
         self.project["tracks"].append({
             "id": "captions", "type": "text", "name": "Captions", "order": 1,
             "clips": [{
                 "id": "animated-caption", "kind": "text", "start_us": 400_000,
-                "duration_us": 800_000, "text": {"content": "No unsafe transform"},
+                "duration_us": 800_000, "text": {"content": "Animated transform"},
                 "effects": [], "keyframes": [
-                    {"property": "scale_x", "time_us": 0, "value": 1.0},
+                    {"property": "position_x", "time_us": 0, "value": -40,
+                     "interpolation": "ease_in_out"},
+                    {"property": "position_x", "time_us": 400_000, "value": 40,
+                     "interpolation": "ease_in_out"},
+                    {"property": "scale_x", "time_us": 0, "value": 0.8},
+                    {"property": "scale_x", "time_us": 400_000, "value": 1.0},
+                    {"property": "scale_y", "time_us": 0, "value": 0.8},
+                    {"property": "scale_y", "time_us": 400_000, "value": 1.0},
+                    {"property": "rotation_deg", "time_us": 0, "value": -8},
+                    {"property": "rotation_deg", "time_us": 400_000, "value": 0},
                 ],
             }],
         })
-        with self.assertRaisesRegex(MltRenderError, "opacity keyframes only"):
-            self.compile()
+        plan = self.compile()
+        text_clip = plan["tracks"][1]["clips"][0]
+        self.assertEqual(text_clip["keyframes"], self.project["tracks"][1]["clips"][0]["keyframes"])
 
     def test_compiles_still_image_overlay(self):
         image = self.root / "overlay.png"
