@@ -787,10 +787,9 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                     raise MltRenderError(
                         "Text clips currently support opacity keyframes only."
                     )
-                if any(item.get("interpolation") == "bezier" for item in clip.get("keyframes", [])):
-                    raise MltRenderError(
-                        "Text opacity animation does not support Bezier interpolation yet."
-                    )
+                _ffmpeg_text_opacity_filters(
+                    clip.get("keyframes", []), fps_num, fps_den
+                )
                 clip_transform = None
             else:
                 clip_transform = _compile_clip_transform(
@@ -1359,70 +1358,42 @@ def _make_text_overlay_image(
     return output_path
 
 
-def _ffmpeg_text_opacity_expression(
+def _ffmpeg_text_opacity_filters(
     keyframes: list[dict[str, Any]], fps_num: int, fps_den: int
-) -> str:
-    """Compile clip-local opacity keyframes against the overlay's frame counter."""
+) -> list[str]:
+    """Compile the supported two-point text opacity fade to FFmpeg's alpha fade filter."""
     entries = sorted(
         (item for item in keyframes if item["property"] == "opacity"),
         key=lambda item: int(item["time_us"]),
     )
     if not entries:
-        return "1"
-    if any(item.get("interpolation", "linear") == "bezier" for item in entries):
-        raise MltRenderError("Text opacity animation does not support Bezier interpolation yet.")
+        return []
+    if len(entries) != 2:
+        raise MltRenderError("Text opacity animation currently requires exactly two keyframes.")
+    if any(item.get("interpolation", "linear") != "linear" for item in entries):
+        raise MltRenderError("Text opacity animation currently supports linear interpolation only.")
 
-    frames = [
-        (_frame_at_us(int(item["time_us"]), fps_num, fps_den), item)
-        for item in entries
-    ]
-    if any(right[0] <= left[0] for left, right in zip(frames, frames[1:])):
-        raise MltRenderError("Text opacity keyframes must map to distinct increasing frames.")
+    start_frame = _frame_at_us(int(entries[0]["time_us"]), fps_num, fps_den)
+    end_frame = _frame_at_us(int(entries[1]["time_us"]), fps_num, fps_den)
+    frame_count = end_frame - start_frame
+    if frame_count < 1:
+        raise MltRenderError("Text opacity keyframes must map to increasing output frames.")
 
-    def eased(ratio: str, mode: str) -> str:
-        if mode == "hold":
-            return "0"
-        if mode == "linear":
-            return ratio
-        if mode in {"ease_in", "ease_in_cubic"}:
-            return f"pow({ratio}\\,3)"
-        if mode in {"ease_out", "ease_out_cubic"}:
-            return f"(1-pow(1-({ratio})\\,3))"
-        if mode in {"ease_in_out", "ease_in_out_cubic"}:
-            return f"if(lt({ratio}\\,0.5)\\,4*pow({ratio}\\,3)\\,1-pow(-2*({ratio})+2\\,3)/2)"
-        if mode == "ease_in_quad":
-            return f"pow({ratio}\\,2)"
-        if mode == "ease_out_quad":
-            return f"(1-pow(1-({ratio})\\,2))"
-        if mode == "ease_in_out_quad":
-            return f"if(lt({ratio}\\,0.5)\\,2*pow({ratio}\\,2)\\,1-pow(-2*({ratio})+2\\,2)/2)"
-        if mode == "ease_in_quart":
-            return f"pow({ratio}\\,4)"
-        if mode == "ease_out_quart":
-            return f"(1-pow(1-({ratio})\\,4))"
-        if mode == "ease_in_out_quart":
-            return f"if(lt({ratio}\\,0.5)\\,8*pow({ratio}\\,4)\\,1-pow(-2*({ratio})+2\\,4)/2)"
-        if mode == "smoothstep":
-            return f"({ratio})*({ratio})*(3-2*({ratio}))"
-        raise MltRenderError(f"Text opacity interpolation {mode!r} is unsupported.")
-
-    expression = f"{float(frames[-1][1]['value']):.9f}"
-    for (start_frame, left), (end_frame, right) in reversed(list(zip(frames, frames[1:]))):
-        span = end_frame - start_frame
-        ratio = f"((N-{start_frame})/{span})"
-        progress = eased(ratio, left.get("interpolation", "linear"))
-        left_value = float(left["value"])
-        right_value = float(right["value"])
-        segment = f"({left_value:.9f}+({right_value-left_value:.9f})*({progress}))"
-        expression = f"if(lt(N\\,{end_frame})\\,{segment}\\,{expression})"
-    first_frame = frames[0][0]
-    expression = f"if(lt(N\\,{first_frame})\\,1\\,{expression})"
-    if len(frames) == 1:
-        expression = (
-            f"if(lt(N\\,{first_frame})\\,1\\,"
-            f"{float(frames[0][1]['value']):.9f})"
-        )
-    return expression
+    start_value = float(entries[0]["value"])
+    end_value = float(entries[1]["value"])
+    if math.isclose(start_value, 0.0, abs_tol=1e-9) and math.isclose(
+        end_value, 1.0, abs_tol=1e-9
+    ):
+        if start_frame != 0:
+            raise MltRenderError("A text fade-in must begin at the first frame of its clip.")
+        return [f"fade=t=in:s=0:n={frame_count}:alpha=1"]
+    if math.isclose(start_value, 1.0, abs_tol=1e-9) and math.isclose(
+        end_value, 0.0, abs_tol=1e-9
+    ):
+        return [f"fade=t=out:s={start_frame}:n={frame_count}:alpha=1"]
+    raise MltRenderError(
+        "Text opacity animation currently supports 0-to-1 fade-in or 1-to-0 fade-out."
+    )
 
 
 def _apply_text_overlay_images_ffmpeg(
@@ -1451,13 +1422,12 @@ def _apply_text_overlay_images_ffmpeg(
         prepared = f"[prepared{index}]"
         keyframes = overlay.get("keyframes", [])
         if keyframes:
-            opacity_expression = _ffmpeg_text_opacity_expression(keyframes, fps_num, fps_den)
+            opacity_filters = _ffmpeg_text_opacity_filters(keyframes, fps_num, fps_den)
             filters.append(
                 f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB),format=rgba,"
-                "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
-                f"a='alpha(X,Y)*({opacity_expression})',"
-                f"scale={int(plan['width'])}:{int(plan['height'])},"
-                f"format=rgba{prepared}"
+                + ",".join(opacity_filters)
+                + f",scale={int(plan['width'])}:{int(plan['height'])},"
+                + f"format=rgba{prepared}"
             )
         else:
             filters.append(

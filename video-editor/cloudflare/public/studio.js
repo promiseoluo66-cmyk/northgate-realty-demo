@@ -1677,9 +1677,11 @@
     if(preset==="fade_in"||preset==="fade_out"){
       if(!["video","image","text"].includes(clip.kind))throw new Error("Fade presets require a visual or text clip.");
       if(preset==="fade_in"){
-        add("opacity",0,0,"ease_out");add("opacity",windowUs,1,"ease_out");
+        add("opacity",0,0,clip.kind==="text"?"linear":"ease_out");
+        add("opacity",windowUs,1,clip.kind==="text"?"linear":"ease_out");
       }else{
-        add("opacity",duration-windowUs,1,"ease_in");add("opacity",duration,0,"ease_in");
+        add("opacity",duration-windowUs,1,clip.kind==="text"?"linear":"ease_in");
+        add("opacity",duration,0,clip.kind==="text"?"linear":"ease_in");
       }
     }else if(preset==="zoom_in"){
       if(!["video","image"].includes(clip.kind))throw new Error("Zoom presets require a video or image clip.");

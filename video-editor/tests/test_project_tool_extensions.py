@@ -147,11 +147,11 @@ class EditorToolExpansionTests(unittest.TestCase):
         clip_id = created["results"][0]["result"]["clip_id"]
         self.run_tool("animation.set_keyframe", {
             "clip_id": clip_id, "property": "opacity",
-            "time_us": 0, "value": 0.0, "interpolation": "ease_out",
+            "time_us": 0, "value": 0.0, "interpolation": "linear",
         })
         self.run_tool("animation.set_keyframe", {
             "clip_id": clip_id, "property": "opacity",
-            "time_us": 400_000, "value": 1.0, "interpolation": "ease_out",
+            "time_us": 400_000, "value": 1.0, "interpolation": "linear",
         })
         clip = next(
             item for track in self.executor.get_project()["tracks"]

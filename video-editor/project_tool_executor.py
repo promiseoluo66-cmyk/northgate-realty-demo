@@ -2256,6 +2256,10 @@ class ProjectToolExecutor:
                         raise ProjectToolExecutionError(
                             "Text clips currently support opacity keyframes only."
                         )
+                    if args.get("interpolation", "linear") != "linear":
+                        raise ProjectToolExecutionError(
+                            "Text opacity keyframes currently support linear interpolation only."
+                        )
                 elif clip["kind"] not in {"video", "image"}:
                     raise ProjectToolExecutionError("Visual keyframes require a video/image clip.")
                 if clip["kind"] != "text" and any(
