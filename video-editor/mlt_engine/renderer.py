@@ -785,14 +785,26 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
             elif clip["kind"] == "text":
                 if clip.get("transform"):
                     raise MltRenderError(
-                        "Text transforms are not enabled; use text geometry properties."
+                        "Text transforms must use the canonical clip-local keyframe model."
                     )
-                if any(item["property"] != "opacity" for item in clip.get("keyframes", [])):
+                supported_text_properties = {
+                    "position_x", "position_y", "scale_x", "scale_y",
+                    "rotation_deg", "opacity",
+                }
+                unsupported_text_properties = sorted({
+                    item["property"] for item in clip.get("keyframes", [])
+                    if item["property"] not in supported_text_properties
+                })
+                if unsupported_text_properties:
                     raise MltRenderError(
-                        "Text clips currently support opacity keyframes only."
+                        "Unsupported text keyframe property: "
+                        + ", ".join(unsupported_text_properties)
                     )
                 _ffmpeg_text_opacity_filters(
                     clip.get("keyframes", []), fps_num, fps_den
+                )
+                _ffmpeg_text_transform_filters(
+                    clip.get("keyframes", []), fps_num, fps_den, 0.0
                 )
                 clip_transform = None
             else:
@@ -1427,6 +1439,107 @@ def _ffmpeg_text_opacity_filters(
     )
 
 
+def _ffmpeg_expression_for_keyframes(
+    keyframes: list[dict[str, Any]],
+    property_name: str,
+    default_value: float,
+    local_time: str = "t",
+) -> str:
+    """Build a bounded FFmpeg expression from validated clip-local keyframes."""
+    entries = sorted(
+        (item for item in keyframes if item["property"] == property_name),
+        key=lambda item: int(item["time_us"]),
+    )
+    if not entries:
+        return f"{default_value:.6f}"
+    expression = f"{float(entries[-1]['value']):.6f}"
+    for left, right in reversed(list(zip(entries, entries[1:]))):
+        start = int(left["time_us"]) / 1_000_000
+        end = int(right["time_us"]) / 1_000_000
+        span = end - start
+        if span <= 0:
+            raise MltRenderError("Text keyframe times must increase.")
+        ratio = f"clip(({local_time}-{start:.9f})/{span:.9f}\\,0\\,1)"
+        mode = left.get("interpolation", "linear")
+        if mode == "hold":
+            eased = "0"
+        elif mode == "linear":
+            eased = ratio
+        elif mode in {"ease_in", "ease_in_cubic"}:
+            eased = f"pow({ratio}\\,3)"
+        elif mode in {"ease_out", "ease_out_cubic"}:
+            eased = f"(1-pow(1-{ratio}\\,3))"
+        elif mode in {"ease_in_out", "ease_in_out_cubic"}:
+            eased = f"if(lt({ratio}\\,0.5)\\,4*pow({ratio}\\,3)\\,1-pow(-2*{ratio}+2\\,3)/2)"
+        elif mode == "ease_in_quad":
+            eased = f"pow({ratio}\\,2)"
+        elif mode == "ease_out_quad":
+            eased = f"(1-pow(1-{ratio}\\,2))"
+        elif mode == "ease_in_out_quad":
+            eased = f"if(lt({ratio}\\,0.5)\\,2*pow({ratio}\\,2)\\,1-pow(-2*{ratio}+2\\,2)/2)"
+        elif mode == "ease_in_quart":
+            eased = f"pow({ratio}\\,4)"
+        elif mode == "ease_out_quart":
+            eased = f"(1-pow(1-{ratio}\\,4))"
+        elif mode == "ease_in_out_quart":
+            eased = f"if(lt({ratio}\\,0.5)\\,8*pow({ratio}\\,4)\\,1-pow(-2*{ratio}+2\\,4)/2)"
+        elif mode == "smoothstep":
+            eased = f"({ratio}*{ratio}*(3-2*{ratio}))"
+        else:
+            raise MltRenderError(
+                f"Text transform interpolation {mode!r} is not supported."
+            )
+        first_value = float(left["value"])
+        delta = float(right["value"]) - first_value
+        segment = f"({first_value:.6f}+{delta:.6f}*({eased}))"
+        expression = f"if(lt({local_time}\\,{end:.9f})\\,{segment}\\,{expression})"
+    first_time = int(entries[0]["time_us"]) / 1_000_000
+    first_value = float(entries[0]["value"])
+    expression = (
+        f"if(lt({local_time}\\,{first_time:.9f})\\,"
+        f"{default_value:.6f}\\,{expression})"
+    )
+    if len(entries) == 1:
+        expression = (
+            f"if(lt({local_time}\\,{first_time:.9f})\\,"
+            f"{default_value:.6f}\\,{float(entries[0]['value']):.6f})"
+        )
+    return expression
+
+
+def _ffmpeg_text_transform_filters(
+    keyframes: list[dict[str, Any]],
+    fps_num: int,
+    fps_den: int,
+    clip_start_seconds: float,
+) -> tuple[list[str], str, str]:
+    """Compile text position/scale/rotation keyframes for the FFmpeg overlay pass."""
+    local_time = f"(t-{float(clip_start_seconds):.9f})"
+    filters: list[str] = []
+    has_scale = any(item["property"] in {"scale_x", "scale_y"} for item in keyframes)
+    if has_scale:
+        scale_x = _ffmpeg_expression_for_keyframes(keyframes, "scale_x", 1.0, local_time)
+        scale_y = _ffmpeg_expression_for_keyframes(keyframes, "scale_y", 1.0, local_time)
+        filters.append(
+            f"scale=w='max(1,iw*({scale_x}))':h='max(1,ih*({scale_y}))':eval=frame"
+        )
+    if any(item["property"] == "rotation_deg" for item in keyframes):
+        rotation = _ffmpeg_expression_for_keyframes(
+            keyframes, "rotation_deg", 0.0, local_time
+        )
+        filters.append(
+            f"rotate=angle='({rotation})*PI/180':"
+            "ow='rotw(iw)':oh='roth(ih)':c=black@0"
+        )
+    position_x = _ffmpeg_expression_for_keyframes(
+        keyframes, "position_x", 0.0, local_time
+    )
+    position_y = _ffmpeg_expression_for_keyframes(
+        keyframes, "position_y", 0.0, local_time
+    )
+    return filters, f"(W-w)/2+({position_x})", f"(H-h)/2+({position_y})"
+
+
 def _apply_text_overlay_images_ffmpeg(
     base_output: Path,
     destination: Path,
@@ -1456,13 +1569,25 @@ def _apply_text_overlay_images_ffmpeg(
             _ffmpeg_text_opacity_filters(keyframes, fps_num, fps_den)
             if keyframes else []
         )
-        if opacity_filters:
-            filters.append(
-                f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB)+{start:.9f}/TB,format=yuva444p,"
-                + ",".join(opacity_filters)
-                + f",format=rgba,scale={int(plan['width'])}:{int(plan['height'])},"
-                + f"format=rgba{prepared}"
+        transform_filters, overlay_x, overlay_y = (
+            _ffmpeg_text_transform_filters(keyframes, fps_num, fps_den, start)
+            if overlay.get("kind") == "text" and keyframes
+            else ([], "0", "0")
+        )
+        if opacity_filters or transform_filters or (
+            overlay.get("kind") == "text"
+            and any(item["property"] in {"position_x", "position_y"} for item in keyframes)
+        ):
+            chain = (
+                f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB)+{start:.9f}/TB,"
+                "format=yuva444p"
             )
+            if opacity_filters:
+                chain += "," + ",".join(opacity_filters)
+            chain += f",format=rgba,scale={int(plan['width'])}:{int(plan['height'])},format=rgba"
+            if transform_filters:
+                chain += "," + ",".join(transform_filters)
+            filters.append(chain + prepared)
         else:
             filters.append(
                 f"[{index}:v]scale={int(plan['width'])}:{int(plan['height'])},"
@@ -1473,7 +1598,7 @@ def _apply_text_overlay_images_ffmpeg(
         )
         filters.append(
             f"{previous}{prepared}"
-            f"overlay=x=0:y=0:format=auto:eof_action=pass:"
+            f"overlay=x='{overlay_x}':y='{overlay_y}':format=auto:eof_action=pass:"
             f"enable='{enabled}'{label}"
         )
         previous = label
