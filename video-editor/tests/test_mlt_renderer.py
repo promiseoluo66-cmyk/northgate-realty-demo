@@ -1542,6 +1542,10 @@ class WordTimedHighlightMltIntegrationTests(unittest.TestCase):
         self.project["tracks"][0]["clips"][0].update({
             "duration_us": 2_000_000, "source_out_us": 2_000_000,
         })
+        self.project["tracks"].append({
+            "id": "captions", "type": "text", "name": "Captions",
+            "order": 1, "locked": False, "clips": [],
+        })
         executor = ProjectToolExecutor(
             self.project, asset_root=self.root, output_dir=self.root
         )
