@@ -1451,3 +1451,149 @@ class TranscriptCutProposalTests(unittest.TestCase):
         with self.assertRaises(ProjectToolExecutionError):
             self.apply(start=0, end=3, confirmed=True)
         self.assertEqual(self.executor.get_project(), before)
+
+
+class MeasuredSilenceReviewTests(unittest.TestCase):
+    def setUp(self):
+        self.executor = ProjectToolExecutor(make_project(), asset_root="/tmp/video-editor-test-assets")
+        imported = self.executor.execute("transcript.import_words", {
+            "media_id": "video-asset",
+            "language": "en",
+            "words": [
+                {"text": "Hello", "start_us": 100_000, "end_us": 300_000},
+                {"text": "world", "start_us": 800_000, "end_us": 1_000_000},
+            ],
+        })
+        self.transcript_id = imported["results"][0]["result"]["transcript_id"]
+
+    def measured(self, *, coverage=8.0, full=True, intervals=None, status="measured"):
+        return {
+            "media_id": "video-asset",
+            "duration_seconds": 8.0,
+            "analysis_coverage_seconds": coverage,
+            "full_duration_scanned": full,
+            "measurement_status": status,
+            "silence_intervals": intervals if intervals is not None else [
+                {"start_seconds": 0.35, "end_seconds": 0.75, "duration_seconds": 0.4},
+            ],
+            "limitations": [],
+        }
+
+    def review(self, **overrides):
+        arguments = {
+            "transcript_id": self.transcript_id,
+            "clip_id": "main-clip",
+            "analysis_seconds": 600,
+            "silence_threshold_db": -50,
+            "minimum_silence_us": 100_000,
+        }
+        arguments.update(overrides)
+        return self.executor.execute("transcript.review_silence", arguments)
+
+    def apply(self, *, confirmed=False, **overrides):
+        arguments = {
+            "transcript_id": self.transcript_id,
+            "clip_id": "main-clip",
+            "source_start_us": 350_000,
+            "source_end_us": 750_000,
+        }
+        arguments.update(overrides)
+        return self.executor.execute(
+            "transcript.apply_silence_cut", arguments,
+            expected_revision=self.executor.revision, confirmed=confirmed,
+        )
+
+    def test_review_tool_is_registered_read_only_and_validates_scan_bounds(self):
+        definition = next(
+            item for item in get_tool_catalog()
+            if item["name"] == "transcript.review_silence"
+        )
+        self.assertTrue(definition["read_only"])
+        self.assertFalse(definition["requires_confirmation"])
+        accepted = validate_tool_call("transcript.review_silence", {
+            "transcript_id": self.transcript_id,
+            "clip_id": "main-clip",
+            "analysis_seconds": 60,
+            "silence_threshold_db": -45,
+            "minimum_silence_us": 100_000,
+        })
+        self.assertEqual(accepted["analysis_seconds"], 60)
+        with self.assertRaises(ToolValidationError):
+            validate_tool_call("transcript.review_silence", {
+                "transcript_id": self.transcript_id, "clip_id": "main-clip",
+                "analysis_seconds": 0, "silence_threshold_db": -50,
+                "minimum_silence_us": 100_000,
+            })
+
+    def test_review_returns_only_measured_gaps_and_never_mutates(self):
+        from unittest.mock import patch
+        before = self.executor.get_project()
+        revision = self.executor.revision
+        with patch.object(ProjectToolExecutor, "_analyze_audio_media", return_value=self.measured()):
+            result = self.review()
+        payload = result["results"][0]["result"]
+        self.assertFalse(result["changed"])
+        self.assertEqual(self.executor.revision, revision)
+        self.assertEqual(self.executor.get_project(), before)
+        self.assertEqual(len(payload["candidates"]), 1)
+        candidate = payload["candidates"][0]
+        self.assertEqual((candidate["source_start_us"], candidate["source_end_us"]),
+                         (350_000, 750_000))
+        self.assertEqual(candidate["adjacent_words"], {"before": "Hello", "after": "world"})
+        self.assertTrue(candidate["can_apply"])
+        self.assertTrue(payload["full_duration_scanned"])
+        self.assertEqual(payload["measurement_status"], "measured")
+
+    def test_review_reports_partial_scan_and_no_audio_without_inventing_candidates(self):
+        from unittest.mock import patch
+        with patch.object(ProjectToolExecutor, "_analyze_audio_media",
+                          return_value=self.measured(coverage=1.0, full=False)):
+            partial = self.review(analysis_seconds=1)["results"][0]["result"]
+        self.assertFalse(partial["full_duration_scanned"])
+        self.assertEqual(partial["analysis_coverage_seconds"], 1.0)
+        with patch.object(ProjectToolExecutor, "_analyze_audio_media",
+                          return_value=self.measured(
+                              intervals=[], status="no_audio_stream")):
+            no_audio = self.review()["results"][0]["result"]
+        self.assertEqual(no_audio["measurement_status"], "no_audio_stream")
+        self.assertEqual(no_audio["candidates"], [])
+
+    def test_apply_requires_confirmation_remeasures_and_is_undoable(self):
+        from unittest.mock import patch
+        measured = self.measured()
+        before = self.executor.get_project()
+        with patch.object(ProjectToolExecutor, "_analyze_audio_media", return_value=measured):
+            with self.assertRaises(ToolConfirmationRequired):
+                self.apply()
+            self.assertEqual(self.executor.get_project(), before)
+            result = self.apply(confirmed=True)
+        outcome = result["results"][0]["result"]
+        self.assertTrue(outcome["applied"])
+        self.assertEqual((outcome["source_start_us"], outcome["source_end_us"]),
+                         (350_000, 750_000))
+        project = self.executor.get_project()
+        self.assertEqual(len(project["transcripts"][0]["words"]), 2)
+        clips = {clip["id"]: clip for track in project["tracks"] for clip in track["clips"]}
+        self.assertEqual(clips["main-clip"]["source_out_us"], 350_000)
+        after_id = outcome["after_clip_id"]
+        self.assertEqual(clips[after_id]["source_in_us"], 750_000)
+        self.executor.execute("history.undo", {})
+        self.assertEqual(self.executor.get_project(), before)
+        self.executor.execute("history.redo", {})
+        self.assertEqual(
+            {clip["id"]: clip for track in self.executor.get_project()["tracks"]
+             for clip in track["clips"]}[after_id]["source_in_us"],
+            750_000,
+        )
+
+    def test_apply_rejects_interval_when_fresh_measurement_no_longer_confirms_it(self):
+        from unittest.mock import patch
+        before = self.executor.get_project()
+        with patch.object(ProjectToolExecutor, "_analyze_audio_media",
+                          return_value=self.measured(intervals=[])):
+            with self.assertRaises(ProjectToolExecutionError):
+                self.apply(confirmed=True)
+        self.assertEqual(self.executor.get_project(), before)
+        self.assertEqual(self.executor.revision, 2)
+
+
