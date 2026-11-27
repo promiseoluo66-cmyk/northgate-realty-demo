@@ -1446,9 +1446,9 @@ class AdvancedTextOverlayTests(unittest.TestCase):
         )
         self.assertNotEqual(with_shadow, blurred_shadow)
         ass_script = (self.root / "blurred-shadow.ass").read_text(encoding="utf-8")
-        self.assertEqual(ass_script.count(r"\\blur3.00"), 1)
-        self.assertIn(r"\\1a&HFF&\\3a&HFF&", ass_script)
-        self.assertIn(r"\\4a&HFF&", ass_script)
+        self.assertEqual(ass_script.count(r"\blur3.00"), 1)
+        self.assertIn(r"\1a&HFF&\3a&HFF&", ass_script)
+        self.assertIn(r"\4a&HFF&", ass_script)
         for y in range(24, 28):
             for x in range(32, 40):
                 offset = (y * 320 + x) * 4
