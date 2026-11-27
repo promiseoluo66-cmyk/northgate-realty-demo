@@ -226,3 +226,38 @@ START by reporting: current branch head, what is complete, what remains, the nex
 - Fresh tests are not verified. The GitHub combined-status tool returned no status checks for the test commit, and the available commit-workflow-runs action only exposes PR-triggered runs. A cloud-container clone attempt failed because outbound DNS/network access is unavailable. Do not claim that the new tests passed or failed.
 - No application implementation has been changed in this session yet. No deployment, merge, release, or manual Actions run occurred. The test commit is under `video-editor/**`, which matches the existing push workflow's path filter; whether its run completed could not be observed through the available GitHub tools.
 - Next permitted task: continue Stage 2 Task 2.6 only after obtaining an observable test execution path; fix advanced text-renderer routing/recursion and add bounded shadow blur using the existing renderer. Do not touch Task 2.4 until separately resolved and explicitly authorised. Do not begin Stage 3.
+
+## 13. Stage 2 continuation — live CI and text renderer repair (2026-11-27)
+
+**Latest code/test commit:** `ab5bd3d48575c46b9996fa60808feef5932e67f7`  
+**Previous code commit:** `7677ee2acbfe83e3c4da91080c621721c77ab6a6`  
+**Working branch:** `video-editor-lab` only.
+
+### GitHub Actions evidence
+
+- Run #157 (`cd649ad`) was cancelled during dependency installation; test suites did not run.
+- Run #158 (`6b35125`) failed: **7 failed, 312 passed**. It exposed advanced renderer routing, missing `shadow_blur` validation and stale fixture IDs.
+- Run #159 (`238f47e`) failed: **3 failed, 316 passed**. The remaining causes were `shadow_blur` missing from the second text-update schema and loss of alpha transparency before ASS/drawbox rendering.
+- Run #160 (`7677ee2`) failed: **1 failed, 318 passed**. All schema, persistence, bounds, routing, transparency, letter-spacing, line-spacing, weight, background and sharp-shadow checks passed. The sole failure was an over-specific test expecting the blurred shadow's alpha-threshold bounding box to grow; the actual blurred pixels differed but had a smaller thresholded box.
+- Commit `ab5bd3d48575c46b9996fa60808feef5932e67f7` changes that assertion to verify the rendered blurred overlay has more partially transparent alpha pixels. Its Actions result is not yet visible; do not claim a pass.
+
+### Task 2.6 code changes
+
+- `video-editor/mlt_engine/renderer.py`: normal text rendering now routes advanced typography to the ASS renderer; the recursive call was removed. Shadow blur uses a shadow-only ASS layer, leaving foreground text sharp. The input is converted to RGBA before the ASS/drawbox filters so transparent pixels remain transparent.
+- `video-editor/project_model.py` and both text style schemas in `tool_registry.py`: bounded optional `shadow_blur` from 0 to 10.
+- `video-editor/cloudflare/public/index.html` and `studio.js`: mobile inspector loads and saves shadow blur through the existing `text.update_clip` operation.
+- `video-editor/tests/test_project_tool_extensions.py`: schema, persistence, bounds and routing coverage; corrected two stale references from nonexistent `expanded-title-clip` to the fixture's `title-clip`.
+- `video-editor/tests/test_mlt_renderer.py`: generated-frame checks for transparency, shadow blur and existing expanded styling.
+- `video-editor/cloudflare/tests/studio-ui.test.mjs`: shadow-blur control/load/save coverage.
+- GitHub read-back verified the changed source and test files after commits `238f47e` and `7677ee2`.
+
+### Task 2.4 reconciliation and authorization
+
+The user explicitly requested completion of all remaining Stage 2 tasks, authorizing the previously gated Task 2.4 scope. The two cited historical runs are both successful: run #150 (`c8bb6b2`) is the implementation/integration evidence; run #151 (`6acbade`) is a subsequent full verification after the documentation update. The ledger summary cites #151 while the detailed integration report cites #150. The Task 2.4 implementation and CI acceptance evidence already exist; do not repeat it absent a concrete defect.
+
+### Remaining Stage 2 scope
+
+- 2.5, 2.10 and 2.12 remain intentionally `gated_optional`; feasibility evidence is complete and those optional AI features must stay disabled.
+- 2.6 remains in progress pending a passing run for `ab5bd3d`.
+- 2.7 text/caption animation, 2.8 editable title templates, 2.9 editable graphics, 2.11 bilingual manual caption tracks, 2.13 mobile transcript review, 2.14 cross-feature reliability/security audit and 2.15 final Stage 2 verification remain to be completed or audited against the approved plan.
+- Stage 3 has not started. `main` remains untouched. No merge, deployment, release or paid service was used.
