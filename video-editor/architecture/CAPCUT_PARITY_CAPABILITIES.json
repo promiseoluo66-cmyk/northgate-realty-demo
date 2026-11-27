@@ -331,8 +331,8 @@
         ],
         [
           "transcript_driven_editing",
-          "Edit by transcript: search spoken words, select/delete timed word ranges, remove filler words and pauses, and assemble a cut from a corrected script.",
-          "planned"
+          "A timed transcript can be searched, and an inclusive word range can be previewed against one selected source clip then applied after explicit confirmation with a single undoable split/ripple-delete transaction. Pause/filler detection, corrected-script assembly and automatic multi-track A/V synchronisation remain pending.",
+          "prototype_verified"
         ]
       ]
     },
@@ -740,8 +740,8 @@
     "capability_entry_count": 118,
     "status_counts": {
       "partially_implemented": 23,
-      "planned": 48,
-      "prototype_verified": 15,
+      "planned": 47,
+      "prototype_verified": 16,
       "gated_optional": 31,
       "under_test": 1
     },
@@ -787,11 +787,23 @@
       "hosted_worker_and_android_acceptance": "not_performed"
     },
     "stage2_task_2_3": {
-      "status": "implementation_under_test",
-      "branch_commit": "ceda47143427ad6c28d9d3d558bfbb830951e554",
-      "scope": "one selected source clip and later clips on its track",
-      "safety": "read-only proposal; confirmation-gated atomic apply; refuses keyframes, linked groups, transitions, locked tracks and overlaps",
-      "hosted_worker_and_android_acceptance": "not_performed"
+      "status": "offline_ci_passed",
+      "workflow_run_id": 45986714784,
+      "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/45986714784",
+      "commit": "25c1b4cf240f36c4ead03a0975f9d22b1509c71d",
+      "python_tests_passed": 304,
+      "node_tests_passed": 64,
+      "node_tests_failed": 0,
+      "d1_migrations": "passed",
+      "transcript_cut_preview": "passed",
+      "confirmation_gate": "passed",
+      "atomic_split_ripple_and_undo_redo": "passed",
+      "hosted_worker_and_android_acceptance": "not_performed",
+      "limitations": [
+        "one selected source clip and its track only",
+        "no automatic multi-track audio/video sync",
+        "pause and filler review are separate pending work"
+      ]
     }
   }
 }

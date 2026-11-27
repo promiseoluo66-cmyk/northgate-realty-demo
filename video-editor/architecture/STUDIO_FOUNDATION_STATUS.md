@@ -176,3 +176,18 @@ This is offline/code acceptance only. No Worker deployment, live private Release
 **GitHub Actions evidence:** run #45985231376 passed on commit `320a8597eae5853443ee05e0ae230786f8d6d84f`: 296 Python tests, 64 Node tests, 0 Node failures and all checked-in D1 migrations passed.
 
 No automatic transcription, hosted Worker deployment or Android usability test was performed. Automatic speech-to-text is a separate gated task.
+
+
+### Task 2.3 — transcript-range cut preview and apply
+
+**Offline implementation and CI accepted on `video-editor-lab`.**
+
+- Added read-only `transcript.propose_cut` to preview an inclusive timed word range against one selected source clip.
+- Added `transcript.apply_cut`, which requires explicit confirmation and rechecks the current transcript and clip before editing.
+- The approved cut reuses the existing `timeline.split_clip` and `timeline.ripple_delete_clip` primitives inside one revisioned project transaction. It preserves the source transcript, returns the remaining segment ID, and supports undo/redo.
+- Refuses the edit if the chosen track is locked, the selected clip has keyframes, belongs to a linked group, has a transition, the selected range is outside its source range, or another clip overlaps the deletion interval.
+- Test coverage includes middle/start/end cuts, ripple shifts, exact timing, no mutation before approval, unsafe-range rejection, source transcript preservation, and undo/redo.
+
+**GitHub Actions evidence:** run #45986714784 passed on commit `25c1b4cf240f36c4ead03a0975f9d22b1509c71d`: 304 Python tests, 64 Node tests, 0 Node failures and all checked-in D1 migrations passed.
+
+**Current limitation:** the operation edits one selected clip and ripple-shifts later clips on that track only. It does not automatically cut and synchronise corresponding audio/video clips on other tracks. Pause/filler detection, transcript text correction and a full Studio transcript-selection interface remain future tasks.
