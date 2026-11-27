@@ -72,7 +72,7 @@ def make_project():
                 "order": 2,
                 "locked": False,
                 "clips": [{
-                    "id": "title-clip",
+                    "id": "expanded-title-clip",
                     "kind": "text",
                     "start_us": 500_000,
                     "duration_us": 1_000_000,
@@ -612,7 +612,7 @@ class EditorToolExpansionTests(unittest.TestCase):
         tracks = sorted(self.executor.get_project()["tracks"], key=lambda item: item["order"])
         self.assertEqual(tracks[0]["id"], "title-track")
         self.assertEqual([item["order"] for item in tracks], list(range(len(tracks))))
-        self.assertEqual(tracks[0]["clips"][0]["id"], "title-clip")
+        self.assertEqual(tracks[0]["clips"][0]["id"], "expanded-title-clip")
 
     def test_track_rename_and_lock_are_executable(self):
         self.run_tool("track.rename", {
@@ -718,7 +718,7 @@ class EditorToolExpansionTests(unittest.TestCase):
 
     def test_text_content_and_supported_styling_can_be_updated(self):
         self.run_tool("text.update_clip", {
-            "clip_id": "title-clip",
+            "clip_id": "expanded-title-clip",
             "content": "Updated title",
             "text_style": {
                 "family": "DejaVu Sans",
@@ -745,15 +745,15 @@ class EditorToolExpansionTests(unittest.TestCase):
 
     def test_text_update_requires_a_real_change_and_known_style_fields(self):
         with self.assertRaisesRegex(ToolValidationError, "must change"):
-            validate_tool_call("text.update_clip", {"clip_id": "title-clip"})
+            validate_tool_call("text.update_clip", {"clip_id": "expanded-title-clip"})
         with self.assertRaisesRegex(ToolValidationError, "unsupported field"):
             validate_tool_call("text.update_clip", {
-                "clip_id": "title-clip",
+                "clip_id": "expanded-title-clip",
                 "text_style": {"fake_option": True},
             })
         with self.assertRaisesRegex(ToolValidationError, "above the allowed maximum"):
             validate_tool_call("text.update_clip", {
-                "clip_id": "title-clip",
+                "clip_id": "expanded-title-clip",
                 "text_style": {"size": 1000},
             })
 
@@ -1672,7 +1672,7 @@ class ExpandedTextStyleTests(unittest.TestCase):
         self.project["tracks"].append({
             "id": "track-text", "type": "text", "name": "Titles", "order": text_order,
             "clips": [{
-                "id": "title-clip", "kind": "text", "start_us": 0,
+                "id": "expanded-title-clip", "kind": "text", "start_us": 0,
                 "duration_us": 2_000_000,
                 "text": {
                     "content": "A title", "size": 48, "weight": 400,
@@ -1704,18 +1704,18 @@ class ExpandedTextStyleTests(unittest.TestCase):
     def test_text_update_schema_accepts_all_expanded_style_properties(self):
         style = self.expanded_style()
         validated = validate_tool_call("text.update_clip", {
-            "clip_id": "title-clip", "text_style": style,
+            "clip_id": "expanded-title-clip", "text_style": style,
         })
         self.assertEqual(validated["text_style"], style)
 
     def test_text_update_persists_expanded_style_without_flattening_text(self):
         style = self.expanded_style()
         result = self.executor.execute("text.update_clip", {
-            "clip_id": "title-clip", "text_style": style,
+            "clip_id": "expanded-title-clip", "text_style": style,
         })
         saved = next(
             clip for track in result["project"]["tracks"]
-            for clip in track["clips"] if clip["id"] == "title-clip"
+            for clip in track["clips"] if clip["id"] == "expanded-title-clip"
         )
         self.assertEqual(saved["text"]["content"], "A title")
         for key, value in style.items():
@@ -1724,16 +1724,16 @@ class ExpandedTextStyleTests(unittest.TestCase):
     def test_expanded_text_style_bounds_are_validated(self):
         with self.assertRaises(ToolValidationError):
             validate_tool_call("text.update_clip", {
-                "clip_id": "title-clip",
+                "clip_id": "expanded-title-clip",
                 "text_style": {"letter_spacing_px": 100},
             })
         with self.assertRaises(ToolValidationError):
             validate_tool_call("text.update_clip", {
-                "clip_id": "title-clip",
+                "clip_id": "expanded-title-clip",
                 "text_style": {"shadow_opacity": 2},
             })
         invalid = self.executor.get_project()
-        invalid["tracks"][1]["clips"][0]["text"]["bgopacity"] = 1.1
+        invalid["tracks"][-1]["clips"][0]["text"]["bgopacity"] = 1.1
         from project_model import validate_project
         with self.assertRaises(ProjectValidationError):
             validate_project(invalid)

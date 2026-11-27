@@ -1423,18 +1423,18 @@ class AdvancedTextOverlayTests(unittest.TestCase):
         if " ass " not in filters:
             self.skipTest("FFmpeg was built without the libass filter.")
 
-        normal = self.render("normal", content="WIDE\\nTEXT")
-        spaced = self.render("spaced", content="WIDE\\nTEXT", letter_spacing_px=8)
+        normal = self.render("normal", content="WIDE\\nTEXT", weight=700)
+        spaced = self.render("spaced", content="WIDE\\nTEXT", weight=700, letter_spacing_px=8)
         normal_box, spaced_box = self.bbox(normal), self.bbox(spaced)
         self.assertGreater(spaced_box[2] - spaced_box[0], normal_box[2] - normal_box[0] + 8)
 
-        tight_lines = self.render("tight-lines", content="A\\nB", line_spacing_px=0)
-        loose_lines = self.render("loose-lines", content="A\\nB", line_spacing_px=20)
+        tight_lines = self.render("tight-lines", content="A\\nB", weight=700, line_spacing_px=0)
+        loose_lines = self.render("loose-lines", content="A\\nB", weight=700, line_spacing_px=20)
         self.assertGreater(self.bbox(loose_lines)[3] - self.bbox(loose_lines)[1],
                            self.bbox(tight_lines)[3] - self.bbox(tight_lines)[1] + 10)
 
-        no_shadow = self.render("no-shadow", content="A", shadow_x=0, shadow_y=0, shadow_opacity=0)
-        with_shadow = self.render("with-shadow", content="A", shadow_x=8, shadow_y=8,
+        no_shadow = self.render("no-shadow", content="A", weight=700, shadow_x=0, shadow_y=0, shadow_opacity=0)
+        with_shadow = self.render("with-shadow", content="A", weight=700, shadow_x=8, shadow_y=8,
                                   shadow_color="#000000", shadow_opacity=1)
         self.assertGreater(self.bbox(with_shadow)[2], self.bbox(no_shadow)[2] + 3)
         self.assertGreater(self.bbox(with_shadow)[3], self.bbox(no_shadow)[3] + 3)
