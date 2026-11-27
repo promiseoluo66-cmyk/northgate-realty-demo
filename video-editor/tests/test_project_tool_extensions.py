@@ -137,6 +137,29 @@ class EditorToolExpansionTests(unittest.TestCase):
             "text.update_clip",
         }.issubset(names))
 
+    def test_text_clips_accept_existing_visual_keyframe_operation(self):
+        created = self.run_tool("timeline.add_text_clip", {
+            "track_id": "title-track",
+            "content": "Animated title",
+            "start_us": 250_000,
+            "duration_us": 1_000_000,
+        })
+        clip_id = created["results"][0]["result"]["clip_id"]
+        self.run_tool("animation.set_keyframe", {
+            "clip_id": clip_id, "property": "opacity",
+            "time_us": 0, "value": 0.0, "interpolation": "ease_out",
+        })
+        self.run_tool("animation.set_keyframe", {
+            "clip_id": clip_id, "property": "opacity",
+            "time_us": 400_000, "value": 1.0, "interpolation": "ease_out",
+        })
+        clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual([item["time_us"] for item in clip["keyframes"]], [0, 400_000])
+        self.assertEqual(self.executor.revision, 3)
+
     def test_animation_keyframes_can_be_reset_for_property_or_entire_clip(self):
         for property_name in ("opacity", "scale_x"):
             self.run_tool("animation.set_keyframe", {
