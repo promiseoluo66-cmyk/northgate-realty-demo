@@ -280,3 +280,12 @@ The user explicitly requested completion of all remaining Stage 2 tasks, authori
 **Still open:** 2.7 text/caption animation; 2.8 editable title templates; 2.9 editable graphics; 2.11 bilingual manual caption tracks; 2.13 mobile transcript review; 2.14 cross-feature reliability/security audit; 2.15 final Stage 2 verification. Tasks 2.5, 2.10 and 2.12 remain intentionally `gated_optional` because their cost/licence/runtime gates are not satisfied.
 
 The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not started. No merge, deployment, release or paid service has occurred.
+
+
+## 15. Task 2.7 design approved; implementation plan awaiting approval — 2026-11-27
+
+- The user approved the safer Task 2.7 design: reuse the canonical clip-local keyframe system, represent presets through that same model, use validated supplied word timings for karaoke highlighting, keep text editable, and fall back to static rendering for invalid or unsupported animation.
+- Created `docs/superpowers/plans/2026-11-27-stage-2-task-2.7-text-animation.md` on `video-editor-lab` in commit `3e4805ecf2c390936da99308b5e779072be45245`. The plan was fetched back from GitHub and verified (blob SHA `3048d1f37d5be93037b6d037795ad055e4d14006`; title and full content present).
+- Plan scope covers model/executor validation, render-time compilation, Studio controls, generated-frame boundary tests, regression/security review and CI acceptance. It explicitly prohibits a second animation engine, duplicate text-edit operation, new paid service/dependency, permanent text flattening, deployment, merge, and work on Task 2.8/Stage 3.
+- FFmpeg current documentation was checked through Context7: overlay x/y expressions can be evaluated per frame and can use the timestamp variable `t`; timestamp alignment and framesync behavior must be handled deliberately. This is research input, not proof that the repository's exact MLT pipeline supports every proposed effect.
+- **Current status: plan awaiting the user's approval. No Task 2.7 production code or tests have been changed.** Do not begin implementation until the user approves this exact plan. The working branch remains `video-editor-lab`; `main` is untouched.
