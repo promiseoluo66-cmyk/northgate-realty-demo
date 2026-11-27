@@ -187,12 +187,13 @@ class OperationInventoryAuditTests(unittest.TestCase):
         self.assertEqual(len(executor.get_project()["tracks"]), 2)
         self.assertEqual(executor.revision, 4)
 
-    def test_only_the_four_destructive_or_export_operations_require_confirmation(self):
+    def test_only_the_five_destructive_or_export_operations_require_confirmation(self):
         expected = {
             "timeline.remove_track",
             "timeline.delete_clip",
             "timeline.ripple_delete_clip",
             "render.export",
+            "transcript.apply_cut",
         }
         actual = {
             item["name"] for item in get_tool_catalog()

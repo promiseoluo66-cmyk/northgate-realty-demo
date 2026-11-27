@@ -1345,15 +1345,17 @@ class TranscriptCutProposalTests(unittest.TestCase):
         redone = {clip["id"]: clip for clip in self.executor.get_project()["tracks"][0]["clips"]}
         self.assertEqual(redone["next-clip"]["start_us"], 1_600_000)
 
-    def test_apply_supports_cut_from_clip_start(self):
+    def test_apply_supports_cut_from_early_in_clip(self):
         self.apply(start=0, end=0, confirmed=True)
         project = self.executor.get_project()
         clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
-        self.assertNotIn("main-clip", clips)
-        remaining = next(clip for clip in project["tracks"][0]["clips"] if clip["kind"] == "video")
+        self.assertEqual(clips["main-clip"]["duration_us"], 100_000)
+        remaining = clips[next(
+            clip["id"] for clip in project["tracks"][0]["clips"] if clip["id"] != "main-clip" and clip["kind"] == "video"
+        )]
         self.assertEqual(remaining["source_in_us"], 250_000)
-        self.assertEqual(remaining["start_us"], 0)
-        self.assertEqual(clips["next-clip"]["start_us"], 1_750_000)
+        self.assertEqual(remaining["start_us"], 100_000)
+        self.assertEqual(clips["next-clip"]["start_us"], 1_850_000)
 
     def test_apply_supports_cut_to_clip_end(self):
         self.apply(start=3, end=3, confirmed=True)
@@ -1361,7 +1363,7 @@ class TranscriptCutProposalTests(unittest.TestCase):
         clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
         self.assertEqual(clips["main-clip"]["source_out_us"], 700_000)
         self.assertEqual(clips["main-clip"]["duration_us"], 700_000)
-        self.assertEqual(clips["next-clip"]["start_us"], 1_800_000)
+        self.assertEqual(clips["next-clip"]["start_us"], 700_000)
 
     def test_proposal_blocks_keyframes_linked_groups_and_locked_tracks(self):
         project = self.executor.get_project()
@@ -1379,6 +1381,18 @@ class TranscriptCutProposalTests(unittest.TestCase):
         self.executor = ProjectToolExecutor(project)
         self.assertIn("clip_belongs_to_linked_group", self.proposal()["results"][0]["result"]["blockers"])
 
+        project = self.executor.get_project()
+        project["tracks"][0]["clips"][0].pop("group_id", None)
+        project["tracks"][0]["clips"][1].pop("group_id", None)
+        project.pop("clip_groups", None)
+        project["transitions"] = [{
+            "id": "transition-1", "type": "dissolve",
+            "from_clip_id": "main-clip", "to_clip_id": "next-clip",
+            "duration_us": 100_000, "parameters": {},
+        }]
+        self.executor = ProjectToolExecutor(project)
+        self.assertIn("clip_has_transition", self.proposal()["results"][0]["result"]["blockers"])
+
         project = make_project()
         project["tracks"][0]["locked"] = True
         project["tracks"][0]["clips"].append({
@@ -1395,7 +1409,7 @@ class TranscriptCutProposalTests(unittest.TestCase):
             ],
         })
         self.transcript_id = imported["results"][0]["result"]["transcript_id"]
-        self.assertIn("selected_track_locked", self.proposal()["results"][0]["result"]["blockers"])
+        self.assertIn("selected_track_locked", self.proposal(start=0, end=1)["results"][0]["result"]["blockers"])
 
     def test_proposal_blocks_out_of_clip_ranges_and_overlapping_siblings(self):
         project = self.executor.get_project()
