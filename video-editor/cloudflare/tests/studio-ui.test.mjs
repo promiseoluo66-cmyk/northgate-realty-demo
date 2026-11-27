@@ -272,3 +272,20 @@ test("Stage 2 Task 2.1 exposes selected-caption editing and SRT/VTT sidecar expo
   assert.match(studioScript, /captionIO\.exportSubtitleTrack/);
   assert.match(studioScript, /studio-text-content/);
 });
+
+
+
+test("Studio exposes measured silence review with individual human approval", () => {
+  for (const id of [
+    "studio-silence-transcript", "studio-silence-analysis-seconds",
+    "studio-silence-threshold", "studio-silence-minimum-ms",
+    "studio-review-silence", "studio-silence-status", "studio-silence-candidates"
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.match(studioScript, /transcript\.review_silence/);
+  assert.match(studioScript, /transcript\.apply_silence_cut/);
+  assert.match(studioScript, /handleStudioAnalysisResult/);
+  assert.match(studioScript, /window\.confirm/);
+  assert.match(studioScript, /semantic_assessment/);
+  assert.match(html, /Silence is a measured signal, not a filler-word verdict/);
+  assert.match(html, /analysis_result/);
+});
