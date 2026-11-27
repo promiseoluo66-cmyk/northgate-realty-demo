@@ -307,6 +307,13 @@ test("Studio exposes expanded editable title styling controls", () => {
 });
 
 
+test("Text opacity interpolation is restricted to its supported linear mode", () => {
+  assert.match(studioScript, /function syncKeyframeInterpolationControl\(\)/);
+  assert.match(studioScript, /linearOnly = selected\?\.clip\.kind === "text" && property === "opacity"/);
+  assert.match(studioScript, /option\.disabled = linearOnly && option\.value !== "linear"/);
+  assert.match(studioScript, /syncKeyframeInterpolationControl\(\)/);
+});
+
 test("Text clips expose canonical transform keyframes and bounded loop presets", () => {
   assert.match(studioScript, /textAnimationProperties = new Set/);
   for (const property of ["position_x", "position_y", "scale_x", "scale_y", "rotation_deg", "opacity"]) {
