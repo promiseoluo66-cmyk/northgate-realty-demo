@@ -137,7 +137,7 @@ class EditorToolExpansionTests(unittest.TestCase):
             "text.update_clip",
         }.issubset(names))
 
-    def test_text_clips_accept_existing_visual_keyframe_operation(self):
+    def test_text_clips_accept_visual_transform_keyframes(self):
         created = self.run_tool("timeline.add_text_clip", {
             "track_id": "title-track",
             "content": "Animated title",
@@ -145,20 +145,21 @@ class EditorToolExpansionTests(unittest.TestCase):
             "duration_us": 1_000_000,
         })
         clip_id = created["results"][0]["result"]["clip_id"]
-        self.run_tool("animation.set_keyframe", {
-            "clip_id": clip_id, "property": "opacity",
-            "time_us": 0, "value": 0.0, "interpolation": "linear",
-        })
-        self.run_tool("animation.set_keyframe", {
-            "clip_id": clip_id, "property": "opacity",
-            "time_us": 400_000, "value": 1.0, "interpolation": "linear",
-        })
+        for prop, value in (("opacity", 0.0), ("scale_x", 0.8),
+                            ("scale_y", 0.8), ("position_x", -40),
+                            ("position_y", 20), ("rotation_deg", -8)):
+            self.run_tool("animation.set_keyframe", {
+                "clip_id": clip_id, "property": prop,
+                "time_us": 0, "value": value, "interpolation": "linear",
+            })
         clip = next(
             item for track in self.executor.get_project()["tracks"]
             for item in track["clips"] if item["id"] == clip_id
         )
-        self.assertEqual([item["time_us"] for item in clip["keyframes"]], [0, 400_000])
-        self.assertEqual(self.executor.revision, 4)
+        self.assertEqual(
+            {item["property"] for item in clip["keyframes"]},
+            {"opacity", "scale_x", "scale_y", "position_x", "position_y", "rotation_deg"},
+        )
 
     def test_animation_keyframes_can_be_reset_for_property_or_entire_clip(self):
         for property_name in ("opacity", "scale_x"):
