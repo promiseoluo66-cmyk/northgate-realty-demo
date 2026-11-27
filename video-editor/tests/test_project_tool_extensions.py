@@ -191,6 +191,82 @@ class EditorToolExpansionTests(unittest.TestCase):
             {"text": "WORLD", "start_us": 400_000, "end_us": 800_000},
         ])
 
+    def test_karaoke_caption_text_edits_keep_the_supplied_word_timing(self):
+        result = self.run_tool("captions.add_word_timed", {
+            "track_id": "title-track", "mode": "karaoke",
+            "words": [
+                {"text": "HELLO", "start_us": 100_000, "end_us": 450_000},
+                {"text": "WORLD", "start_us": 500_000, "end_us": 900_000},
+            ],
+        })
+        clip_id = result["results"][0]["result"]["caption_clips"][0]["clip_id"]
+        self.run_tool("text.update_clip", {
+            "clip_id": clip_id, "content": "HI THERE",
+            "text_style": {"highlight_colour": "#00FF00"},
+        })
+        clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(clip["text"]["content"], "HI THERE")
+        self.assertEqual([word["text"] for word in clip["word_timings"]], ["HI", "THERE"])
+        self.assertEqual(clip["text"]["highlight_colour"], "#00FF00")
+        with self.assertRaisesRegex(ProjectToolExecutionError, "same number of words"):
+            self.run_tool("text.update_clip", {"clip_id": clip_id, "content": "ONE"})
+        unchanged = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(unchanged["text"]["content"], "HI THERE")
+
+
+    def test_splitting_karaoke_caption_partitions_word_timings_without_corruption(self):
+        result = self.run_tool("captions.add_word_timed", {
+            "track_id": "title-track", "mode": "karaoke",
+            "words": [
+                {"text": "HELLO", "start_us": 100_000, "end_us": 450_000},
+                {"text": "WORLD", "start_us": 500_000, "end_us": 900_000},
+            ],
+        })
+        clip_id = result["results"][0]["result"]["caption_clips"][0]["clip_id"]
+        split = self.run_tool("timeline.split_clip", {
+            "clip_id": clip_id, "at_us": 400_000,
+        })
+        result_ids = split["results"][0]["result"]
+        clips = {
+            item["id"]: item
+            for track in self.executor.get_project()["tracks"]
+            for item in track["clips"]
+        }
+        left = clips[clip_id]
+        right = clips[result_ids["right_clip_id"]]
+        self.assertEqual(left["text"]["content"], "HELLO")
+        self.assertEqual(right["text"]["content"], "WORLD")
+        self.assertEqual(left["duration_us"], 400_000)
+        self.assertEqual(right["start_us"], 500_000)
+        self.assertEqual(right["word_timings"][0]["start_us"], 0)
+        self.assertEqual(right["word_timings"][0]["end_us"], 400_000)
+
+
+    def test_splitting_karaoke_caption_inside_a_word_is_rejected_atomically(self):
+        result = self.run_tool("captions.add_word_timed", {
+            "track_id": "title-track", "mode": "karaoke",
+            "words": [
+                {"text": "HELLO", "start_us": 100_000, "end_us": 450_000},
+                {"text": "WORLD", "start_us": 500_000, "end_us": 900_000},
+            ],
+        })
+        clip_id = result["results"][0]["result"]["caption_clips"][0]["clip_id"]
+        with self.assertRaisesRegex(ProjectToolExecutionError, "between timed words"):
+            self.run_tool("timeline.split_clip", {"clip_id": clip_id, "at_us": 200_000})
+        clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(clip["text"]["content"], "HELLO WORLD")
+        self.assertEqual(len(clip["word_timings"]), 2)
+
+
     def test_word_timed_caption_clips_use_supplied_timing_and_highlight_style(self):
         result = self.run_tool("captions.add_word_timed", {
             "track_id": "title-track",
