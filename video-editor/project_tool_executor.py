@@ -2251,14 +2251,19 @@ class ProjectToolExecutor:
                         "Speed curves cannot yet be combined with clip effects or animated transforms."
                     )
             else:
-                if clip["kind"] not in {"video", "image"}:
+                if clip["kind"] == "text":
+                    if prop != "opacity":
+                        raise ProjectToolExecutionError(
+                            "Text clips currently support opacity keyframes only."
+                        )
+                elif clip["kind"] not in {"video", "image"}:
                     raise ProjectToolExecutionError("Visual keyframes require a video/image clip.")
-                if any(item["property"] == "playback_rate" for item in clip.get("keyframes", [])):
+                if clip["kind"] != "text" and any(
+                    item["property"] == "playback_rate" for item in clip.get("keyframes", [])
+                ):
                     raise ProjectToolExecutionError(
                         "Animated transforms cannot yet be combined with speed ramps."
                     )
-            if track["type"] == "text":
-                raise ProjectToolExecutionError("Animated text is not enabled in this engine.")
             item = {
                 "property": prop,
                 "time_us": args["time_us"],
