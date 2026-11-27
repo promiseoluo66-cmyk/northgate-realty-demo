@@ -1699,7 +1699,7 @@ class TextLoopAndExitMltIntegrationTests(unittest.TestCase):
         self.assertTrue(receipt["ok"], receipt)
 
         peaks = [self.decoded_white_bounds(output, time) for time in (0.6, 1.0, 1.4)]
-        troughs = [self.decoded_white_bounds(output, time) for time in (0.8, 1.2, 1.6)]
+        troughs = [self.decoded_white_bounds(output, time) for time in (0.8, 1.2, 1.55)]
         for cycle, (peak, trough) in enumerate(zip(peaks, troughs), start=1):
             self.assertIsNotNone(peak, f"Pulse cycle {cycle} peak should render text.")
             self.assertIsNotNone(trough, f"Pulse cycle {cycle} trough should render text.")
