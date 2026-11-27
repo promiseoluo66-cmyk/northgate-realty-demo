@@ -279,7 +279,7 @@
         ],
         [
           "ai_stickers",
-          "AI-generated stickers and graphics",
+          "Stability AI Community License is conditional; Cloudflare Workers Free cannot host generation and no dependable free GPU runtime or acceptable CPU latency has been verified. Native editable graphics take priority.",
           "gated_optional"
         ]
       ]
@@ -296,7 +296,7 @@
         ],
         [
           "auto_captions",
-          "Speech-to-text auto captions",
+          "Whisper/whisper.cpp is a local MIT-licensed candidate with CPU support and a plausible free GitHub Actions runner path; automatic captions remain gated until representative real-footage quality, timestamp drift, language coverage and 30-minute runtime tests pass.",
           "gated_optional"
         ],
         [
@@ -326,7 +326,7 @@
         ],
         [
           "tts_dubbing",
-          "Text-to-speech and multilingual dubbing",
+          "Piper is a local GPL-3.0-or-later engine, but voice rights are model-specific and require checking each full training chain. No approved voice, output-quality benchmark or dubbing workflow is enabled.",
           "gated_optional"
         ],
         [
@@ -393,7 +393,7 @@
         ],
         [
           "tts_audio",
-          "Text-to-speech and dubbing",
+          "Piper provides local TTS, but the engine is GPL-3.0-or-later and voice-model rights vary by training chain. Keep gated until one exact commercial-use voice and rendered output are verified.",
           "gated_optional"
         ],
         [
@@ -808,9 +808,9 @@
   },
   "stage2_task_2_4": {
     "status": "offline_ci_passed",
-    "workflow_run_id": 46000233242,
-    "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46000233242",
-    "commit": "c8bb6b24835a188f689aaf111b84ba7aa9440039",
+    "workflow_run_id": 46000546362,
+    "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46000546362",
+    "commit": "6acbade5e6ca0de7022c1d3ae62a546179af8e7d",
     "python_tests_passed": 314,
     "node_tests_passed": 69,
     "node_tests_failed": 0,
@@ -824,5 +824,28 @@
       "no automatic multi-track audio/video synchronisation",
       "no filler-word recognition"
     ]
+  },
+  "stage2_task_2_5": {
+    "status": "gated_optional",
+    "evidence": "STAGE_2_SPEECH_TO_TEXT_EVIDENCE.md",
+    "candidate": "Whisper/whisper.cpp",
+    "code_and_model_license": "MIT",
+    "cpu_runner_candidate": "public GitHub Actions standard runner",
+    "reason": "No representative real-footage quality, timestamp-drift, language/noise or job-runtime acceptance."
+  },
+  "stage2_task_2_10": {
+    "status": "gated_optional",
+    "evidence": "STAGE_2_AI_STICKER_EVIDENCE.md",
+    "candidate": "Stable Diffusion 3.5",
+    "license": "Stability AI Community License (conditional)",
+    "reason": "No dependable free GPU runtime or accepted CPU generation latency; Cloudflare Workers Free limits are unsuitable."
+  },
+  "stage2_task_2_12": {
+    "status": "gated_optional",
+    "evidence": "STAGE_2_TTS_DUBBING_EVIDENCE.md",
+    "candidate": "Piper",
+    "engine_license": "GPL-3.0-or-later",
+    "voice_license": "Per-model and full training-chain review required",
+    "reason": "No exact voice model, commercial rights review and rendered speech-quality acceptance completed."
   }
 }

@@ -207,3 +207,16 @@ No automatic transcription, hosted Worker deployment or Android usability test w
 **GitHub Actions evidence:** run #46000233242 passed on commit `c8bb6b24835a188f689aaf111b84ba7aa9440039`: 314 Python tests, 69 Node tests, 0 Node failures and all checked-in D1 migrations passed. A real MLT integration test verified the shortened output duration and decoded the expected 880 Hz audio after the cut; the original source media remained byte-for-byte unchanged.
 
 This is offline/code acceptance only. No Worker deployment, live private Release upload or Android usability test was performed. Multi-track A/V synchronisation and filler-word recognition remain open.
+
+
+### Task 2.5 — automatic speech-to-text feasibility
+
+**Feasibility evidence complete; capability remains `gated_optional`.** Whisper/whisper.cpp is MIT-licensed and can run CPU-only. The public GitHub runner provides a plausible $0 path, but no real-footage word-error, timestamp-drift, language/noise or 30-minute runtime benchmark has passed. Cloudflare Workers Free's 10 ms CPU and 128 MB memory are not suitable for inference. No automatic transcription is enabled; user-supplied timed transcripts remain the supported route. See `architecture/STAGE_2_SPEECH_TO_TEXT_EVIDENCE.md`.
+
+### Task 2.10 — AI sticker feasibility
+
+**Feasibility evidence complete; capability remains `gated_optional`.** Stability AI's Community License is conditional on revenue and terms; the model is not a free hosted inference service. Cloudflare Workers Free cannot run image generation, and the free public Actions runner has no GPU or proven CPU generation latency. Native editable graphics take priority. See `architecture/STAGE_2_AI_STICKER_EVIDENCE.md`.
+
+### Task 2.12 — TTS and dubbing feasibility
+
+**Feasibility evidence complete; capability remains `gated_optional`.** Piper is local and open source, but its GPL-3.0-or-later engine and model-specific voice/training-chain licences require review. No voice is approved or quality-tested for this editor; voice cloning and paid APIs remain disabled. See `architecture/STAGE_2_TTS_DUBBING_EVIDENCE.md`.
