@@ -1296,6 +1296,19 @@ class EditedCaptionMltRenderTests(unittest.TestCase):
         )
 
 
+class TextOpacityExpressionTests(unittest.TestCase):
+    def test_opacity_expression_uses_monotonic_frame_counter_not_missing_timestamps(self):
+        from mlt_engine.renderer import _ffmpeg_text_opacity_expression
+
+        expression = _ffmpeg_text_opacity_expression([
+            {"property": "opacity", "time_us": 0, "value": 0.0, "interpolation": "linear"},
+            {"property": "opacity", "time_us": 400_000, "value": 1.0, "interpolation": "linear"},
+        ], 25, 1)
+        self.assertIn("N", expression)
+        self.assertNotIn("T", expression)
+        self.assertIn("10", expression)
+
+
 class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
     """Decode real output frames to verify text fades and clip boundaries."""
 

@@ -1359,8 +1359,10 @@ def _make_text_overlay_image(
     return output_path
 
 
-def _ffmpeg_text_opacity_expression(keyframes: list[dict[str, Any]]) -> str:
-    """Compile validated clip-local opacity keyframes to a FFmpeg geq expression."""
+def _ffmpeg_text_opacity_expression(
+    keyframes: list[dict[str, Any]], fps_num: int, fps_den: int
+) -> str:
+    """Compile clip-local opacity keyframes against the overlay's frame counter."""
     entries = sorted(
         (item for item in keyframes if item["property"] == "opacity"),
         key=lambda item: int(item["time_us"]),
@@ -1369,6 +1371,13 @@ def _ffmpeg_text_opacity_expression(keyframes: list[dict[str, Any]]) -> str:
         return "1"
     if any(item.get("interpolation", "linear") == "bezier" for item in entries):
         raise MltRenderError("Text opacity animation does not support Bezier interpolation yet.")
+
+    frames = [
+        (_frame_at_us(int(item["time_us"]), fps_num, fps_den), item)
+        for item in entries
+    ]
+    if any(right[0] <= left[0] for left, right in zip(frames, frames[1:])):
+        raise MltRenderError("Text opacity keyframes must map to distinct increasing frames.")
 
     def eased(ratio: str, mode: str) -> str:
         if mode == "hold":
@@ -1397,25 +1406,21 @@ def _ffmpeg_text_opacity_expression(keyframes: list[dict[str, Any]]) -> str:
             return f"({ratio})*({ratio})*(3-2*({ratio}))"
         raise MltRenderError(f"Text opacity interpolation {mode!r} is unsupported.")
 
-    expression = f"{float(entries[-1]['value']):.9f}"
-    for left, right in reversed(list(zip(entries, entries[1:]))):
-        start = int(left["time_us"]) / 1_000_000
-        end = int(right["time_us"]) / 1_000_000
-        span = end - start
-        if span <= 0:
-            raise MltRenderError("Text opacity keyframe times must increase.")
-        ratio = f"((T-{start:.9f})/{span:.9f})"
+    expression = f"{float(frames[-1][1]['value']):.9f}"
+    for (start_frame, left), (end_frame, right) in reversed(list(zip(frames, frames[1:]))):
+        span = end_frame - start_frame
+        ratio = f"((N-{start_frame})/{span})"
         progress = eased(ratio, left.get("interpolation", "linear"))
         left_value = float(left["value"])
         right_value = float(right["value"])
         segment = f"({left_value:.9f}+({right_value-left_value:.9f})*({progress}))"
-        expression = f"if(lt(T\\,{end:.9f})\\,{segment}\\,{expression})"
-    first_time = int(entries[0]["time_us"]) / 1_000_000
-    expression = f"if(lt(T\\,{first_time:.9f})\\,1\\,{expression})"
-    if len(entries) == 1:
+        expression = f"if(lt(N\\,{end_frame})\\,{segment}\\,{expression})"
+    first_frame = frames[0][0]
+    expression = f"if(lt(N\\,{first_frame})\\,1\\,{expression})"
+    if len(frames) == 1:
         expression = (
-            f"if(lt(T\\,{first_time:.9f})\\,1\\,"
-            f"{float(entries[0]['value']):.9f})"
+            f"if(lt(N\\,{first_frame})\\,1\\,"
+            f"{float(frames[0][1]['value']):.9f})"
         )
     return expression
 
@@ -1446,7 +1451,7 @@ def _apply_text_overlay_images_ffmpeg(
         prepared = f"[prepared{index}]"
         keyframes = overlay.get("keyframes", [])
         if keyframes:
-            opacity_expression = _ffmpeg_text_opacity_expression(keyframes)
+            opacity_expression = _ffmpeg_text_opacity_expression(keyframes, fps_num, fps_den)
             filters.append(
                 f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB),format=rgba,"
                 "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
