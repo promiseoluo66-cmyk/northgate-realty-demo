@@ -384,6 +384,19 @@ def _load_project(job:dict[str,Any],source:Path)->dict[str,Any]:
     if raw: return validate_project(json.loads(raw) if isinstance(raw,str) else raw)
     return _build_initial_project(job,**_probe_media(source),size_bytes=source.stat().st_size)
 
+def is_read_only_analysis_plan(pending_plan: Any) -> bool:
+    """Only the single registered silence-review operation may bypass video export."""
+    if not isinstance(pending_plan, dict) or pending_plan.get("mode") != "manual":
+        return False
+    calls = pending_plan.get("tool_calls")
+    return (
+        isinstance(calls, list)
+        and len(calls) == 1
+        and isinstance(calls[0], dict)
+        and calls[0].get("name") == "transcript.review_silence"
+    )
+
+
 def _make_plan(
     instruction: str,
     executor: ProjectToolExecutor,
