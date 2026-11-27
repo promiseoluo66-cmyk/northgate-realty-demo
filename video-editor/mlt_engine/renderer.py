@@ -779,9 +779,17 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                 )
                 clip_transform = None
             elif clip["kind"] == "text":
-                if clip.get("keyframes") or clip.get("transform"):
+                if clip.get("transform"):
                     raise MltRenderError(
-                        "Text transforms/keyframes are not enabled; use text geometry properties."
+                        "Text transforms are not enabled; use text geometry properties."
+                    )
+                if any(item["property"] != "opacity" for item in clip.get("keyframes", [])):
+                    raise MltRenderError(
+                        "Text clips currently support opacity keyframes only."
+                    )
+                if any(item.get("interpolation") == "bezier" for item in clip.get("keyframes", [])):
+                    raise MltRenderError(
+                        "Text opacity animation does not support Bezier interpolation yet."
                     )
                 clip_transform = None
             else:
@@ -889,6 +897,7 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                 "effects": effects,
                 "transform": clip_transform,
                 "audio_keyframes": audio_keyframes,
+                "keyframes": clip.get("keyframes", []) if clip["kind"] == "text" else [],
             })
             cursor_frame = end_frame
             previous_clip_id = clip["id"]
@@ -1350,6 +1359,67 @@ def _make_text_overlay_image(
     return output_path
 
 
+def _ffmpeg_text_opacity_expression(keyframes: list[dict[str, Any]]) -> str:
+    """Compile validated clip-local opacity keyframes to a FFmpeg geq expression."""
+    entries = sorted(
+        (item for item in keyframes if item["property"] == "opacity"),
+        key=lambda item: int(item["time_us"]),
+    )
+    if not entries:
+        return "1"
+    if any(item.get("interpolation", "linear") == "bezier" for item in entries):
+        raise MltRenderError("Text opacity animation does not support Bezier interpolation yet.")
+
+    def eased(ratio: str, mode: str) -> str:
+        if mode == "hold":
+            return "0"
+        if mode == "linear":
+            return ratio
+        if mode in {"ease_in", "ease_in_cubic"}:
+            return f"pow({ratio}\\,3)"
+        if mode in {"ease_out", "ease_out_cubic"}:
+            return f"(1-pow(1-({ratio})\\,3))"
+        if mode in {"ease_in_out", "ease_in_out_cubic"}:
+            return f"if(lt({ratio}\\,0.5)\\,4*pow({ratio}\\,3)\\,1-pow(-2*({ratio})+2\\,3)/2)"
+        if mode == "ease_in_quad":
+            return f"pow({ratio}\\,2)"
+        if mode == "ease_out_quad":
+            return f"(1-pow(1-({ratio})\\,2))"
+        if mode == "ease_in_out_quad":
+            return f"if(lt({ratio}\\,0.5)\\,2*pow({ratio}\\,2)\\,1-pow(-2*({ratio})+2\\,2)/2)"
+        if mode == "ease_in_quart":
+            return f"pow({ratio}\\,4)"
+        if mode == "ease_out_quart":
+            return f"(1-pow(1-({ratio})\\,4))"
+        if mode == "ease_in_out_quart":
+            return f"if(lt({ratio}\\,0.5)\\,8*pow({ratio}\\,4)\\,1-pow(-2*({ratio})+2\\,4)/2)"
+        if mode == "smoothstep":
+            return f"({ratio})*({ratio})*(3-2*({ratio}))"
+        raise MltRenderError(f"Text opacity interpolation {mode!r} is unsupported.")
+
+    expression = f"{float(entries[-1]['value']):.9f}"
+    for left, right in reversed(list(zip(entries, entries[1:]))):
+        start = int(left["time_us"]) / 1_000_000
+        end = int(right["time_us"]) / 1_000_000
+        span = end - start
+        if span <= 0:
+            raise MltRenderError("Text opacity keyframe times must increase.")
+        ratio = f"((T-{start:.9f})/{span:.9f})"
+        progress = eased(ratio, left.get("interpolation", "linear"))
+        left_value = float(left["value"])
+        right_value = float(right["value"])
+        segment = f"({left_value:.9f}+({right_value-left_value:.9f})*({progress}))"
+        expression = f"if(lt(T\\,{end:.9f})\\,{segment}\\,{expression})"
+    first_time = int(entries[0]["time_us"]) / 1_000_000
+    expression = f"if(lt(T\\,{first_time:.9f})\\,1\\,{expression})"
+    if len(entries) == 1:
+        expression = (
+            f"if(lt(T\\,{first_time:.9f})\\,1\\,"
+            f"{float(entries[0]['value']):.9f})"
+        )
+    return expression
+
+
 def _apply_text_overlay_images_ffmpeg(
     base_output: Path,
     destination: Path,
@@ -1374,10 +1444,20 @@ def _apply_text_overlay_images_ffmpeg(
         enabled = f"gte(t\\,{start:.6f})*lt(t\\,{end:.6f})"
         label = f"[title{index}]"
         prepared = f"[prepared{index}]"
-        filters.append(
-            f"[{index}:v]scale={int(plan['width'])}:{int(plan['height'])},"
-            f"format=rgba{prepared}"
-        )
+        keyframes = overlay.get("keyframes", [])
+        if keyframes:
+            opacity_expression = _ffmpeg_text_opacity_expression(keyframes)
+            filters.append(
+                f"[{index}:v]format=rgba,"
+                "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
+                f"a='alpha(X,Y)*({opacity_expression})',"
+                f"scale={int(plan['width'])}:{int(plan['height'])}{prepared}"
+            )
+        else:
+            filters.append(
+                f"[{index}:v]scale={int(plan['width'])}:{int(plan['height'])},"
+                f"format=rgba{prepared}"
+            )
         filters.append(
             f"{previous}{prepared}"
             f"overlay=x=0:y=0:format=auto:eof_action=pass:"
@@ -1708,6 +1788,7 @@ def render_project(
             "start_frame": text_clip["start_frame"],
             "duration_frames": text_clip["duration_frames"],
             "track_order": text_clip["track_order"],
+            "keyframes": text_clip.get("keyframes", []),
         })
     visual_overlays.sort(key=lambda item: (item["track_order"], item["start_frame"]))
 
