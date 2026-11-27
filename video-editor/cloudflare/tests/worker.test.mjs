@@ -640,3 +640,159 @@ test("private media asset URL refuses a public storage repository", async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("manual Studio queues a read-only silence review without asking for edit confirmation", async () => {
+  const originalFetch = globalThis.fetch;
+  let updateSql = "";
+  let updateValues = null;
+  const env = {
+    APP_API_TOKEN: "test-app-token", GITHUB_TOKEN: "github-test-token",
+    GITHUB_OWNER: "owner", GITHUB_REPO: "repo", GITHUB_WORKFLOW: "render.yml",
+    GITHUB_REF: "video-editor-lab",
+    DB: {
+      prepare(sql) {
+        if (sql.startsWith("SELECT status,project_json,project_revision,pending_plan_json")) {
+          return { bind: () => ({ first: async () => ({
+            status: "completed", project_json: JSON.stringify({ revision: 3 }),
+            project_revision: 3, pending_plan_json: null
+          }) }) };
+        }
+        updateSql = sql;
+        return { bind(...args) {
+          updateValues = args;
+          return { run: async () => ({ meta: { changes: 1 } }) };
+        }};
+      }
+    }
+  };
+  globalThis.fetch = async () => new Response(null, { status: 204 });
+  try {
+    const response = await worker.fetch(
+      new Request("https://studio.test/api/v1/jobs/" + "6".repeat(32) + "/manual-edit", {
+        method: "POST",
+        headers: { Authorization: "Bearer test-app-token", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: 3,
+          tool_calls: [{
+            name: "transcript.review_silence",
+            arguments: {
+              transcript_id: "transcript-1", clip_id: "main-clip",
+              analysis_seconds: 600, silence_threshold_db: -50,
+              minimum_silence_us: 100000
+            }
+          }]
+        })
+      }), env
+    );
+    assert.equal(response.status, 202);
+    assert.match(updateSql, /analysis_result_json=NULL/);
+    assert.equal(JSON.parse(updateValues[0]).tool_calls[0].name, "transcript.review_silence");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("manual Studio requires confirmation for transcript word and silence cuts", async () => {
+  const originalFetch = globalThis.fetch;
+  const env = {
+    APP_API_TOKEN: "test-app-token", GITHUB_TOKEN: "github-test-token",
+    GITHUB_OWNER: "owner", GITHUB_REPO: "repo", GITHUB_WORKFLOW: "render.yml",
+    GITHUB_REF: "video-editor-lab",
+    DB: {
+      prepare(sql) {
+        if (sql.startsWith("SELECT status,project_json,project_revision,pending_plan_json")) {
+          return { bind: () => ({ first: async () => ({
+            status: "completed", project_json: JSON.stringify({ revision: 3 }),
+            project_revision: 3, pending_plan_json: null
+          }) }) };
+        }
+        return { bind: () => ({ run: async () => ({ meta: { changes: 1 } }) }) };
+      }
+    }
+  };
+  globalThis.fetch = async () => new Response(null, { status: 204 });
+  try {
+    for (const name of ["transcript.apply_cut", "transcript.apply_silence_cut"]) {
+      const request = (confirmed_tools = []) => worker.fetch(
+        new Request("https://studio.test/api/v1/jobs/" + "7".repeat(32) + "/manual-edit", {
+          method: "POST",
+          headers: { Authorization: "Bearer test-app-token", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expected_revision: 3,
+            tool_calls: [{ name, arguments: {
+              transcript_id: "transcript-1", clip_id: "main-clip",
+              word_start_index: 0, word_end_index: 0,
+              source_start_us: 100000, source_end_us: 200000
+            }}],
+            confirmed_tools
+          })
+        }), env
+      );
+      const blocked = await request();
+      assert.equal(blocked.status, 409, name + " must be blocked before explicit confirmation");
+      const blockedBody = await blocked.json();
+      assert.deepEqual(blockedBody.required_confirmations, [name]);
+      const approved = await request([name]);
+      assert.equal(approved.status, 202, name + " must be accepted after matching confirmation");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("internal callback stores an analysis-only completed result without an output video", async () => {
+  let updateSql = "";
+  let values = null;
+  const env = {
+    CALLBACK_SECRET: "test-callback-secret",
+    DB: {
+      prepare(sql) {
+        updateSql = sql;
+        return { bind(...args) {
+          values = args;
+          return { run: async () => ({ meta: { changes: 1 } }) };
+        }};
+      }
+    }
+  };
+  const analysis = { results: [{ name: "transcript.review_silence", result: { candidates: [] } }] };
+  const response = await worker.fetch(
+    new Request("https://studio.test/api/internal/jobs/" + "8".repeat(32), {
+      method: "POST",
+      headers: { "X-Callback-Secret": "test-callback-secret", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "completed", message: "Silence review completed.",
+        analysis_result: analysis, project_revision: 3
+      })
+    }), env
+  );
+  assert.equal(response.status, 200);
+  assert.match(updateSql, /analysis_result_json/);
+  assert.equal(JSON.parse(values.find(value => typeof value === "string" && value.includes('"results"'))), analysis);
+});
+
+test("job status returns the saved analysis result to Studio", async () => {
+  const analysis = { results: [{ name: "transcript.review_silence", result: { candidates: [] } }] };
+  const env = {
+    APP_API_TOKEN: "test-app-token",
+    DB: {
+      prepare(sql) {
+        assert.match(sql, /analysis_result_json/);
+        return { bind: () => ({ first: async () => ({
+          id: "9".repeat(32), status: "completed", message: "Silence review completed.",
+          instruction: "Review silence", skill_id: "clean-shorts",
+          project_revision: 3, ai_status: "applied", pending_plan_json: null,
+          output_asset_id: null, analysis_result_json: JSON.stringify(analysis)
+        }) }) };
+      }
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://studio.test/api/v1/jobs/" + "9".repeat(32), {
+      headers: { Authorization: "Bearer test-app-token" }
+    }), env
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).analysis_result, analysis);
+});

@@ -467,3 +467,23 @@ def test_generated_video_proxy_upload_uses_video_mime_and_saves_release_id(tmp_p
     assert ("proxy-generated.mp4", "video/mp4") in uploads
     proxy = next(item for item in executor.get_project()["assets"] if item["id"] == "proxy-generated")
     assert proxy["release_asset_id"] == 765432
+
+
+def test_runner_recognises_only_single_read_only_silence_review_jobs():
+    from cloudflare.runner import is_read_only_analysis_plan
+
+    assert is_read_only_analysis_plan({
+        "mode": "manual",
+        "tool_calls": [{"name": "transcript.review_silence", "arguments": {}}],
+    })
+    assert not is_read_only_analysis_plan({
+        "mode": "manual",
+        "tool_calls": [
+            {"name": "transcript.review_silence", "arguments": {}},
+            {"name": "text.update_clip", "arguments": {}},
+        ],
+    })
+    assert not is_read_only_analysis_plan({
+        "mode": "manual",
+        "tool_calls": [{"name": "text.update_clip", "arguments": {}}],
+    })
