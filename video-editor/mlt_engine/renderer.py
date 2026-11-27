@@ -1444,6 +1444,39 @@ def _apply_text_overlay_images_ffmpeg(
     duration = int(plan["total_frames"]) * fps_den / fps_num
     if os.environ.get("MLT_DEBUG_TEXT_OVERLAY") == "1" and overlays:
         print("MLT_DEBUG_TEXT_OVERLAY filtergraph=" + repr(";".join(filters)))
+        for overlay in overlays:
+            if overlay.get("keyframes"):
+                diagnostic_filters = _ffmpeg_text_opacity_filters(
+                    overlay["keyframes"], fps_num, fps_den
+                )
+                diagnostic_command = [
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-loop", "1", "-framerate", f"{fps_num}/{fps_den}",
+                    "-i", str(overlay["path"]),
+                    "-vf",
+                    ",".join([
+                        f"setpts=N*{fps_den}/({fps_num}*TB)",
+                        "format=yuva444p",
+                        *diagnostic_filters,
+                        "alphaextract",
+                    ]),
+                    "-frames:v", "12", "-f", "rawvideo", "-pix_fmt", "gray", "-",
+                ]
+                diagnostic = subprocess.run(
+                    diagnostic_command, check=True, capture_output=True, timeout=30
+                ).stdout
+                frame_size = int(plan["width"]) * int(plan["height"])
+                alpha_means = [
+                    round(
+                        sum(diagnostic[offset:offset + frame_size]) / frame_size, 3
+                    )
+                    for offset in range(0, len(diagnostic), frame_size)
+                    if len(diagnostic[offset:offset + frame_size]) == frame_size
+                ]
+                print(
+                    "MLT_DEBUG_TEXT_OVERLAY alpha_frame_means="
+                    + repr(alpha_means)
+                )
         sample_pixels = {}
         for debug_time in (0.20, 0.80, 1.25, 1.75):
             pixels_at_time = {}
