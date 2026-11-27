@@ -479,6 +479,31 @@ def validate_project(document: Any) -> dict[str, Any]:
                     raise ProjectValidationError(f"{path}.crop cannot be combined with automatic framing.")
                 _validate_crop(clip["crop"], f"{path}.crop")
             _validate_keyframes(clip.get("keyframes", []), f"{path}.keyframes", duration)
+            if kind == "text":
+                text_keyframe_limits = {
+                    "position_x": (-8192, 8192), "position_y": (-8192, 8192),
+                    "scale_x": (0.1, 4.0), "scale_y": (0.1, 4.0),
+                    "rotation_deg": (-360.0, 360.0), "opacity": (0.0, 1.0),
+                }
+                for keyframe_index, keyframe in enumerate(clip.get("keyframes", [])):
+                    property_name = keyframe["property"]
+                    if property_name not in text_keyframe_limits:
+                        raise ProjectValidationError(
+                            f"{path}.keyframes[{keyframe_index}].property is not supported for text clips."
+                        )
+                    low, high = text_keyframe_limits[property_name]
+                    if not low <= float(keyframe["value"]) <= high:
+                        raise ProjectValidationError(
+                            f"{path}.keyframes[{keyframe_index}].value must be between {low} and {high} for text."
+                        )
+                    if property_name == "opacity" and keyframe.get("interpolation", "linear") != "linear":
+                        raise ProjectValidationError(
+                            f"{path}.keyframes[{keyframe_index}] text opacity interpolation must be linear."
+                        )
+                    if property_name != "opacity" and keyframe.get("interpolation", "linear") == "bezier":
+                        raise ProjectValidationError(
+                            f"{path}.keyframes[{keyframe_index}] text transforms do not support Bezier interpolation."
+                        )
             crop_keyframes = {item["property"] for item in clip.get("keyframes", [])
                               if item["property"] in {"crop_x", "crop_y", "crop_width", "crop_height"}}
             if crop_keyframes and kind not in {"video", "image"}:
