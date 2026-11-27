@@ -1801,7 +1801,17 @@ class ProjectToolExecutor:
             if not isinstance(text_spec, dict):
                 raise ProjectToolExecutionError("The selected text clip has no valid text specification.")
             if "content" in args:
-                text_spec["content"] = args["content"]
+                new_content = args["content"]
+                if clip.get("word_timings"):
+                    updated_words = str(new_content).split()
+                    if len(updated_words) != len(clip["word_timings"]):
+                        raise ProjectToolExecutionError(
+                            "Editing karaoke text must keep the same number of words so supplied timings remain valid."
+                        )
+                    new_content = " ".join(updated_words)
+                    for timing, word_text in zip(clip["word_timings"], updated_words):
+                        timing["text"] = word_text
+                text_spec["content"] = new_content
             if "text_style" in args:
                 text_spec.update(deepcopy(args["text_style"]))
             return {"clip_id": clip["id"], "text": deepcopy(text_spec)}, True
@@ -2045,6 +2055,38 @@ class ProjectToolExecutor:
             right["start_us"] = int(clip["start_us"]) + offset
             right["duration_us"] = int(clip["duration_us"]) - offset
             left["duration_us"] = offset
+            if clip.get("word_timings"):
+                crossing_words = [
+                    word for word in clip["word_timings"]
+                    if int(word["start_us"]) < offset < int(word["end_us"])
+                ]
+                if crossing_words:
+                    raise ProjectToolExecutionError(
+                        "A karaoke caption can only be split between timed words."
+                    )
+                left_words = [
+                    deepcopy(word) for word in clip["word_timings"]
+                    if int(word["end_us"]) <= offset
+                ]
+                right_words = [
+                    deepcopy(word) for word in clip["word_timings"]
+                    if int(word["start_us"]) >= offset
+                ]
+                if not left_words or not right_words:
+                    raise ProjectToolExecutionError(
+                        "A karaoke caption split must leave at least one timed word on each side."
+                    )
+                left["word_timings"] = left_words
+                left["text"]["content"] = " ".join(word["text"] for word in left_words)
+                right["word_timings"] = [
+                    {
+                        **word,
+                        "start_us": int(word["start_us"]) - offset,
+                        "end_us": int(word["end_us"]) - offset,
+                    }
+                    for word in right_words
+                ]
+                right["text"]["content"] = " ".join(word["text"] for word in right_words)
             if clip["kind"] != "text":
                 rate = float(clip.get("playback_rate", 1.0))
                 source_in = int(clip.get("source_in_us", 0))
