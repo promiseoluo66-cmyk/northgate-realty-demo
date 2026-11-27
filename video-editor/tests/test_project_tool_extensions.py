@@ -190,6 +190,55 @@ class EditorToolExpansionTests(unittest.TestCase):
             {"text": "HELLO", "start_us": 0, "end_us": 350_000},
             {"text": "WORLD", "start_us": 400_000, "end_us": 800_000},
         ])
+        reopened = ProjectToolExecutor(self.executor.get_project())
+        reopened_clip = next(
+            item for track in reopened.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip["id"]
+        )
+        self.assertEqual(reopened_clip["word_timings"], clip["word_timings"])
+
+    def test_text_animation_is_revision_checked_undoable_redoable_and_reopenable(self):
+        created = self.run_tool("timeline.add_text_clip", {
+            "track_id": "title-track", "content": "Animated title",
+            "start_us": 250_000, "duration_us": 1_000_000,
+        })
+        clip_id = created["results"][0]["result"]["clip_id"]
+        self.run_tool("animation.set_keyframe", {
+            "clip_id": clip_id, "property": "scale_x",
+            "time_us": 0, "value": 0.8, "interpolation": "ease_in_out",
+        })
+        saved_project = self.executor.get_project()
+        reopened = ProjectToolExecutor(saved_project)
+        reopened_clip = next(
+            item for track in reopened.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(reopened_clip["keyframes"][0]["property"], "scale_x")
+        revision_before_undo = self.executor.revision
+        self.executor.execute("history.undo", {})
+        undone_clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(undone_clip["keyframes"], [])
+        self.assertEqual(self.executor.revision, revision_before_undo + 1)
+        self.executor.execute("history.redo", {})
+        redone_clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(redone_clip["keyframes"][0]["value"], 0.8)
+        with self.assertRaises(ProjectRevisionConflict):
+            self.executor.execute(
+                "animation.set_keyframe",
+                {"clip_id": clip_id, "property": "scale_y", "time_us": 0, "value": 0.9},
+                expected_revision=1,
+            )
+        self.assertEqual(
+            {item["property"] for item in redone_clip["keyframes"]},
+            {"scale_x"},
+        )
+
 
     def test_karaoke_caption_text_edits_keep_the_supplied_word_timing(self):
         result = self.run_tool("captions.add_word_timed", {
