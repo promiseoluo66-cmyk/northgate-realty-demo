@@ -1212,7 +1212,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         rect_height = min(height - rect_y, box_height + 2 * pad)
         background_filter = (
             f"drawbox=x={rect_x}:y={rect_y}:w={rect_width}:h={rect_height}:"
-            f"color=0x{red:02X}{green:02X}{blue:02X}@{max(0.0, min(1.0, bg_alpha)):.4f}:t=fill"
+            f"color=0x{red:02X}{green:02X}{blue:02X}@{max(0.0, min(1.0, bg_alpha)):.4f}:t=fill:replace=1"
         )
         filter_complex = (
             f"[0:v]{background_filter}[background];"
