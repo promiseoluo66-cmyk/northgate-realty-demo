@@ -1611,6 +1611,144 @@ class WordTimedHighlightMltIntegrationTests(unittest.TestCase):
         self.assertEqual(yellow_pixels(1.4), 0, "No karaoke text should remain after its supplied end time.")
 
 
+class TextLoopAndExitMltIntegrationTests(unittest.TestCase):
+    """Decode rendered frames at loop and exit boundaries."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.project = make_project(self.root)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def make_source(self):
+        import subprocess
+        source = self.root / "source.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=25:d=2",
+            "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ], check=True, capture_output=True, text=True, timeout=120)
+        self.project["assets"][0].update({
+            "size_bytes": source.stat().st_size, "duration_us": 2_000_000,
+        })
+        self.project["tracks"][0]["clips"][0].update({
+            "duration_us": 2_000_000, "source_out_us": 2_000_000,
+        })
+
+    def decoded_white_bounds(self, output, timestamp):
+        import subprocess
+        decoded = subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-ss", f"{timestamp:.3f}", "-i", str(output),
+            "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+        ], check=True, capture_output=True, timeout=60)
+        frame = decoded.stdout
+        self.assertEqual(len(frame), 320 * 240 * 3)
+        points = [
+            (index % 320, index // 320)
+            for index in range(320 * 240)
+            if frame[index * 3] > 100
+            and frame[index * 3 + 1] > 100
+            and frame[index * 3 + 2] > 180
+        ]
+        if not points:
+            return None
+        return (
+            min(x for x, _ in points), min(y for _, y in points),
+            max(x for x, _ in points), max(y for _, y in points),
+        )
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_pulse_loop_renders_three_distinct_cycles_and_stops_at_clip_end(self):
+        from mlt_engine.renderer import render_project
+
+        self.make_source()
+        times = [0, 200_000, 400_000, 600_000, 800_000, 1_000_000, 1_200_000]
+        values = [1.0, 1.08, 1.0, 1.08, 1.0, 1.08, 1.0]
+        keyframes = []
+        for property_name in ("scale_x", "scale_y"):
+            keyframes.extend({
+                "property": property_name,
+                "time_us": at,
+                "value": value,
+                "interpolation": "ease_in_out",
+            } for at, value in zip(times, values))
+        self.project["tracks"].append({
+            "id": "loop-track", "type": "text", "name": "Pulse loop",
+            "order": 1, "locked": False, "clips": [{
+                "id": "pulse-title", "kind": "text",
+                "start_us": 400_000, "duration_us": 1_200_000,
+                "text": {
+                    "content": "LOOP", "size": 48, "fgcolour": "#FFFFFF",
+                    "outline": 0, "halign": "center", "valign": "middle",
+                    "x_percent": 5, "y_percent": 35,
+                    "width_percent": 90, "height_percent": 30,
+                },
+                "effects": [], "keyframes": keyframes,
+            }],
+        })
+        output = self.root / "pulse-loop-render.mp4"
+        receipt = render_project(self.project, self.root, output, timeout_seconds=120)
+        self.assertTrue(receipt["ok"], receipt)
+
+        peaks = [self.decoded_white_bounds(output, time) for time in (0.6, 1.0, 1.4)]
+        troughs = [self.decoded_white_bounds(output, time) for time in (0.8, 1.2, 1.6)]
+        for cycle, (peak, trough) in enumerate(zip(peaks, troughs), start=1):
+            self.assertIsNotNone(peak, f"Pulse cycle {cycle} peak should render text.")
+            self.assertIsNotNone(trough, f"Pulse cycle {cycle} trough should render text.")
+            peak_width = peak[2] - peak[0]
+            trough_width = trough[2] - trough[0]
+            self.assertGreater(
+                peak_width, trough_width + 3,
+                f"Pulse cycle {cycle} should visibly grow then return to its base size.",
+            )
+        self.assertIsNone(
+            self.decoded_white_bounds(output, 1.7),
+            "Looped text must disappear immediately after its clip boundary.",
+        )
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_text_fade_out_finishes_before_clip_end_without_leaking(self):
+        from mlt_engine.renderer import render_project
+
+        self.make_source()
+        self.project["tracks"].append({
+            "id": "exit-track", "type": "text", "name": "Exit title",
+            "order": 1, "locked": False, "clips": [{
+                "id": "exit-title", "kind": "text",
+                "start_us": 400_000, "duration_us": 800_000,
+                "text": {
+                    "content": "EXIT", "size": 48, "fgcolour": "#FFFFFF",
+                    "outline": 0, "halign": "center", "valign": "middle",
+                    "x_percent": 5, "y_percent": 35,
+                    "width_percent": 90, "height_percent": 30,
+                },
+                "effects": [], "keyframes": [
+                    {"property": "opacity", "time_us": 0, "value": 1.0, "interpolation": "linear"},
+                    {"property": "opacity", "time_us": 400_000, "value": 0.0, "interpolation": "linear"},
+                ],
+            }],
+        })
+        output = self.root / "fade-out-render.mp4"
+        receipt = render_project(self.project, self.root, output, timeout_seconds=120)
+        self.assertTrue(receipt["ok"], receipt)
+        self.assertIsNotNone(self.decoded_white_bounds(output, 0.45))
+        self.assertIsNone(self.decoded_white_bounds(output, 0.9))
+        self.assertIsNone(self.decoded_white_bounds(output, 1.3))
+
+
 class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
