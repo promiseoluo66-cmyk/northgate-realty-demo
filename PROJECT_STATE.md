@@ -58,7 +58,7 @@ The current `video-editor/architecture/STAGE_2_EXECUTION_PLAN.md` records:
 | 2.3 — Transcript-driven editing | Offline CI accepted | One selected source clip/track; unsupported mappings remain blocked |
 | 2.4 — Measured silence review and approved cuts | **Conflicting records — see Section 6** | Do not start, repeat, or modify until the user resolves the conflict |
 | 2.5 — Automatic speech-to-text | Feasibility evidence complete; `gated_optional` | Real-footage quality/runtime acceptance is still missing; do not enable by assumption |
-| 2.6 — Expanded text styling | Planned | Not recorded as complete |
+| 2.6 — Expanded text styling | **In progress** | Existing schema/model/Studio fields found; renderer routing defect and missing shadow blur identified. Test-first commit `cd649ad1da4d6b626ef5d8fa952b2d0b6d2bf80f`; test execution not yet independently observable. |
 | 2.7 — Text/caption/word-highlight animation | Planned | Not recorded as complete |
 | 2.8 — Editable title templates | Planned | Not recorded as complete |
 | 2.9 — Editable stickers and graphics | Planned | Not recorded as complete |
@@ -212,3 +212,17 @@ START by reporting: current branch head, what is complete, what remains, the nex
 - Superpowers process instructions in the repository were verified. A dedicated Superpowers skill/tool namespace was not exposed in this session, so no separate plugin invocation or independent subagents are claimed.
 - Task 2.4 remains blocked by the conflicting authorization/status records. Its CI run-number discrepancy is now explicitly recorded above. No Task 2.4 code or status was changed.
 - No application source, tests, CI configuration, deployment, or `main` branch was changed by this audit.
+
+## 12. Resumption audit — 2026-11-27 (current session)
+
+- Read this handoff first, then re-read `AGENTS.md`, `docs/superpowers/WORKFLOW.md`, `docs/superpowers/REVIEW_CHECKLIST.md`, the approved GPT-controlled workflow design, the Stage 2 completion plan and the Stage 2 capability ledger from `video-editor-lab`.
+- Verified repository identity and permissions through the GitHub connector. `video-editor-lab` exists; repository default branch is `main`. Compared `main...video-editor-lab`: lab is 187 commits ahead and 0 behind. `main` remains untouched.
+- Verified branch head at session start: `7a98d2b6f0f980d3ab3d389959112f809b9a0d28` (`docs: record final repository and workflow audit`).
+- Reconfirmed Stage 1 Tasks 1–10 and Stage 2 Tasks 2.1–2.3 as historically offline/CI accepted, subject to their recorded hosted/Android limitations. Task 2.4 remains blocked by the documented authorization conflict and CI run-number discrepancy. Tasks 2.5, 2.10 and 2.12 remain `gated_optional`.
+- Audited Task 2.6 before implementation. Existing schema/model validation, `text.update_clip`, Studio controls and render assertions already cover font weight, background fill/opacity, shadow colour/offset/opacity, letter spacing and line spacing. Found a renderer defect: `_make_ass_text_overlay_image()` recursively calls itself when advanced styling is requested, while `_make_text_overlay_image()` does not dispatch advanced styles to that helper. Shadow blur is absent from the schema, project validation, Studio and renderer.
+- Added test-first regression coverage in `video-editor/tests/test_project_tool_extensions.py` for shadow-blur validation/persistence and advanced-renderer dispatch. Test commit: `cd649ad1da4d6b626ef5d8fa952b2d0b6d2bf80f` (https://github.com/promiseoluo66-cmyk/northgate-realty-demo/commit/cd649ad1da4d6b626ef5d8fa952b2d0b6d2bf80f).
+- Updated `video-editor/architecture/STAGE_2_EXECUTION_PLAN.md` to mark Task 2.6 in progress and record the findings. Ledger commit: `6b351257a2d381863bc6d1d896ef5d93b099a609` (https://github.com/promiseoluo66-cmyk/northgate-realty-demo/commit/6b351257a2d381863bc6d1d896ef5d93b099a609).
+- Context7 documentation was checked for FFmpeg's `ass` filter and libass ASS override tags, including shadow-component blur. Documentation lookup only; no runtime test was performed.
+- Fresh tests are not verified. The GitHub combined-status tool returned no status checks for the test commit, and the available commit-workflow-runs action only exposes PR-triggered runs. A cloud-container clone attempt failed because outbound DNS/network access is unavailable. Do not claim that the new tests passed or failed.
+- No application implementation has been changed in this session yet. No deployment, merge, release, or manual Actions run occurred. The test commit is under `video-editor/**`, which matches the existing push workflow's path filter; whether its run completed could not be observed through the available GitHub tools.
+- Next permitted task: continue Stage 2 Task 2.6 only after obtaining an observable test execution path; fix advanced text-renderer routing/recursion and add bounded shadow blur using the existing renderer. Do not touch Task 2.4 until separately resolved and explicitly authorised. Do not begin Stage 3.
