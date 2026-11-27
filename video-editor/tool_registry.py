@@ -107,6 +107,7 @@ _TEXT_UPDATE_SCHEMA = {
         "size": _field("integer", minimum=8, maximum=256),
         "weight": _field("integer", minimum=100, maximum=1000),
         "fgcolour": _field("string", max_length=16),
+        "highlight_colour": _field("string", max_length=16),
         "bgcolour": _field("string", max_length=16),
         "bgopacity": _field("number", minimum=0, maximum=1),
         "background_fill": _field("boolean"),
