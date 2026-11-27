@@ -1276,7 +1276,7 @@ class TranscriptCutProposalTests(unittest.TestCase):
                 {"text": "This", "start_us": 100_000, "end_us": 250_000},
                 {"text": "part", "start_us": 300_000, "end_us": 500_000},
                 {"text": "goes", "start_us": 500_000, "end_us": 700_000},
-                {"text": "away", "start_us": 700_000, "end_us": 900_000},
+                {"text": "away", "start_us": 700_000, "end_us": 2_000_000},
             ],
         })
         self.transcript_id = imported["results"][0]["result"]["transcript_id"]
@@ -1327,7 +1327,8 @@ class TranscriptCutProposalTests(unittest.TestCase):
         project = self.executor.get_project()
         clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
         left = clips["main-clip"]
-        right_id = outcome["split_clip_ids"][-1]
+        right_id = outcome["after_clip_id"]
+        self.assertIsNotNone(right_id)
         right = clips[right_id]
         self.assertEqual((left["source_in_us"], left["source_out_us"], left["duration_us"]),
                          (0, 300_000, 300_000))
@@ -1352,7 +1353,7 @@ class TranscriptCutProposalTests(unittest.TestCase):
         remaining = next(clip for clip in project["tracks"][0]["clips"] if clip["kind"] == "video")
         self.assertEqual(remaining["source_in_us"], 250_000)
         self.assertEqual(remaining["start_us"], 0)
-        self.assertEqual(clips["next-clip"]["start_us"], 1_850_000)
+        self.assertEqual(clips["next-clip"]["start_us"], 1_750_000)
 
     def test_apply_supports_cut_to_clip_end(self):
         self.apply(start=3, end=3, confirmed=True)
@@ -1399,6 +1400,7 @@ class TranscriptCutProposalTests(unittest.TestCase):
     def test_proposal_blocks_out_of_clip_ranges_and_overlapping_siblings(self):
         project = self.executor.get_project()
         project["tracks"][0]["clips"][0]["source_out_us"] = 600_000
+        project["tracks"][0]["clips"][0]["duration_us"] = 600_000
         self.executor = ProjectToolExecutor(project)
         self.assertIn("selected_range_outside_clip_source", self.proposal()["results"][0]["result"]["blockers"])
 
@@ -1424,11 +1426,15 @@ class TranscriptCutProposalTests(unittest.TestCase):
         )
 
     def test_apply_refuses_unsafe_ranges_without_partial_mutation(self):
+        project = self.executor.get_project()
+        project["tracks"][0]["clips"][0]["source_out_us"] = 600_000
+        project["tracks"][0]["clips"][0]["duration_us"] = 600_000
+        self.executor = ProjectToolExecutor(project)
         before = self.executor.get_project()
+        plan = self.proposal(start=0, end=3)["results"][0]["result"]
         with self.assertRaises(ToolConfirmationRequired):
             self.apply()
         self.assertEqual(self.executor.get_project(), before)
-        plan = self.proposal(start=0, end=3)["results"][0]["result"]
         self.assertFalse(plan["can_apply"])
         with self.assertRaises(ProjectToolExecutionError):
             self.apply(start=0, end=3, confirmed=True)

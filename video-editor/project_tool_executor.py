@@ -899,11 +899,13 @@ class ProjectToolExecutor:
             end_offset = round((plan["source_end_us"] - source_in) / rate)
             duration_us = int(clip["duration_us"])
             split_clip_ids: list[str] = []
+            after_clip_id = None
             if start_offset == 0 and end_offset == duration_us:
                 removed_id = clip_id
             elif start_offset == 0:
                 split_result, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": end_offset})
                 split_clip_ids.append(split_result["right_clip_id"])
+                after_clip_id = split_result["right_clip_id"]
                 removed_id = clip_id
             elif end_offset == duration_us:
                 split_result, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": start_offset})
@@ -912,14 +914,15 @@ class ProjectToolExecutor:
             else:
                 end_split, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": end_offset})
                 split_clip_ids.append(end_split["right_clip_id"])
+                after_clip_id = end_split["right_clip_id"]
                 start_split, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": start_offset})
                 split_clip_ids.append(start_split["right_clip_id"])
                 removed_id = start_split["right_clip_id"]
             ripple_result, _ = self._apply(project, "timeline.ripple_delete_clip", {"clip_id": removed_id})
             return {
                 "applied": True, "plan": plan, "removed_segment_clip_id": removed_id,
-                "split_clip_ids": split_clip_ids, "ripple_result": ripple_result,
-                "source_transcript_preserved": True,
+                "split_clip_ids": split_clip_ids, "after_clip_id": after_clip_id,
+                "ripple_result": ripple_result, "source_transcript_preserved": True,
             }, True
         if name == "media.list":
             media_type = args.get("media_type")
