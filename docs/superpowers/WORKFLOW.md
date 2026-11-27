@@ -99,7 +99,7 @@ Obtain explicit user permission before:
 - Changing production infrastructure, secrets, billing, or paid services.
 - Sending emails/messages or publishing content.
 - Performing destructive or irreversible actions.
-- Beginning Stage 2 Task 2.4.
+- Beginning Stage 2 Task 2.4. Until separately authorised, Stage 2 Task 2.4 must remain unstarted.
 
 Never infer permission for these actions from approval of a design or implementation plan.
 
