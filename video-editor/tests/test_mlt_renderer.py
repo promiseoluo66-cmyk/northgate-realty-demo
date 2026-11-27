@@ -142,7 +142,7 @@ class CompilePlanTests(unittest.TestCase):
                 ],
             }],
         })
-        with self.assertRaisesRegex(MltRenderError, "only opacity keyframes"):
+        with self.assertRaisesRegex(MltRenderError, "opacity keyframes only"):
             self.compile()
 
     def test_compiles_still_image_overlay(self):

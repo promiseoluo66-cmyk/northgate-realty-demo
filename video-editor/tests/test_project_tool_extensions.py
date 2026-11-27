@@ -158,7 +158,7 @@ class EditorToolExpansionTests(unittest.TestCase):
             for item in track["clips"] if item["id"] == clip_id
         )
         self.assertEqual([item["time_us"] for item in clip["keyframes"]], [0, 400_000])
-        self.assertEqual(self.executor.revision, 3)
+        self.assertEqual(self.executor.revision, 4)
 
     def test_animation_keyframes_can_be_reset_for_property_or_entire_clip(self):
         for property_name in ("opacity", "scale_x"):
