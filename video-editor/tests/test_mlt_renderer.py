@@ -1569,12 +1569,14 @@ class WordTimedHighlightMltIntegrationTests(unittest.TestCase):
             "name": "captions.add_word_timed",
             "arguments": {
                 "track_id": "captions",
+                "mode": "karaoke",
                 "words": [
                     {"text": "FIRST", "start_us": 400_000, "end_us": 800_000},
                     {"text": "SECOND", "start_us": 800_000, "end_us": 1_200_000},
                 ],
                 "text_style": {
-                    "size": 48, "weight": 700, "fgcolour": "#FFD700",
+                    "size": 48, "weight": 700, "fgcolour": "#FFFFFF",
+                    "highlight_colour": "#FFD700",
                     "outline": 0, "halign": "center", "valign": "middle",
                     "x_percent": 5, "y_percent": 35,
                     "width_percent": 90, "height_percent": 30,
@@ -1599,9 +1601,14 @@ class WordTimedHighlightMltIntegrationTests(unittest.TestCase):
                 if red > 180 and green > 150 and blue < 150
             )
 
-        self.assertGreater(yellow_pixels(0.6), 10, "The first word should be highlighted in its supplied time window.")
-        self.assertGreater(yellow_pixels(1.0), 10, "The second word should be highlighted in its supplied time window.")
-        self.assertEqual(yellow_pixels(1.4), 0, "No timed word should remain after its supplied end time.")
+        first_word_frame = yellow_pixels(0.6)
+        second_word_frame = yellow_pixels(1.0)
+        self.assertGreater(first_word_frame, 10, "The first word should be highlighted in its supplied time window.")
+        self.assertGreater(
+            second_word_frame, first_word_frame + 10,
+            "The next word should receive the highlight at its supplied start time.",
+        )
+        self.assertEqual(yellow_pixels(1.4), 0, "No karaoke text should remain after its supplied end time.")
 
 
 class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
