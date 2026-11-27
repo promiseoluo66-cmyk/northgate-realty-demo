@@ -584,8 +584,11 @@
     const visual = ["video", "image"].includes(clip.kind);
     const keyframeProperty = byId("keyframe-property");
     if (keyframeProperty) {
+      const textAnimationProperties = new Set([
+        "position_x", "position_y", "scale_x", "scale_y", "rotation_deg", "opacity"
+      ]);
       Array.from(keyframeProperty.options).forEach((option) => {
-        option.disabled = clip.kind === "text" && option.value !== "opacity";
+        option.disabled = clip.kind === "text" && !textAnimationProperties.has(option.value);
       });
       if (clip.kind === "text") keyframeProperty.value = "opacity";
     }
@@ -1702,6 +1705,26 @@
       add("crop_y",0,0.08,"ease_in_out");add("crop_y",windowUs,0,"ease_in_out");
       add("crop_width",0,0.84,"ease_in_out");add("crop_width",windowUs,1,"ease_in_out");
       add("crop_height",0,0.84,"ease_in_out");add("crop_height",windowUs,1,"ease_in_out");
+    }else if(preset==="pulse_loop"||preset==="float_loop"){
+      if(clip.kind!=="text")throw new Error("Text loop presets require a text or caption clip.");
+      const cycleUs=Math.floor(duration/3);
+      if(cycleUs<100000)throw new Error("This text clip is too short for three safe loop cycles.");
+      for(let cycle=0;cycle<3;cycle++){
+        const start=cycle*cycleUs;
+        const middle=start+Math.floor(cycleUs/2);
+        const end=start+cycleUs;
+        if(preset==="pulse_loop"){
+          for(const property of ["scale_x","scale_y"]){
+            add(property,start,1,"ease_in_out");
+            add(property,middle,1.08,"ease_in_out");
+            add(property,end,1,"ease_in_out");
+          }
+        }else{
+          add("position_y",start,0,"ease_in_out");
+          add("position_y",middle,-18,"ease_in_out");
+          add("position_y",end,0,"ease_in_out");
+        }
+      }
     }else if(preset==="speed_ramp"){
       if(clip.kind!=="video")throw new Error("Speed ramp presets require a video clip.");
       add("playback_rate",0,0.75,"ease_in_out");
