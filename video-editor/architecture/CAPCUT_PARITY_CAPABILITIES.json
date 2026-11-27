@@ -265,7 +265,7 @@
         [
           "text_animation",
           "Text entrance, exit, loop and per-word animation",
-          "planned"
+          "prototype_verified"
         ],
         [
           "title_templates",
@@ -312,12 +312,12 @@
         [
           "caption_animations",
           "Caption templates, keyword highlights and animated captions",
-          "planned"
+          "partially_implemented"
         ],
         [
           "karaoke_lyrics",
           "Karaoke/lyric captions when timing data exists",
-          "planned"
+          "prototype_verified"
         ],
         [
           "subtitle_import_export",

@@ -20,7 +20,7 @@ A feature is complete only after its data contract, permission and validation ru
 | 2.4 | `transcript_driven_editing` | Combine transcript timing with measured silence candidates; never label technical silence as a filler word; show source/timeline bounds and adjacent words; apply only one freshly remeasured cut after explicit approval. | **Offline CI accepted** — final run #46000546362 (314 Python, 69 Node, 0 Node failures, D1 migrations and real MLT silence-cut render passed). |
 | 2.5 | `auto_captions` | Evaluate local/free speech-to-text runtimes, licences, model size/download, runner/mobile fit, compute and retention. Enable only after a genuinely $0 route passes real-footage timing tests; otherwise remain visibly gated. | **Feasibility evidence complete — gated_optional**; Whisper/whisper.cpp is a viable local candidate, but real-footage quality/runtime acceptance is still missing. |
 | 2.6 | `text_style` | Add validated typography, background, shadow and spacing settings; render generated frame fixtures for every supported control. | **Offline CI accepted** — run #166: 319 Python tests, 71 Node/Studio/Worker tests and all checked-in D1 migrations passed; generated RGBA/ASS render tests cover advanced routing, font weight, letter/line spacing, background alpha and shadow blur. |
-| 2.7 | `text_animation`, `caption_animations`, `karaoke_lyrics` | Add entrance/exit/loop and word-highlight animation through the canonical timing model; render boundary frames and verify timing. | Planned |
+| 2.7 | `text_animation`, `caption_animations`, `karaoke_lyrics` | Canonical text keyframes, fade/loop presets, timed ASS karaoke highlighting and decoded-frame boundary tests. | Offline CI accepted |
 | 2.8 | `title_templates` | Save/load editable title recipes with schema version and compatibility checks; never flatten templates into video. | Planned |
 | 2.9 | `stickers_graphics` | Build editable shapes, arrows, frames and imported image overlays; validate dimensions and retain asset provenance/licence. | Planned |
 | 2.10 | `ai_stickers` | Research only after model licence, zero-cost quota, privacy and runtime are verified. | **Feasibility evidence complete — gated_optional**; the model licence is conditional and no dependable free GPU runtime is available. |
@@ -128,3 +128,16 @@ Sources:
 - Verification evidence: **319 Python tests passed**, **71 Node/Studio/Worker tests passed**, and every checked-in D1 migration applied successfully to in-memory SQLite. The Python suite includes generated-frame rendering/decoding assertions for text routing, spacing, weight, background transparency and shadow blur.
 - Task 2.6 is complete for the offline CI scope. Hosted/Android acceptance remains a separate later activity; no deployment was performed.
 
+
+## Task 2.7 — text, caption and word-highlight animation
+
+**Status: Offline CI accepted.** Source commit `6efb39b23a4c011428201ed1a9c0ec3c92bd2c11`; GitHub Actions [run #46078537336](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46078537336) completed successfully on `video-editor-lab`.
+
+- Verification: **338 Python tests passed**, **73 Studio/Worker Node tests passed**, **0 Node tests skipped**, and all checked-in D1 migrations applied successfully to in-memory SQLite. The Python suite completed with no skipped tests.
+- Text clips reuse the existing `animation.set_keyframe` operation for opacity, position, scale and rotation. Text opacity supports linear fades; position/scale/rotation support the renderer's validated easing set. Output scale/rotation dimensions are bounded to 8192 pixels.
+- Studio provides text pulse and float loop presets, each compiling to three bounded cycles in the canonical clip-local keyframe model. It restricts text opacity interpolation to linear and exposes a load/save karaoke highlight-colour control.
+- The existing `captions.add_word_timed` operation retains its sequential mode and adds an optional karaoke mode. Karaoke words are stored in one editable text clip with validated clip-local timings and rendered through the existing FFmpeg/libass path. No timings are inferred or fabricated.
+- Text edits preserve word timing when the word count is unchanged. Splitting between words partitions timing data; splitting inside a word is rejected atomically. Save/reopen, undo/redo and stale-revision behaviour are tested.
+- Generated-media tests decode frames for fade-in, fade-out, position/scale/rotation animation, three pulse-loop cycles, karaoke word transitions and clip-boundary disappearance. Unsupported legacy text transforms fall back to static text with a privacy-safe diagnostic; malformed or out-of-range timing is rejected before mutation.
+- No new registered text-edit operation, Worker endpoint, D1 migration, runtime dependency, paid service or billing was introduced. Existing static text clips remain supported.
+- This is offline CI acceptance only. Hosted Worker, live private-media and Android device acceptance have not been performed; no deployment was made.

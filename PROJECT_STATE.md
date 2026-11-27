@@ -331,3 +331,23 @@ The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not star
 - User explicitly requested that the temporary diagnostic logging become permanent later; this implementation fulfils that request using the standard Python logging system rather than always-on print statements.
 - Task 2.7 remains partial and not accepted. Word-by-word highlighting, loop animation presets, additional transforms, broader malformed-input/static-legacy/boundary tests, full architecture/security review, and final Stage 2 documentation reconciliation remain open.
 - No Task 2.8 or Stage 3 work has started. Changes remain on video-editor-lab; main is untouched. No merge, deployment, release, or external action occurred.
+
+
+## 20. Stage 2 Task 2.7 accepted — 2026-11-27
+
+**Task status:** Offline CI accepted.  
+**Latest implementation commit:** `6efb39b23a4c011428201ed1a9c0ec3c92bd2c11`  
+**Fresh verification:** [GitHub Actions run #46078537336](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46078537336) — success.
+
+- Full workflow result: **338 Python tests passed**, **73 Studio/Worker Node tests passed**, **0 Node tests skipped**, and every checked-in D1 migration applied successfully to in-memory SQLite. The Python test suite also reported no skips.
+- Text animation reuses the canonical `animation.set_keyframe` operation for opacity, position, scale and rotation. Text opacity is linear; transforms use supported easing and bounded FFmpeg expressions. Output dimensions are capped at 8192 pixels.
+- Studio now exposes text transform keyframes, fade-in/fade-out, three-cycle pulse/float loop presets, and a karaoke highlight-colour control. Presets compile to canonical keyframes.
+- The existing `captions.add_word_timed` operation retains sequential mode and adds optional ASS/libass karaoke mode. Karaoke timing is supplied by the caller, stored in one editable text clip, and validated for content matching, order, overlap, minimum duration and clip bounds. No timing is invented.
+- Text edits with the same number of words preserve word timing. Splits between timed words partition the timing data; splits inside a word are rejected atomically. Save/reopen, undo/redo and stale-revision tests are covered.
+- Decoded generated-video tests verify fade-in, fade-out, animated position/scale/rotation, all three pulse-loop cycles, karaoke word transitions and disappearance at clip boundaries. Unsupported legacy text transforms fall back to static text with a privacy-safe diagnostic; invalid animation/timing is rejected before mutation.
+- No new text-edit operation, paid dependency/service, Worker endpoint or D1 migration was added. Legacy static text remains supported.
+- Hosted Worker/private-media and Android device acceptance remain outstanding. No deployment, merge, release or Stage 3 work occurred.
+
+**Remaining Stage 2 work:** Task 2.8 editable title templates; 2.9 editable graphics; 2.11 bilingual manual caption tracks; 2.13 mobile transcript review; 2.14 cross-feature reliability/security audit; and 2.15 final Stage 2 verification. Tasks 2.5, 2.10 and 2.12 remain `gated_optional`. Task 2.4 and Task 2.6 remain accepted under their previously recorded evidence.
+
+**Next boundary:** Stop after Task 2.7. Do not start Task 2.8 or Stage 3 until the user requests the next task. Keep all work on `video-editor-lab`; `main` remains untouched.

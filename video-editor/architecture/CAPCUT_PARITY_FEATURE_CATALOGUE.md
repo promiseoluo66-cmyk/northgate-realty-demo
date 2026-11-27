@@ -1,7 +1,7 @@
 # Independent Video Editor — CapCut Capability Parity Catalogue
 
 **Benchmark checked:** 23 November 2026  
-**Project branch:** \`mlt-integration\`  
+**Project branch:** \`video-editor-lab\`  
 **Purpose:** A reusable feature specification for building our own editor with a broad feature set comparable in capability to CapCut.
 
 ## 1. What this catalogue means
@@ -36,8 +36,8 @@ Verified engine capabilities include:
 The combined master catalogue contains **118 capability entries**. This is a product-scope catalogue, not a count of registered tools. The Stage 1 Studio implementation has 52 unique registered operations, extending the 34-tool Stable baseline.
 
 The combined master catalogue now contains **118 capability entries**:
-**12 prototype-verified**, **25 partially implemented**, **1 under test**,
-**49 planned**, and **31 gated optional**. It retains 112 CapCut-style entries
+**19 prototype-verified**, **23 partially implemented**, **1 under test**,
+**44 planned**, and **31 gated optional**. It retains 112 CapCut-style entries
 and adds six cross-repository capabilities for transcript-driven editing,
 audio synchronisation, technical quality inspection, visual review evidence,
 reference matching, and workflow receipts. The full per-feature audit is in
@@ -286,3 +286,16 @@ These are official CapCut pages consulted for the feature families above. Their 
 - [CapCut templates and platform differences](https://www.capcut.com/help/use-and-export-templates-in-capcut)
 
 **Product rule:** we use this catalogue as our independent build checklist. We do not claim CapCut-level parity until the relevant operations are implemented, connected to the Studio, legally cleared and tested.
+
+
+## Task 2.7 implementation update — 27 November 2026
+
+The current lab branch has an offline-CI-accepted text and caption animation prototype. GitHub Actions [run #46078537336](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46078537336) passed **338 Python tests**, **73 Studio/Worker Node tests**, and all checked-in D1 migrations with no skipped Node or Python tests.
+
+Verified additions:
+- Editable text clips reuse canonical clip-local keyframes for opacity, position, scale and rotation. Text opacity uses linear fades; transforms use bounded supported easing.
+- Studio provides three-cycle pulse and float presets and a karaoke highlight-colour control. Presets are stored as ordinary keyframes, not a separate animation clock.
+- The existing word-timed caption operation can create one editable ASS/libass karaoke line from supplied word timings. Word timing is validated, preserved during same-word-count edits, partitioned on safe splits, and never fabricated.
+- Generated-media tests decode fade-in/fade-out, transform, repeated loop, karaoke transition and clip-boundary frames. Static legacy text remains supported; unsupported legacy text transforms use static rendering with a diagnostic.
+
+This remains an offline prototype, not a production or hosted/Android acceptance claim. Caption templates remain partially implemented and are not included in Task 2.7 acceptance. No new paid service, dependency, Worker endpoint or D1 migration was added.
