@@ -14,10 +14,10 @@ from tool_registry import (
 
 
 class OperationInventoryAuditTests(unittest.TestCase):
-    def test_registry_has_54_unique_operations(self):
+    def test_registry_has_56_unique_operations(self):
         names = [item["name"] for item in get_tool_catalog()]
-        self.assertEqual(len(names), 54)
-        self.assertEqual(len(set(names)), 54)
+        self.assertEqual(len(names), 56)
+        self.assertEqual(len(set(names)), 56)
 
     def test_each_registered_tool_has_an_executor_dispatch_reference(self):
         source = inspect.getsource(ProjectToolExecutor)

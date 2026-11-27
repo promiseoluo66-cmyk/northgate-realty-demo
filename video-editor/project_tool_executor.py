@@ -92,6 +92,93 @@ def _map_source_range_to_timeline(
                 })
     return locations
 
+def _build_transcript_cut_plan(project: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    transcript = next(
+        (item for item in project.get("transcripts", []) if item["id"] == args["transcript_id"]),
+        None,
+    )
+    if transcript is None:
+        raise ProjectToolExecutionError("The selected transcript does not exist.")
+    words = transcript["words"]
+    first_index = int(args["word_start_index"])
+    last_index = int(args["word_end_index"])
+    if first_index > last_index or last_index >= len(words):
+        raise ProjectToolExecutionError("Select a valid inclusive transcript word range.")
+    source_start = int(words[first_index]["start_us"])
+    source_end = int(words[last_index]["end_us"])
+    if source_end <= source_start:
+        raise ProjectToolExecutionError("The selected transcript range has no positive duration.")
+    selected = None
+    selected_track = None
+    for track in project["tracks"]:
+        for clip in track["clips"]:
+            if clip["id"] == args["clip_id"]:
+                selected, selected_track = clip, track
+                break
+        if selected is not None:
+            break
+    if selected is None or selected_track is None:
+        raise ProjectToolExecutionError("The selected timeline clip does not exist.")
+    if selected.get("kind") not in {"video", "audio"} or selected.get("media_id") != transcript["source_media_id"]:
+        raise ProjectToolExecutionError("The selected clip must use the transcript source video or audio asset.")
+    source_in = int(selected.get("source_in_us", 0))
+    rate = float(selected.get("playback_rate", 1.0))
+    source_out = int(selected.get("source_out_us", source_in + round(int(selected["duration_us"]) * rate)))
+    start_us = int(selected["start_us"])
+    duration_us = int(selected["duration_us"])
+    blockers: list[str] = []
+    if source_start < source_in or source_end > source_out:
+        blockers.append("selected_range_outside_clip_source")
+    if selected_track.get("locked", False):
+        blockers.append("selected_track_locked")
+    if selected.get("keyframes"):
+        blockers.append("clip_has_keyframes")
+    if selected.get("group_id"):
+        blockers.append("clip_belongs_to_linked_group")
+    if any(selected["id"] in (item["from_clip_id"], item["to_clip_id"]) for item in project.get("transitions", [])):
+        blockers.append("clip_has_transition")
+    start_offset = 0
+    end_offset = 0
+    timeline_cut_start = start_us
+    timeline_cut_end = start_us
+    if "selected_range_outside_clip_source" not in blockers:
+        start_offset = round((source_start - source_in) / rate)
+        end_offset = round((source_end - source_in) / rate)
+        if start_offset < 0 or end_offset > duration_us or end_offset <= start_offset:
+            blockers.append("selected_range_cannot_map_to_positive_timeline_duration")
+        else:
+            timeline_cut_start = start_us + start_offset
+            timeline_cut_end = start_us + end_offset
+            for other in selected_track["clips"]:
+                if other["id"] == selected["id"]:
+                    continue
+                other_start = int(other["start_us"])
+                other_end = other_start + int(other["duration_us"])
+                if other_start < timeline_cut_end and other_end > timeline_cut_start:
+                    blockers.append("another_clip_overlaps_cut_range_on_selected_track")
+                    break
+    before = None
+    after = None
+    if start_offset > 0:
+        before = {"source_in_us": source_in, "source_out_us": source_start, "timeline_duration_us": start_offset}
+    if end_offset < duration_us:
+        after = {
+            "source_in_us": source_end, "source_out_us": source_out,
+            "timeline_start_after_cut_us": start_us + start_offset,
+            "timeline_duration_us": duration_us - end_offset,
+        }
+    return {
+        "transcript_id": transcript["id"], "source_media_id": transcript["source_media_id"],
+        "clip_id": selected["id"], "track_id": selected_track["id"],
+        "word_start_index": first_index, "word_end_index": last_index,
+        "selected_text": " ".join(word["text"] for word in words[first_index:last_index + 1]),
+        "source_start_us": source_start, "source_end_us": source_end,
+        "timeline_cut_start_us": timeline_cut_start, "timeline_cut_end_us": timeline_cut_end,
+        "removed_duration_us": max(0, end_offset - start_offset),
+        "before_segment": before, "after_segment": after,
+        "can_apply": not blockers, "blockers": blockers,
+        "scope": "selected_clip_and_later_clips_on_same_track_only",
+    }
 def _prune_clip_groups(project: dict[str, Any], removed_clip_ids: set[str]) -> None:
     """Keep linked-group metadata consistent after clips or tracks are removed."""
     groups = project.get("clip_groups", [])
@@ -797,6 +884,43 @@ class ProjectToolExecutor:
                 "matches": matches[:limit],
                 "truncated": len(matches) > limit,
             }, False
+        if name == "transcript.propose_cut":
+            return _build_transcript_cut_plan(project, args), False
+
+        if name == "transcript.apply_cut":
+            plan = _build_transcript_cut_plan(project, args)
+            if not plan["can_apply"]:
+                raise ProjectToolExecutionError("The transcript cut is blocked: " + ", ".join(plan["blockers"]))
+            clip_id = plan["clip_id"]
+            clip = next(item for track in project["tracks"] for item in track["clips"] if item["id"] == clip_id)
+            source_in = int(clip.get("source_in_us", 0))
+            rate = float(clip.get("playback_rate", 1.0))
+            start_offset = round((plan["source_start_us"] - source_in) / rate)
+            end_offset = round((plan["source_end_us"] - source_in) / rate)
+            duration_us = int(clip["duration_us"])
+            split_clip_ids: list[str] = []
+            if start_offset == 0 and end_offset == duration_us:
+                removed_id = clip_id
+            elif start_offset == 0:
+                split_result, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": end_offset})
+                split_clip_ids.append(split_result["right_clip_id"])
+                removed_id = clip_id
+            elif end_offset == duration_us:
+                split_result, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": start_offset})
+                split_clip_ids.append(split_result["right_clip_id"])
+                removed_id = split_result["right_clip_id"]
+            else:
+                end_split, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": end_offset})
+                split_clip_ids.append(end_split["right_clip_id"])
+                start_split, _ = self._apply(project, "timeline.split_clip", {"clip_id": clip_id, "at_us": start_offset})
+                split_clip_ids.append(start_split["right_clip_id"])
+                removed_id = start_split["right_clip_id"]
+            ripple_result, _ = self._apply(project, "timeline.ripple_delete_clip", {"clip_id": removed_id})
+            return {
+                "applied": True, "plan": plan, "removed_segment_clip_id": removed_id,
+                "split_clip_ids": split_clip_ids, "ripple_result": ripple_result,
+                "source_transcript_preserved": True,
+            }, True
         if name == "media.list":
             media_type = args.get("media_type")
             folder = args.get("folder")

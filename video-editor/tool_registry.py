@@ -324,6 +324,28 @@ TOOL_DEFINITIONS = (
         }, ("track_id", "words")),
     ),
     ToolDefinition(
+        "transcript.propose_cut", "transcript",
+        "Preview removal of an inclusive timed word range from one selected source clip. Does not change the project.",
+        _schema({
+            "transcript_id": _field("string", max_length=64),
+            "word_start_index": _field("integer", minimum=0, maximum=19999),
+            "word_end_index": _field("integer", minimum=0, maximum=19999),
+            "clip_id": _field("string", max_length=64),
+        }, ("transcript_id", "word_start_index", "word_end_index", "clip_id")),
+        read_only=True,
+    ),
+    ToolDefinition(
+        "transcript.apply_cut", "transcript",
+        "Apply a reviewable transcript word-range cut to one selected source clip. The operation is atomic, undoable and requires explicit user confirmation.",
+        _schema({
+            "transcript_id": _field("string", max_length=64),
+            "word_start_index": _field("integer", minimum=0, maximum=19999),
+            "word_end_index": _field("integer", minimum=0, maximum=19999),
+            "clip_id": _field("string", max_length=64),
+        }, ("transcript_id", "word_start_index", "word_end_index", "clip_id")),
+        requires_confirmation=True,
+    ),
+    ToolDefinition(
         "transcript.import_words", "transcript",
         "Store a source-media transcript supplied as word-level text and timestamps. Timestamps are relative to the original source media; this tool does not perform speech recognition.",
         _schema({

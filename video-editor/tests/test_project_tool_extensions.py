@@ -7,6 +7,7 @@ from project_tool_executor import (
     ProjectRevisionConflict,
     ProjectToolExecutionError,
     ProjectToolExecutor,
+    ToolConfirmationRequired,
 )
 from tool_registry import ToolValidationError, get_tool_catalog, validate_tool_call
 
@@ -1257,3 +1258,178 @@ class TimedTranscriptTests(unittest.TestCase):
         self.assertEqual(self.executor.revision, 1)
         self.assertEqual(self.executor.get_project().get("transcripts", []), [])
 
+
+
+class TranscriptCutProposalTests(unittest.TestCase):
+    def setUp(self):
+        project = make_project()
+        project["tracks"][0]["clips"].append({
+            "id": "next-clip", "kind": "video", "media_id": "video-asset",
+            "start_us": 2_000_000, "duration_us": 1_000_000,
+            "source_in_us": 2_000_000, "source_out_us": 3_000_000,
+            "playback_rate": 1.0, "effects": [], "keyframes": [],
+        })
+        self.executor = ProjectToolExecutor(project)
+        imported = self.executor.execute("transcript.import_words", {
+            "media_id": "video-asset", "language": "en",
+            "words": [
+                {"text": "This", "start_us": 100_000, "end_us": 250_000},
+                {"text": "part", "start_us": 300_000, "end_us": 500_000},
+                {"text": "goes", "start_us": 500_000, "end_us": 700_000},
+                {"text": "away", "start_us": 700_000, "end_us": 900_000},
+            ],
+        })
+        self.transcript_id = imported["results"][0]["result"]["transcript_id"]
+
+    def proposal(self, start=1, end=2, clip_id="main-clip"):
+        return self.executor.execute("transcript.propose_cut", {
+            "transcript_id": self.transcript_id,
+            "word_start_index": start,
+            "word_end_index": end,
+            "clip_id": clip_id,
+        })
+
+    def apply(self, start=1, end=2, clip_id="main-clip", confirmed=False):
+        return self.executor.execute("transcript.apply_cut", {
+            "transcript_id": self.transcript_id,
+            "word_start_index": start,
+            "word_end_index": end,
+            "clip_id": clip_id,
+        }, confirmed=confirmed)
+
+    def test_proposal_previews_exact_range_without_mutation(self):
+        before = self.executor.get_project()
+        revision = self.executor.revision
+        result = self.proposal()
+        plan = result["results"][0]["result"]
+        self.assertFalse(result["changed"])
+        self.assertEqual(self.executor.revision, revision)
+        self.assertEqual(self.executor.get_project(), before)
+        self.assertEqual(plan["selected_text"], "part goes")
+        self.assertEqual((plan["source_start_us"], plan["source_end_us"]), (300_000, 700_000))
+        self.assertEqual((plan["timeline_cut_start_us"], plan["timeline_cut_end_us"]), (300_000, 700_000))
+        self.assertEqual(plan["removed_duration_us"], 400_000)
+        self.assertTrue(plan["can_apply"])
+
+    def test_apply_requires_confirmation_and_leaves_project_untouched_before_approval(self):
+        before = self.executor.get_project()
+        with self.assertRaises(ToolConfirmationRequired):
+            self.apply()
+        self.assertEqual(self.executor.get_project(), before)
+        self.assertEqual(self.executor.revision, 2)
+
+    def test_apply_is_atomic_and_undoable_and_preserves_transcript(self):
+        result = self.apply(confirmed=True)
+        self.assertEqual(result["revision"], 3)
+        outcome = result["results"][0]["result"]
+        self.assertTrue(outcome["applied"])
+        self.assertTrue(outcome["source_transcript_preserved"])
+        project = self.executor.get_project()
+        clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
+        left = clips["main-clip"]
+        right_id = outcome["split_clip_ids"][-1]
+        right = clips[right_id]
+        self.assertEqual((left["source_in_us"], left["source_out_us"], left["duration_us"]),
+                         (0, 300_000, 300_000))
+        self.assertEqual((right["source_in_us"], right["source_out_us"], right["duration_us"]),
+                         (700_000, 2_000_000, 1_300_000))
+        self.assertEqual(right["start_us"], 300_000)
+        self.assertEqual(clips["next-clip"]["start_us"], 1_600_000)
+        self.assertEqual(len(project["transcripts"][0]["words"]), 4)
+        self.executor.execute("history.undo", {})
+        undone = {clip["id"]: clip for clip in self.executor.get_project()["tracks"][0]["clips"]}
+        self.assertEqual(undone["main-clip"]["duration_us"], 2_000_000)
+        self.assertEqual(undone["next-clip"]["start_us"], 2_000_000)
+        self.executor.execute("history.redo", {})
+        redone = {clip["id"]: clip for clip in self.executor.get_project()["tracks"][0]["clips"]}
+        self.assertEqual(redone["next-clip"]["start_us"], 1_600_000)
+
+    def test_apply_supports_cut_from_clip_start(self):
+        self.apply(start=0, end=0, confirmed=True)
+        project = self.executor.get_project()
+        clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
+        self.assertNotIn("main-clip", clips)
+        remaining = next(clip for clip in project["tracks"][0]["clips"] if clip["kind"] == "video")
+        self.assertEqual(remaining["source_in_us"], 250_000)
+        self.assertEqual(remaining["start_us"], 0)
+        self.assertEqual(clips["next-clip"]["start_us"], 1_850_000)
+
+    def test_apply_supports_cut_to_clip_end(self):
+        self.apply(start=3, end=3, confirmed=True)
+        project = self.executor.get_project()
+        clips = {clip["id"]: clip for clip in project["tracks"][0]["clips"]}
+        self.assertEqual(clips["main-clip"]["source_out_us"], 700_000)
+        self.assertEqual(clips["main-clip"]["duration_us"], 700_000)
+        self.assertEqual(clips["next-clip"]["start_us"], 1_800_000)
+
+    def test_proposal_blocks_keyframes_linked_groups_and_locked_tracks(self):
+        project = self.executor.get_project()
+        project["tracks"][0]["clips"][0]["keyframes"] = [
+            {"property": "opacity", "time_us": 0, "value": 1.0}
+        ]
+        self.executor = ProjectToolExecutor(project)
+        self.assertIn("clip_has_keyframes", self.proposal()["results"][0]["result"]["blockers"])
+
+        project = self.executor.get_project()
+        project["tracks"][0]["clips"][0]["keyframes"] = []
+        project["tracks"][0]["clips"][0]["group_id"] = "group-1"
+        project["clip_groups"] = [{"id": "group-1", "name": "Linked", "clip_ids": ["main-clip", "next-clip"]}]
+        project["tracks"][0]["clips"][1]["group_id"] = "group-1"
+        self.executor = ProjectToolExecutor(project)
+        self.assertIn("clip_belongs_to_linked_group", self.proposal()["results"][0]["result"]["blockers"])
+
+        project = make_project()
+        project["tracks"][0]["locked"] = True
+        project["tracks"][0]["clips"].append({
+            "id": "next-clip", "kind": "video", "media_id": "video-asset",
+            "start_us": 2_000_000, "duration_us": 1_000_000,
+            "source_in_us": 2_000_000, "source_out_us": 3_000_000,
+            "playback_rate": 1.0, "effects": [], "keyframes": [],
+        })
+        self.executor = ProjectToolExecutor(project)
+        imported = self.executor.execute("transcript.import_words", {
+            "media_id": "video-asset", "words": [
+                {"text": "This", "start_us": 100_000, "end_us": 250_000},
+                {"text": "part", "start_us": 300_000, "end_us": 500_000},
+            ],
+        })
+        self.transcript_id = imported["results"][0]["result"]["transcript_id"]
+        self.assertIn("selected_track_locked", self.proposal()["results"][0]["result"]["blockers"])
+
+    def test_proposal_blocks_out_of_clip_ranges_and_overlapping_siblings(self):
+        project = self.executor.get_project()
+        project["tracks"][0]["clips"][0]["source_out_us"] = 600_000
+        self.executor = ProjectToolExecutor(project)
+        self.assertIn("selected_range_outside_clip_source", self.proposal()["results"][0]["result"]["blockers"])
+
+        project = make_project()
+        project["tracks"][0]["clips"].append({
+            "id": "overlap-clip", "kind": "video", "media_id": "video-asset",
+            "start_us": 400_000, "duration_us": 500_000,
+            "source_in_us": 2_000_000, "source_out_us": 2_500_000,
+            "playback_rate": 1.0, "effects": [], "keyframes": [],
+        })
+        self.executor = ProjectToolExecutor(project)
+        imported = self.executor.execute("transcript.import_words", {
+            "media_id": "video-asset", "words": [
+                {"text": "This", "start_us": 100_000, "end_us": 250_000},
+                {"text": "part", "start_us": 300_000, "end_us": 500_000},
+                {"text": "goes", "start_us": 500_000, "end_us": 700_000},
+            ],
+        })
+        self.transcript_id = imported["results"][0]["result"]["transcript_id"]
+        self.assertIn(
+            "another_clip_overlaps_cut_range_on_selected_track",
+            self.proposal()["results"][0]["result"]["blockers"],
+        )
+
+    def test_apply_refuses_unsafe_ranges_without_partial_mutation(self):
+        before = self.executor.get_project()
+        with self.assertRaises(ToolConfirmationRequired):
+            self.apply()
+        self.assertEqual(self.executor.get_project(), before)
+        plan = self.proposal(start=0, end=3)["results"][0]["result"]
+        self.assertFalse(plan["can_apply"])
+        with self.assertRaises(ProjectToolExecutionError):
+            self.apply(start=0, end=3, confirmed=True)
+        self.assertEqual(self.executor.get_project(), before)

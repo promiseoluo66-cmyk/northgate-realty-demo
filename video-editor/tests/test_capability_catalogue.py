@@ -53,8 +53,8 @@ class CapabilityCatalogueTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(self.catalogue["audit"]["registered_tool_count"], 34)
         self.assertEqual(self.catalogue["audit"]["stage1_registered_tool_count"], 52)
-        self.assertEqual(self.catalogue["audit"]["stage2_registered_tool_count"], 54)
-        self.assertEqual(len(names), 54)
+        self.assertEqual(self.catalogue["audit"]["stage2_registered_tool_count"], 56)
+        self.assertEqual(len(names), 56)
         self.assertTrue(self.catalogue["audit"]["registered_tool_names_are_unique"])
         self.assertTrue(self.catalogue["audit"]["stage1_registered_tool_names_are_unique"])
 
