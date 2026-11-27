@@ -324,6 +324,32 @@ TOOL_DEFINITIONS = (
         }, ("track_id", "words")),
     ),
     ToolDefinition(
+        "transcript.review_silence", "transcript",
+        "Measure silence intervals between adjacent transcript words and preview safe cut candidates without changing the project.",
+        _schema({
+            "transcript_id": _field("string", max_length=64),
+            "clip_id": _field("string", max_length=64),
+            "analysis_seconds": _field("integer", minimum=1, maximum=600),
+            "silence_threshold_db": _field("number", minimum=-80, maximum=-10),
+            "minimum_silence_us": _field("integer", minimum=20_000, maximum=10_000_000),
+        }, ("transcript_id", "clip_id", "analysis_seconds", "silence_threshold_db", "minimum_silence_us")),
+        read_only=True,
+    ),
+    ToolDefinition(
+        "transcript.apply_silence_cut", "transcript",
+        "Apply one freshly remeasured silence interval between adjacent transcript words. This destructive edit requires explicit confirmation and is undoable.",
+        _schema({
+            "transcript_id": _field("string", max_length=64),
+            "clip_id": _field("string", max_length=64),
+            "source_start_us": _field("integer", minimum=0),
+            "source_end_us": _field("integer", minimum=1),
+            "analysis_seconds": _field("integer", minimum=1, maximum=600),
+            "silence_threshold_db": _field("number", minimum=-80, maximum=-10),
+            "minimum_silence_us": _field("integer", minimum=20_000, maximum=10_000_000),
+        }, ("transcript_id", "clip_id", "source_start_us", "source_end_us")),
+        requires_confirmation=True,
+    ),
+    ToolDefinition(
         "transcript.propose_cut", "transcript",
         "Preview removal of an inclusive timed word range from one selected source clip. Does not change the project.",
         _schema({

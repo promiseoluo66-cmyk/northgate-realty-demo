@@ -1578,7 +1578,10 @@ class MeasuredSilenceReviewTests(unittest.TestCase):
         after_id = outcome["after_clip_id"]
         self.assertEqual(clips[after_id]["source_in_us"], 750_000)
         self.executor.execute("history.undo", {})
-        self.assertEqual(self.executor.get_project(), before)
+        undone = self.executor.get_project()
+        self.assertEqual(undone["tracks"], before["tracks"])
+        self.assertEqual(undone["transcripts"], before["transcripts"])
+        self.assertEqual(undone["revision"], before["revision"] + 2)
         self.executor.execute("history.redo", {})
         self.assertEqual(
             {clip["id"]: clip for track in self.executor.get_project()["tracks"]

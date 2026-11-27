@@ -179,6 +179,122 @@ def _build_transcript_cut_plan(project: dict[str, Any], args: dict[str, Any]) ->
         "can_apply": not blockers, "blockers": blockers,
         "scope": "selected_clip_and_later_clips_on_same_track_only",
     }
+
+def _build_source_range_cut_plan(
+    project: dict[str, Any], transcript_id: str, clip_id: str,
+    source_start_us: int, source_end_us: int,
+) -> dict[str, Any]:
+    """Validate a source-time cut without changing the project."""
+    transcript = next(
+        (item for item in project.get("transcripts", []) if item["id"] == transcript_id),
+        None,
+    )
+    if transcript is None:
+        raise ProjectToolExecutionError("The selected transcript does not exist.")
+    if source_start_us < 0 or source_end_us <= source_start_us:
+        raise ProjectToolExecutionError("The measured silence range must have positive duration.")
+    selected = None
+    selected_track = None
+    for track in project["tracks"]:
+        for clip in track["clips"]:
+            if clip["id"] == clip_id:
+                selected, selected_track = clip, track
+                break
+        if selected is not None:
+            break
+    if selected is None or selected_track is None:
+        raise ProjectToolExecutionError("The selected timeline clip does not exist.")
+    if selected.get("kind") not in {"video", "audio"} or selected.get("media_id") != transcript["source_media_id"]:
+        raise ProjectToolExecutionError("The selected clip must use the transcript source video or audio asset.")
+
+    words = transcript["words"]
+    previous = next(
+        (word for word in reversed(words) if int(word["end_us"]) <= source_start_us),
+        None,
+    )
+    following = next(
+        (word for word in words if int(word["start_us"]) >= source_end_us),
+        None,
+    )
+    blockers: list[str] = []
+    if previous is None or following is None:
+        blockers.append("range_not_between_adjacent_transcript_words")
+    if any(
+        int(word["start_us"]) < source_end_us and int(word["end_us"]) > source_start_us
+        for word in words
+    ):
+        blockers.append("silence_range_overlaps_transcript_word")
+
+    source_in = int(selected.get("source_in_us", 0))
+    rate = float(selected.get("playback_rate", 1.0))
+    source_out = int(selected.get("source_out_us", source_in + round(
+        int(selected["duration_us"]) * rate
+    )))
+    start_us = int(selected["start_us"])
+    duration_us = int(selected["duration_us"])
+    if source_start_us < source_in or source_end_us > source_out:
+        blockers.append("selected_range_outside_clip_source")
+    if selected_track.get("locked", False):
+        blockers.append("selected_track_locked")
+    if selected.get("keyframes"):
+        blockers.append("clip_has_keyframes")
+    if selected.get("group_id"):
+        blockers.append("clip_belongs_to_linked_group")
+    if any(selected["id"] in (item["from_clip_id"], item["to_clip_id"])
+           for item in project.get("transitions", [])):
+        blockers.append("clip_has_transition")
+
+    start_offset = 0
+    end_offset = 0
+    timeline_cut_start = start_us
+    timeline_cut_end = start_us
+    if "selected_range_outside_clip_source" not in blockers:
+        start_offset = round((source_start_us - source_in) / rate)
+        end_offset = round((source_end_us - source_in) / rate)
+        if start_offset < 0 or end_offset > duration_us or end_offset <= start_offset:
+            blockers.append("selected_range_cannot_map_to_positive_timeline_duration")
+        else:
+            timeline_cut_start = start_us + start_offset
+            timeline_cut_end = start_us + end_offset
+            for other in selected_track["clips"]:
+                if other["id"] == selected["id"]:
+                    continue
+                other_start = int(other["start_us"])
+                other_end = other_start + int(other["duration_us"])
+                if other_start < timeline_cut_end and other_end > timeline_cut_start:
+                    blockers.append("another_clip_overlaps_cut_range_on_selected_track")
+                    break
+    before = None
+    after = None
+    if start_offset > 0:
+        before = {
+            "source_in_us": source_in, "source_out_us": source_start_us,
+            "timeline_duration_us": start_offset,
+        }
+    if end_offset < duration_us:
+        after = {
+            "source_in_us": source_end_us, "source_out_us": source_out,
+            "timeline_start_after_cut_us": start_us + start_offset,
+            "timeline_duration_us": duration_us - end_offset,
+        }
+    return {
+        "transcript_id": transcript["id"],
+        "source_media_id": transcript["source_media_id"],
+        "clip_id": selected["id"], "track_id": selected_track["id"],
+        "source_start_us": source_start_us, "source_end_us": source_end_us,
+        "timeline_cut_start_us": timeline_cut_start,
+        "timeline_cut_end_us": timeline_cut_end,
+        "removed_duration_us": max(0, end_offset - start_offset),
+        "adjacent_words": {
+            "before": previous["text"] if previous else None,
+            "after": following["text"] if following else None,
+        },
+        "before_segment": before, "after_segment": after,
+        "can_apply": not blockers, "blockers": blockers,
+        "scope": "selected_clip_and_later_clips_on_same_track_only",
+    }
+
+
 def _prune_clip_groups(project: dict[str, Any], removed_clip_ids: set[str]) -> None:
     """Keep linked-group metadata consistent after clips or tracks are removed."""
     groups = project.get("clip_groups", [])
@@ -823,6 +939,67 @@ class ProjectToolExecutor:
                 "height": int(image_stream[0]["height"]),
                 "storage_status": "pending_private_upload"}
 
+
+    def _apply_source_range_cut(
+        self, project: dict[str, Any], plan: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Split around one validated source interval and ripple-delete only that segment."""
+        clip_id = plan["clip_id"]
+        clip = next(
+            item for track in project["tracks"] for item in track["clips"]
+            if item["id"] == clip_id
+        )
+        source_in = int(clip.get("source_in_us", 0))
+        rate = float(clip.get("playback_rate", 1.0))
+        start_offset = round((plan["source_start_us"] - source_in) / rate)
+        end_offset = round((plan["source_end_us"] - source_in) / rate)
+        duration_us = int(clip["duration_us"])
+        split_clip_ids: list[str] = []
+        after_clip_id = None
+        if start_offset == 0 and end_offset == duration_us:
+            removed_id = clip_id
+        elif start_offset == 0:
+            split_result, _ = self._apply(
+                project, "timeline.split_clip",
+                {"clip_id": clip_id, "at_us": end_offset},
+            )
+            split_clip_ids.append(split_result["right_clip_id"])
+            after_clip_id = split_result["right_clip_id"]
+            removed_id = clip_id
+        elif end_offset == duration_us:
+            split_result, _ = self._apply(
+                project, "timeline.split_clip",
+                {"clip_id": clip_id, "at_us": start_offset},
+            )
+            split_clip_ids.append(split_result["right_clip_id"])
+            removed_id = split_result["right_clip_id"]
+        else:
+            end_split, _ = self._apply(
+                project, "timeline.split_clip",
+                {"clip_id": clip_id, "at_us": end_offset},
+            )
+            split_clip_ids.append(end_split["right_clip_id"])
+            after_clip_id = end_split["right_clip_id"]
+            start_split, _ = self._apply(
+                project, "timeline.split_clip",
+                {"clip_id": clip_id, "at_us": start_offset},
+            )
+            split_clip_ids.append(start_split["right_clip_id"])
+            removed_id = start_split["right_clip_id"]
+        ripple_result, _ = self._apply(
+            project, "timeline.ripple_delete_clip", {"clip_id": removed_id}
+        )
+        return {
+            "applied": True, "plan": plan,
+            "source_start_us": plan["source_start_us"],
+            "source_end_us": plan["source_end_us"],
+            "removed_segment_clip_id": removed_id,
+            "split_clip_ids": split_clip_ids,
+            "after_clip_id": after_clip_id,
+            "ripple_result": ripple_result,
+            "source_transcript_preserved": True,
+        }
+
     def _apply(
         self, project: dict[str, Any], name: str, args: dict[str, Any]
     ) -> tuple[Any, bool]:
@@ -884,6 +1061,116 @@ class ProjectToolExecutor:
                 "matches": matches[:limit],
                 "truncated": len(matches) > limit,
             }, False
+        if name == "transcript.review_silence":
+            transcript = next(
+                (item for item in project.get("transcripts", [])
+                 if item["id"] == args["transcript_id"]),
+                None,
+            )
+            if transcript is None:
+                raise ProjectToolExecutionError("The selected transcript does not exist.")
+            analysis = self._analyze_audio_media(
+                project, transcript["source_media_id"],
+                int(args["analysis_seconds"]), float(args["silence_threshold_db"]),
+            )
+            coverage_us = round(float(analysis.get("analysis_coverage_seconds", 0)) * 1_000_000)
+            minimum_silence_us = int(args["minimum_silence_us"])
+            candidates = []
+            if analysis.get("measurement_status") == "measured":
+                words = transcript["words"]
+                for interval in analysis.get("silence_intervals", []):
+                    start_us = round(float(interval["start_seconds"]) * 1_000_000)
+                    end_us = round(float(interval["end_seconds"]) * 1_000_000)
+                    if start_us < 0 or end_us <= start_us or end_us > coverage_us:
+                        continue
+                    if end_us - start_us < minimum_silence_us:
+                        continue
+                    for index in range(len(words) - 1):
+                        previous, following = words[index], words[index + 1]
+                        if int(previous["end_us"]) > start_us or int(following["start_us"]) < end_us:
+                            continue
+                        if int(following["start_us"]) <= int(previous["end_us"]):
+                            continue
+                        plan = _build_source_range_cut_plan(
+                            project, transcript["id"], args["clip_id"], start_us, end_us,
+                        )
+                        candidates.append({
+                            "candidate_id": (
+                                f"{transcript['id']}:{args['clip_id']}:{start_us}:{end_us}"
+                            ),
+                            "source_start_us": start_us,
+                            "source_end_us": end_us,
+                            "measured_duration_us": end_us - start_us,
+                            "gap_start_us": int(previous["end_us"]),
+                            "gap_end_us": int(following["start_us"]),
+                            "adjacent_words": {
+                                "before": previous["text"], "after": following["text"],
+                            },
+                            "timeline_cut_start_us": plan["timeline_cut_start_us"],
+                            "timeline_cut_end_us": plan["timeline_cut_end_us"],
+                            "can_apply": plan["can_apply"],
+                            "blockers": plan["blockers"],
+                            "measurement": "ffmpeg_silencedetect",
+                            "semantic_assessment": "not_evaluated",
+                        })
+                        break
+            return {
+                "transcript_id": transcript["id"],
+                "source_media_id": transcript["source_media_id"],
+                "clip_id": args["clip_id"],
+                "silence_threshold_db": float(args["silence_threshold_db"]),
+                "minimum_silence_us": minimum_silence_us,
+                "analysis_coverage_seconds": analysis.get("analysis_coverage_seconds", 0),
+                "full_duration_scanned": bool(analysis.get("full_duration_scanned", False)),
+                "duration_seconds": analysis.get("duration_seconds"),
+                "measurement_status": analysis.get("measurement_status", "unavailable"),
+                "candidates": candidates,
+                "candidate_count": len(candidates),
+                "limitations": list(analysis.get("limitations", [])) + [
+                    "Silence is a signal measurement, not a filler-word or unwanted-content verdict.",
+                    "Only measured silence wholly between adjacent transcript words is proposed.",
+                ],
+            }, False
+
+        if name == "transcript.apply_silence_cut":
+            transcript = next(
+                (item for item in project.get("transcripts", [])
+                 if item["id"] == args["transcript_id"]),
+                None,
+            )
+            if transcript is None:
+                raise ProjectToolExecutionError("The selected transcript does not exist.")
+            source_start = int(args["source_start_us"])
+            source_end = int(args["source_end_us"])
+            minimum_silence_us = int(args.get("minimum_silence_us", 100_000))
+            if source_end - source_start < minimum_silence_us:
+                raise ProjectToolExecutionError("The selected silence is shorter than the minimum review duration.")
+            analysis = self._analyze_audio_media(
+                project, transcript["source_media_id"],
+                int(args.get("analysis_seconds", 600)),
+                float(args.get("silence_threshold_db", -50)),
+            )
+            if analysis.get("measurement_status") != "measured":
+                raise ProjectToolExecutionError("Fresh audio analysis did not confirm an audio stream.")
+            coverage_us = round(float(analysis.get("analysis_coverage_seconds", 0)) * 1_000_000)
+            if source_end > coverage_us:
+                raise ProjectToolExecutionError("The selected interval is outside the freshly scanned audio coverage.")
+            confirmed_silence = any(
+                round(float(interval["start_seconds"]) * 1_000_000) <= source_start
+                and round(float(interval["end_seconds"]) * 1_000_000) >= source_end
+                for interval in analysis.get("silence_intervals", [])
+            )
+            if not confirmed_silence:
+                raise ProjectToolExecutionError("Fresh audio analysis no longer confirms the selected silence interval.")
+            plan = _build_source_range_cut_plan(
+                project, transcript["id"], args["clip_id"], source_start, source_end,
+            )
+            if not plan["can_apply"]:
+                raise ProjectToolExecutionError(
+                    "The silence cut is blocked: " + ", ".join(plan["blockers"])
+                )
+            return self._apply_source_range_cut(project, plan), True
+
         if name == "transcript.propose_cut":
             return _build_transcript_cut_plan(project, args), False
 
