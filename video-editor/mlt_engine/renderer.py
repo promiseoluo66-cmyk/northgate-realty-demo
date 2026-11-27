@@ -1451,7 +1451,8 @@ def _apply_text_overlay_images_ffmpeg(
                 f"[{index}:v]format=rgba,"
                 "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
                 f"a='alpha(X,Y)*({opacity_expression})',"
-                f"scale={int(plan['width'])}:{int(plan['height'])}{prepared}"
+                f"scale={int(plan['width'])}:{int(plan['height'])},"
+                f"format=rgba{prepared}"
             )
         else:
             filters.append(
