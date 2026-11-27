@@ -784,8 +784,12 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                 clip_transform = None
             elif clip["kind"] == "text":
                 if clip.get("transform"):
-                    raise MltRenderError(
-                        "Text transforms must use the canonical clip-local keyframe model."
+                    logger.warning(
+                        "Unsupported legacy text transform ignored; rendering the text clip statically.",
+                        extra={
+                            "event": "text_transform_static_fallback",
+                            "clip_id": clip["id"],
+                        },
                     )
                 supported_text_properties = {
                     "position_x", "position_y", "scale_x", "scale_y",

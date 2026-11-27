@@ -429,6 +429,18 @@
     }
   }
 
+  function syncKeyframeInterpolationControl() {
+    const selected = findSelectedClip();
+    const property = byId("keyframe-property")?.value || "scale_x";
+    const control = byId("keyframe-interpolation");
+    if (!control) return;
+    const linearOnly = selected?.clip.kind === "text" && property === "opacity";
+    Array.from(control.options).forEach((option) => {
+      option.disabled = linearOnly && option.value !== "linear";
+    });
+    if (linearOnly) control.value = "linear";
+  }
+
   function updateInspector() {
     const host = byId("studio-clip-inspector");
     const scope = byId("edit-scope");
@@ -593,6 +605,7 @@
       });
       if (clip.kind === "text") keyframeProperty.value = "opacity";
     }
+    syncKeyframeInterpolationControl();
     ["clip-crop-x", "clip-crop-y", "clip-crop-width", "clip-crop-height",
       "studio-apply-crop", "studio-reset-crop"].forEach((id) => setDisabled(id, !visual));
     setDisabled("clip-framing", !visual);
@@ -1315,7 +1328,10 @@
   const seek = byId("timeline-seek");
   if (seek) seek.addEventListener("input", () => setPlayhead(Number(seek.value)));
   const graphProperty = byId("keyframe-property");
-  if (graphProperty) graphProperty.addEventListener("change", renderKeyframeGraph);
+  if (graphProperty) graphProperty.addEventListener("change", () => {
+    syncKeyframeInterpolationControl();
+    renderKeyframeGraph();
+  });
   const graphZoom = byId("keyframe-graph-zoom");
   if (graphZoom) graphZoom.addEventListener("input", renderKeyframeGraph);
   const graphPan = byId("keyframe-graph-pan");
