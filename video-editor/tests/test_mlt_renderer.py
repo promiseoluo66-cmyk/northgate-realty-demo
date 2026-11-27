@@ -126,6 +126,22 @@ class CompilePlanTests(unittest.TestCase):
                      "interpolation": "linear"},
                     {"property": "opacity", "time_us": 400_000, "value": 1.0,
                      "interpolation": "linear"},
+                    {"property": "position_x", "time_us": 0, "value": -40,
+                     "interpolation": "ease_in_out"},
+                    {"property": "position_x", "time_us": 400_000, "value": 0,
+                     "interpolation": "ease_in_out"},
+                    {"property": "scale_x", "time_us": 0, "value": 0.7,
+                     "interpolation": "ease_in_out"},
+                    {"property": "scale_x", "time_us": 400_000, "value": 1.0,
+                     "interpolation": "ease_in_out"},
+                    {"property": "scale_y", "time_us": 0, "value": 0.7,
+                     "interpolation": "ease_in_out"},
+                    {"property": "scale_y", "time_us": 400_000, "value": 1.0,
+                     "interpolation": "ease_in_out"},
+                    {"property": "rotation_deg", "time_us": 0, "value": -8,
+                     "interpolation": "ease_in_out"},
+                    {"property": "rotation_deg", "time_us": 400_000, "value": 0,
+                     "interpolation": "ease_in_out"},
                 ],
             }],
         })
@@ -1440,6 +1456,7 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
             return sum(samples) / len(samples)
 
         early_frame = decoded_frame(0.5)
+        transform_start_frame = decoded_frame(0.65)
         visible_frame = decoded_frame(0.9)
         after_frame = decoded_frame(1.4)
         early = bright_glyph_pixels(early_frame)
@@ -1454,11 +1471,117 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
             f"(early={early_mean:.4f}, visible={visible_mean:.4f}).",
         )
         self.assertGreater(fully_visible, 20, "Fully faded text should be visible in decoded frames.")
+
+        def white_pixel_bounds(frame):
+            points = [
+                (index % 320, index // 320)
+                for index in range(320 * 240)
+                if frame[index * 3] > 100
+                and frame[index * 3 + 1] > 100
+                and frame[index * 3 + 2] > 180
+            ]
+            self.assertGreater(len(points), 10, "Animated text should be measurable in the decoded frame.")
+            return (
+                min(x for x, _ in points), min(y for _, y in points),
+                max(x for x, _ in points), max(y for _, y in points),
+            )
+
+        early_bounds = white_pixel_bounds(transform_start_frame)
+        visible_bounds = white_pixel_bounds(visible_frame)
+        early_width = early_bounds[2] - early_bounds[0]
+        visible_width = visible_bounds[2] - visible_bounds[0]
+        early_center_x = (early_bounds[0] + early_bounds[2]) / 2
+        visible_center_x = (visible_bounds[0] + visible_bounds[2]) / 2
+        self.assertGreater(
+            visible_width, early_width + 8,
+            "Text scale keyframes should enlarge the decoded title during entrance.",
+        )
+        self.assertLess(
+            early_center_x, visible_center_x - 8,
+            "Text position keyframes should move the decoded title to its final position.",
+        )
         self.assertEqual(after_clip, 0, "Text must disappear after its clip ends.")
         self.assertAlmostEqual(
             after_mean, 0.0, delta=2.0,
             msg="The title region should return to the blue background after the clip ends.",
         )
+
+
+class WordTimedHighlightMltIntegrationTests(unittest.TestCase):
+    """Decode output frames to verify supplied word timings control emphasis."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.project = make_project(self.root)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_supplied_word_times_render_each_highlighted_word_only_in_its_window(self):
+        import subprocess
+        from project_tool_executor import ProjectToolExecutor
+        from mlt_engine.renderer import render_project
+
+        source = self.root / "source.mp4"
+        output = self.root / "word-highlight-render.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=25:d=2",
+            "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ], check=True, capture_output=True, text=True, timeout=120)
+        self.project["assets"][0].update({
+            "size_bytes": source.stat().st_size, "duration_us": 2_000_000,
+        })
+        self.project["tracks"][0]["clips"][0].update({
+            "duration_us": 2_000_000, "source_out_us": 2_000_000,
+        })
+        executor = ProjectToolExecutor(
+            self.project, asset_root=self.root, output_dir=self.root
+        )
+        executor.execute_batch([{
+            "name": "captions.add_word_timed",
+            "arguments": {
+                "track_id": "captions",
+                "words": [
+                    {"text": "FIRST", "start_us": 400_000, "end_us": 800_000},
+                    {"text": "SECOND", "start_us": 800_000, "end_us": 1_200_000},
+                ],
+                "text_style": {
+                    "size": 48, "weight": 700, "fgcolour": "#FFD700",
+                    "outline": 0, "halign": "center", "valign": "middle",
+                    "x_percent": 5, "y_percent": 35,
+                    "width_percent": 90, "height_percent": 30,
+                },
+            },
+        }])
+        receipt = render_project(executor.get_project(), self.root, output, timeout_seconds=120)
+        self.assertTrue(receipt["ok"], receipt)
+
+        def yellow_pixels(timestamp):
+            decoded = subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-ss", f"{timestamp:.3f}", "-i", str(output),
+                "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+            ], check=True, capture_output=True, timeout=60)
+            frame = decoded.stdout
+            self.assertEqual(len(frame), 320 * 240 * 3)
+            return sum(
+                1 for red, green, blue in zip(
+                    frame[0::3], frame[1::3], frame[2::3]
+                )
+                if red > 180 and green > 150 and blue < 150
+            )
+
+        self.assertGreater(yellow_pixels(0.6), 10, "The first word should be highlighted in its supplied time window.")
+        self.assertGreater(yellow_pixels(1.0), 10, "The second word should be highlighted in its supplied time window.")
+        self.assertEqual(yellow_pixels(1.4), 0, "No timed word should remain after its supplied end time.")
 
 
 class MeasuredSilenceMltIntegrationTests(unittest.TestCase):
