@@ -72,7 +72,7 @@ def make_project():
                 "order": 2,
                 "locked": False,
                 "clips": [{
-                    "id": "expanded-title-clip",
+                    "id": "title-clip",
                     "kind": "text",
                     "start_us": 500_000,
                     "duration_us": 1_000_000,
@@ -1672,7 +1672,7 @@ class ExpandedTextStyleTests(unittest.TestCase):
         self.project["tracks"].append({
             "id": "track-text", "type": "text", "name": "Titles", "order": text_order,
             "clips": [{
-                "id": "expanded-title-clip", "kind": "text", "start_us": 0,
+                "id": "style-title-clip", "kind": "text", "start_us": 0,
                 "duration_us": 2_000_000,
                 "text": {
                     "content": "A title", "size": 48, "weight": 400,
@@ -1704,18 +1704,18 @@ class ExpandedTextStyleTests(unittest.TestCase):
     def test_text_update_schema_accepts_all_expanded_style_properties(self):
         style = self.expanded_style()
         validated = validate_tool_call("text.update_clip", {
-            "clip_id": "expanded-title-clip", "text_style": style,
+            "clip_id": "style-title-clip", "text_style": style,
         })
         self.assertEqual(validated["text_style"], style)
 
     def test_text_update_persists_expanded_style_without_flattening_text(self):
         style = self.expanded_style()
         result = self.executor.execute("text.update_clip", {
-            "clip_id": "expanded-title-clip", "text_style": style,
+            "clip_id": "style-title-clip", "text_style": style,
         })
         saved = next(
             clip for track in result["project"]["tracks"]
-            for clip in track["clips"] if clip["id"] == "expanded-title-clip"
+            for clip in track["clips"] if clip["id"] == "style-title-clip"
         )
         self.assertEqual(saved["text"]["content"], "A title")
         for key, value in style.items():
@@ -1724,12 +1724,12 @@ class ExpandedTextStyleTests(unittest.TestCase):
     def test_expanded_text_style_bounds_are_validated(self):
         with self.assertRaises(ToolValidationError):
             validate_tool_call("text.update_clip", {
-                "clip_id": "expanded-title-clip",
+                "clip_id": "style-title-clip",
                 "text_style": {"letter_spacing_px": 100},
             })
         with self.assertRaises(ToolValidationError):
             validate_tool_call("text.update_clip", {
-                "clip_id": "expanded-title-clip",
+                "clip_id": "style-title-clip",
                 "text_style": {"shadow_opacity": 2},
             })
         invalid = self.executor.get_project()
