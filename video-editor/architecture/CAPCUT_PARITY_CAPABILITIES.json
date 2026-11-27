@@ -301,8 +301,8 @@
         ],
         [
           "word_timing",
-          "A tool creates sequential caption clips from supplied verified word timestamps; automatic speech recognition and timestamp generation are not included.",
-          "partially_implemented"
+          "Source-linked timed word records can be imported from user-supplied timestamps, validated against media duration, searched lexically by exact word or phrase and mapped to constant-speed timeline clip instances. Existing word-timed caption clip creation remains supported; automatic speech recognition and timestamp generation are not included.",
+          "prototype_verified"
         ],
         [
           "bilingual_captions",
@@ -739,9 +739,9 @@
     },
     "capability_entry_count": 118,
     "status_counts": {
-      "partially_implemented": 24,
+      "partially_implemented": 23,
       "planned": 48,
-      "prototype_verified": 14,
+      "prototype_verified": 15,
       "gated_optional": 31,
       "under_test": 1
     },
@@ -773,6 +773,18 @@
       "hosted_worker_and_android_acceptance": "not_performed"
     },
     "stage2_registered_tool_count": 54,
-    "stage2_registered_tool_names_are_unique": true
+    "stage2_registered_tool_names_are_unique": true,
+    "stage2_task_2_2": {
+      "status": "offline_ci_passed",
+      "workflow_run_id": 45985231376,
+      "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/45985231376",
+      "commit": "320a8597eae5853443ee05e0ae230786f8d6d84f",
+      "python_tests_passed": 296,
+      "node_tests_passed": 64,
+      "node_tests_failed": 0,
+      "d1_migrations": "passed",
+      "transcript_import_and_search": "passed",
+      "hosted_worker_and_android_acceptance": "not_performed"
+    }
   }
 }

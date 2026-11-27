@@ -160,3 +160,19 @@ Optical-flow slow motion remains optional and gated. It must not introduce a pai
 **GitHub Actions evidence:** run #45983414095 passed on commit `70385fca459b08a7bf6e8957233919bc40347cce`: 276 Python tests, 64 Node tests, 0 Node failures and all checked-in D1 migrations passed.
 
 This is offline/code acceptance only. No Worker deployment, live private Release upload, hosted end-to-end test or Android usability test was performed. Remaining Stage 2 tasks are still open.
+
+
+### Task 2.2 — validated timed transcripts and word search
+
+**Offline implementation and CI accepted on `video-editor-lab`.**
+
+- Added optional, backwards-compatible `project.transcripts` records linked to source video/audio assets, with language tags and word-level source timestamps.
+- Validates word ranges, chronological ordering, source duration, unique transcript IDs, supported fields, word/text limits and optional speaker/confidence metadata.
+- Added `transcript.import_words` for user-supplied word timings. Import is revisioned, persists through the project JSON and supports undo/redo. It explicitly reports that speech recognition was not performed.
+- Added read-only `transcript.search` for exact word/phrase matching with Unicode normalization, case sensitivity and bounded results.
+- Maps transcript hits to every matching constant-speed source clip on the timeline; partial source-window matches are identified, and animated speed curves are explicitly marked unsupported rather than given inaccurate timestamps.
+- Added schema, import, undo/redo, exact search, word-boundary, result-limit, source mapping, speed-ramp guard, stale revision and atomic failure tests.
+
+**GitHub Actions evidence:** run #45985231376 passed on commit `320a8597eae5853443ee05e0ae230786f8d6d84f`: 296 Python tests, 64 Node tests, 0 Node failures and all checked-in D1 migrations passed.
+
+No automatic transcription, hosted Worker deployment or Android usability test was performed. Automatic speech-to-text is a separate gated task.
