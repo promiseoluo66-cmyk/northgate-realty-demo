@@ -1162,3 +1162,103 @@ class GeneratedFreezeFrameMltRenderTests(unittest.TestCase):
             self.assertLess(pixel[1], 90, f"Unexpected green at {timestamp}s: {pixel}")
             self.assertLess(pixel[2], 90, f"Unexpected blue at {timestamp}s: {pixel}")
         self.assertGreater(after_hold[2], 150, f"Expected blue after hold, got {after_hold}")
+
+
+class EditedCaptionMltRenderTests(unittest.TestCase):
+    """Render a caption after editing it and inspect decoded output pixels."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.project = make_project(self.root)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("mlt7") is not None
+        and shutil.which("ffmpeg")
+        and shutil.which("ffprobe"),
+        "The real MLT/FFmpeg runtime is not installed.",
+    )
+    def test_edited_caption_is_visible_in_a_real_render(self):
+        import subprocess
+        from project_tool_executor import ProjectToolExecutor
+        from mlt_engine.renderer import render_project
+
+        source = self.root / "source.mp4"
+        original_output = self.root / "caption-before.mp4"
+        edited_output = self.root / "caption-after.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=25:d=2",
+            "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ], check=True, capture_output=True, text=True, timeout=120)
+
+        self.project["assets"][0].update({
+            "size_bytes": source.stat().st_size,
+            "duration_us": 2_000_000,
+        })
+        self.project["tracks"][0]["clips"][0].update({
+            "duration_us": 2_000_000,
+            "source_out_us": 2_000_000,
+        })
+        self.project["tracks"].append({
+            "id": "captions", "type": "text", "name": "Captions",
+            "order": 1, "locked": False, "clips": [{
+                "id": "caption-one", "kind": "text",
+                "start_us": 0, "duration_us": 2_000_000,
+                "text": {
+                    "content": "ORIGINAL CAPTION",
+                    "family": "Sans", "size": 42, "weight": 700,
+                    "fgcolour": "#FFFFFF", "olcolour": "#000000", "outline": 1,
+                    "halign": "center", "valign": "middle",
+                    "x_percent": 5, "y_percent": 35,
+                    "width_percent": 90, "height_percent": 30,
+                },
+                "effects": [], "keyframes": [],
+            }],
+        })
+
+        executor = ProjectToolExecutor(self.project, asset_root=self.root)
+        before_receipt = render_project(executor.get_project(), self.root, original_output, timeout_seconds=120)
+        self.assertTrue(before_receipt["ok"])
+        executor.execute("text.update_clip", {
+            "clip_id": "caption-one",
+            "content": "CORRECTED CAPTION",
+            "text_style": {"fgcolour": "#FFFF00"},
+        })
+        edited_caption = next(
+            clip for track in executor.get_project()["tracks"]
+            for clip in track["clips"] if clip["id"] == "caption-one"
+        )
+        self.assertEqual(edited_caption["text"]["content"], "CORRECTED CAPTION")
+        self.assertEqual(edited_caption["text"]["fgcolour"], "#FFFF00")
+
+        after_receipt = render_project(executor.get_project(), self.root, edited_output, timeout_seconds=120)
+        self.assertTrue(after_receipt["ok"])
+
+        def decoded_frame(path):
+            result = subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-ss", "1.0", "-i", str(path),
+                "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+            ], check=True, capture_output=True, timeout=60)
+            self.assertEqual(len(result.stdout), 320 * 240 * 3)
+            return result.stdout
+
+        before_pixels = decoded_frame(original_output)
+        after_pixels = decoded_frame(edited_output)
+        self.assertGreater(
+            sum(left != right for left, right in zip(before_pixels, after_pixels)),
+            100,
+            "Editing the caption should change the decoded rendered frame.",
+        )
+        yellow_glyph_pixels = sum(
+            1 for red, green, blue in zip(after_pixels[0::3], after_pixels[1::3], after_pixels[2::3])
+            if red > 150 and green > 150 and blue < 120
+        )
+        self.assertGreater(
+            yellow_glyph_pixels, 20,
+            "The edited caption's requested yellow text should be visible in the actual render.",
+        )
