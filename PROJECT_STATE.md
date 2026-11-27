@@ -263,17 +263,20 @@ The user explicitly requested completion of all remaining Stage 2 tasks, authori
 - Stage 3 has not started. `main` remains untouched. No merge, deployment, release or paid service was used.
 
 
-## 14. Task 2.6 background-alpha repair — 2026-11-27
+## 14. Task 2.6 accepted — 2026-11-27
 
 **Latest code commit:** `240026b7aa6ac89a853be5208cbf11d476564247`  
-**Actions run:** #166 is the verification run for this commit; it is currently queued/in progress and has not reported a result.
+**Verification:** [GitHub Actions run #166](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46063895597) — **success**.
 
-- Run #162 (`6395f17`) failed on the shadow-blur test's pixel-count expectation; the rendered blur did change the image, but the count metric was not a valid measure of softness.
-- Run #163 (`56501fc`) was cancelled by the subsequent push.
-- Run #164 (`d196a6d`) passed the shadow-blur tag-isolation and foreground-pixel checks, but the background-fill test showed that the ASS filter path was clearing the previously drawn box alpha.
-- Run #165 (`cf6b1f3`) still failed the same background-alpha assertion after separating the background and text into two RGBA inputs.
-- FFmpeg's official drawbox documentation explains that `replace=1` is required to overwrite both colour and alpha on an alpha-capable input. Commit `240026b` adds that option to the background rectangle. This is the next fix under test.
-- Across the latest Python runs, the other **318 tests pass**; the single remaining failure is the generated background-fill alpha assertion. Node/Worker and D1 steps are skipped when the Python step fails, so full workflow acceptance is still pending.
-- Task 2.6 is **not accepted** until the complete workflow passes on the current code.
+- Run #166 completed all workflow stages: **319 Python tests passed**, **71 Node/Studio/Worker tests passed**, and all checked-in D1 migrations applied successfully to in-memory SQLite.
+- Generated-media tests verified advanced text renderer routing, transparent RGBA output, font weight, letter spacing, line spacing, background fill/opacity, shadow rendering and shadow-only blur while keeping foreground text sharp.
+- The renderer recursion was removed; advanced styles are routed to ASS/libass; `shadow_blur` is validated 0–10, persisted through the existing `text.update_clip` operation and exposed in Studio.
+- The background rectangle is rendered on a separate RGBA input and composited behind text. FFmpeg `drawbox` uses `replace=1` to write the semi-transparent box alpha correctly.
+- The test-first sequence surfaced and resolved the following: run #158 (7 failed, 312 passed), #159 (3 failed, 316 passed), #160–#165 (one remaining targeted render assertion/fill issue per run, with #163 cancelled), then run #166 passed the full workflow. These are debugging history, not current failures.
+- Task 2.6 is **complete for offline CI**. Android/hosted acceptance remains separate; no deployment was performed.
 
-The branch remains `video-editor-lab`; `main` is untouched. No Stage 3 work, merge, deployment, release or paid service has occurred.
+The user explicitly requested completion of all remaining Stage 2 tasks, authorizing the previously gated Task 2.4 scope. The historical discrepancy is reconciled: run #150 (`c8bb6b2`) is the implementation/integration evidence and run #151 (`6acbade`) is the subsequent full verification. Both completed successfully; Task 2.4 was already implemented and accepted.
+
+**Still open:** 2.7 text/caption animation; 2.8 editable title templates; 2.9 editable graphics; 2.11 bilingual manual caption tracks; 2.13 mobile transcript review; 2.14 cross-feature reliability/security audit; 2.15 final Stage 2 verification. Tasks 2.5, 2.10 and 2.12 remain intentionally `gated_optional` because their cost/licence/runtime gates are not satisfied.
+
+The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not started. No merge, deployment, release or paid service has occurred.

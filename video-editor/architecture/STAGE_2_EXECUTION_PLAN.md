@@ -19,7 +19,7 @@ A feature is complete only after its data contract, permission and validation ru
 | 2.3 | `transcript_driven_editing` | Select inclusive timed word ranges on one chosen source clip; preview exact source/timeline range; apply only after explicit confirmation through an atomic split+ripple-delete transaction with undo/redo. Refuses keyframes, linked groups, transitions, locked tracks and overlapping clips. Limitation: one selected clip and its track; automatic multi-track A/V sync and pause/filler removal remain open. | **Offline CI accepted** — run #45986714784 (304 Python, 64 Node, D1 migrations passed). |
 | 2.4 | `transcript_driven_editing` | Combine transcript timing with measured silence candidates; never label technical silence as a filler word; show source/timeline bounds and adjacent words; apply only one freshly remeasured cut after explicit approval. | **Offline CI accepted** — final run #46000546362 (314 Python, 69 Node, 0 Node failures, D1 migrations and real MLT silence-cut render passed). |
 | 2.5 | `auto_captions` | Evaluate local/free speech-to-text runtimes, licences, model size/download, runner/mobile fit, compute and retention. Enable only after a genuinely $0 route passes real-footage timing tests; otherwise remain visibly gated. | **Feasibility evidence complete — gated_optional**; Whisper/whisper.cpp is a viable local candidate, but real-footage quality/runtime acceptance is still missing. |
-| 2.6 | `text_style` | Add validated typography, background, shadow and spacing settings; render generated frame fixtures for every supported control. | **In progress** — existing schema/model/Studio controls and render fixtures are present; audit found advanced-renderer routing is not connected and the ASS helper recurses. Shadow blur is missing. Regression tests added in commit `cd649ad1da4d6b626ef5d8fa952b2d0b6d2bf80f`; execution result is not yet observable through the connected GitHub status tools. |
+| 2.6 | `text_style` | Add validated typography, background, shadow and spacing settings; render generated frame fixtures for every supported control. | **Offline CI accepted** — run #166: 319 Python tests, 71 Node/Studio/Worker tests and all checked-in D1 migrations passed; generated RGBA/ASS render tests cover advanced routing, font weight, letter/line spacing, background alpha and shadow blur. |
 | 2.7 | `text_animation`, `caption_animations`, `karaoke_lyrics` | Add entrance/exit/loop and word-highlight animation through the canonical timing model; render boundary frames and verify timing. | Planned |
 | 2.8 | `title_templates` | Save/load editable title recipes with schema version and compatibility checks; never flatten templates into video. | Planned |
 | 2.9 | `stickers_graphics` | Build editable shapes, arrows, frames and imported image overlays; validate dimensions and retain asset provenance/licence. | Planned |
@@ -116,13 +116,15 @@ Sources:
 - [Piper engine repository and GPL-3.0-or-later licence](https://github.com/OHF-Voice/piper1-gpl)
 - [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 
-## Task 2.6 — expanded text styling: resumption audit
+## Task 2.6 — expanded text styling
 
-**Status: In progress; implementation not yet changed in this session.**
+**Status: Offline CI accepted.** GitHub Actions run [#166](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46063895597) passed on source commit `240026b7aa6ac89a853be5208cbf11d476564247`.
 
-- Existing text-style schema fields, project-model validation, `text.update_clip`, Studio controls and rendering assertions cover font weight, background fill/opacity, shadow colour/offset/opacity, letter spacing and line spacing.
-- The current renderer audit found `_make_ass_text_overlay_image()` recursively calls itself whenever advanced styling is requested. The normal `_make_text_overlay_image()` path does not dispatch advanced styles to that helper, so the existing advanced style controls are not reliably rendered.
-- Shadow blur is not yet represented in the operation schema, project validation, Studio controls or renderer.
-- Added regression coverage first in `video-editor/tests/test_project_tool_extensions.py`: shadow-blur schema/persistence/bounds and advanced-renderer routing. Test-first commit: `cd649ad1da4d6b626ef5d8fa952b2d0b6d2bf80f`.
-- Fresh execution was not verified. The connected GitHub tool returned no commit status checks, and this environment cannot clone the public repository because outbound DNS/network access is unavailable. No test pass or failure is claimed.
-- Next action: obtain observable test execution, then fix renderer routing/recursion and implement bounded shadow blur through the existing ASS/libass path. Keep the existing operation and project model; do not create a duplicate text-edit operation.
+- The normal text renderer now routes advanced styles to the ASS/libass renderer; the recursive self-call has been removed.
+- Bounded `shadow_blur` (0–10) is supported in the operation schema, project-model validation, Studio inspector and rendered overlay. The shadow is rendered on a separate ASS layer so the foreground glyph remains sharp.
+- Transparent RGBA is created before ASS processing. Background rectangles are composited as a separate RGBA layer; FFmpeg `drawbox` uses `replace=1` so its semi-transparent fill writes both colour and alpha.
+- Existing `text.update_clip` remains the single text-edit operation. No duplicate editing operation was introduced.
+- The two stale test references to nonexistent `expanded-title-clip` were corrected to the fixture's `title-clip`.
+- Verification evidence: **319 Python tests passed**, **71 Node/Studio/Worker tests passed**, and every checked-in D1 migration applied successfully to in-memory SQLite. The Python suite includes generated-frame rendering/decoding assertions for text routing, spacing, weight, background transparency and shadow blur.
+- Task 2.6 is complete for the offline CI scope. Hosted/Android acceptance remains a separate later activity; no deployment was performed.
+

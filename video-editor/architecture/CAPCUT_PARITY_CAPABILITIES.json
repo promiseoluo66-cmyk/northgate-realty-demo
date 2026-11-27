@@ -259,8 +259,8 @@
         ],
         [
           "text_style",
-          "Basic font, size, weight, colour, outline, alignment and placement are supported; full typographic spacing, shadow, background and template controls remain incomplete.",
-          "partially_implemented"
+          "Font family/size/weight, colour, outline, alignment/placement, letter and line spacing, background fill/opacity, and shadow colour/offset/opacity/blur are editable in Studio and offline render-tested through transparent ASS/libass overlays; editable title templates and text animation remain separate pending capabilities.",
+          "prototype_verified"
         ],
         [
           "text_animation",
