@@ -61,8 +61,8 @@ For every finding, record: **severity**, **affected path**, **evidence**, **requ
 - Are project instructions, plans, links, and references consistent?
 - Are regressions or duplicate implementations introduced?
 - Are all acceptance criteria met with evidence?
-- Are repository and branch boundaries respected?
-- Are Stage 2 Task 2.4 and other explicitly excluded work untouched?
+- Is all work confined to `promiseoluo66-cmyk/northgate-realty-demo` on `video-editor-lab`, with `main` untouched?
+- Is Stage 2 Task 2.4 (measured silence candidates with human review) still unstarted, and is all other explicitly excluded work untouched?
 - Does the final report list exact files, commit, checks, limitations, and blockers?
 
 ## Finding severity
