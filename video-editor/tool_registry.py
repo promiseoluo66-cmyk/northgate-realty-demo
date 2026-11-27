@@ -324,6 +324,41 @@ TOOL_DEFINITIONS = (
         }, ("track_id", "words")),
     ),
     ToolDefinition(
+        "transcript.import_words", "transcript",
+        "Store a source-media transcript supplied as word-level text and timestamps. Timestamps are relative to the original source media; this tool does not perform speech recognition.",
+        _schema({
+            "media_id": _field("string", max_length=64),
+            "name": _field("string", max_length=120),
+            "language": _field("string", max_length=35),
+            "words": _field("array", nested={
+                "minItems": 1, "maxItems": 20000,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": _field("string", max_length=100),
+                        "start_us": _field("integer", minimum=0),
+                        "end_us": _field("integer", minimum=1),
+                        "speaker_id": _field("string", max_length=64),
+                        "confidence": _field("number", minimum=0, maximum=1),
+                    },
+                    "required": ["text", "start_us", "end_us"],
+                    "additionalProperties": False,
+                },
+            }),
+        }, ("media_id", "words")),
+    ),
+    ToolDefinition(
+        "transcript.search", "transcript",
+        "Search a stored timed transcript for exact words or phrases and map source-time matches to compatible timeline clips. Matching is lexical, not semantic.",
+        _schema({
+            "transcript_id": _field("string", max_length=64),
+            "query": _field("string", max_length=200),
+            "case_sensitive": {"type": "boolean"},
+            "limit": _field("integer", minimum=1, maximum=100),
+        }, ("transcript_id", "query")),
+        read_only=True,
+    ),
+    ToolDefinition(
         "text.update_clip", "text",
         "Update a caption/title's content and renderer-supported text styling.",
         _schema({
