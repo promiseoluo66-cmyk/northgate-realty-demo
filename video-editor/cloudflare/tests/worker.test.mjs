@@ -769,7 +769,7 @@ test("internal callback stores an analysis-only completed result without an outp
   );
   assert.equal(response.status, 200);
   assert.match(updateSql, /analysis_result_json/);
-  assert.equal(JSON.parse(values.find(value => typeof value === "string" && value.includes('"results"'))), analysis);
+  assert.deepEqual(JSON.parse(values.find(value => typeof value === "string" && value.includes('"results"'))), analysis);
 });
 
 test("job status returns the saved analysis result to Studio", async () => {

@@ -1600,3 +1600,66 @@ class MeasuredSilenceReviewTests(unittest.TestCase):
         self.assertEqual(self.executor.revision, 2)
 
 
+
+
+class MeasuredSilenceCutSafetyTests(unittest.TestCase):
+    def setUp(self):
+        from project_tool_executor import _build_source_range_cut_plan
+        self.build_plan = _build_source_range_cut_plan
+        self.executor = ProjectToolExecutor(make_project())
+        imported = self.executor.execute("transcript.import_words", {
+            "media_id": "video-asset",
+            "language": "en",
+            "words": [
+                {"text": "Hello", "start_us": 100_000, "end_us": 300_000},
+                {"text": "world", "start_us": 800_000, "end_us": 1_000_000},
+            ],
+        })
+        self.transcript_id = imported["results"][0]["result"]["transcript_id"]
+
+    def plan(self, project):
+        return self.build_plan(
+            project, self.transcript_id, "main-clip", 350_000, 750_000
+        )
+
+    def test_source_offset_and_non_unit_playback_speed_map_to_timeline(self):
+        project = self.executor.get_project()
+        clip = project["tracks"][0]["clips"][0]
+        clip.update({
+            "source_in_us": 100_000, "source_out_us": 2_100_000,
+            "playback_rate": 2.0, "duration_us": 1_000_000,
+        })
+        plan = self.plan(project)
+        self.assertTrue(plan["can_apply"], plan["blockers"])
+        self.assertEqual(plan["timeline_cut_start_us"], 125_000)
+        self.assertEqual(plan["timeline_cut_end_us"], 325_000)
+        self.assertEqual(plan["removed_duration_us"], 200_000)
+
+    def test_locked_linked_keyframed_transition_and_overlapping_clips_block_cut(self):
+        import copy
+        base = self.executor.get_project()
+        cases = [
+            ("selected_track_locked", lambda p: p["tracks"][0].update({"locked": True})),
+            ("clip_has_keyframes", lambda p: p["tracks"][0]["clips"][0].update({
+                "keyframes": [{"property": "opacity", "points": [{"time_us": 0, "value": 1.0}]}]
+            })),
+            ("clip_belongs_to_linked_group", lambda p: p["tracks"][0]["clips"][0].update({
+                "group_id": "linked-group"
+            })),
+            ("clip_has_transition", lambda p: p.update({"transitions": [{
+                "from_clip_id": "main-clip", "to_clip_id": "other-clip",
+                "transition_type": "dissolve", "duration_us": 100_000
+            }]})),
+            ("another_clip_overlaps_cut_range_on_selected_track", lambda p: p["tracks"][0]["clips"].append({
+                "id": "overlap-clip", "kind": "video", "media_id": "video-asset",
+                "start_us": 400_000, "duration_us": 500_000, "source_in_us": 0,
+                "playback_rate": 1.0, "effects": [], "keyframes": []
+            })),
+        ]
+        for blocker, mutate in cases:
+            with self.subTest(blocker=blocker):
+                project = copy.deepcopy(base)
+                mutate(project)
+                plan = self.plan(project)
+                self.assertFalse(plan["can_apply"])
+                self.assertIn(blocker, plan["blockers"])

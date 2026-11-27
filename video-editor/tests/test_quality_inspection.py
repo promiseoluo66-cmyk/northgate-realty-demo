@@ -158,3 +158,32 @@ class QualityInspectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_audio_silence_analysis_uses_requested_minimum_duration():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "source.mp4").write_bytes(b"fixture")
+        executor = ProjectToolExecutor(sample_project(), asset_root=root)
+        probe = SimpleNamespace(stdout=json.dumps({
+            "format": {"duration": "10.0"},
+            "streams": [{"codec_type": "audio", "codec_name": "aac"}],
+        }))
+        ffmpeg = SimpleNamespace(stderr=(
+            "[silencedetect] silence_start: 2.000\\n"
+            "[silencedetect] silence_end: 3.000 | silence_duration: 1.000\\n"
+        ))
+        commands = []
+
+        def fake_run(command, **kwargs):
+            commands.append(command)
+            return probe if command[0] == "ffprobe" else ffmpeg
+
+        with patch("project_tool_executor.subprocess.run", side_effect=fake_run):
+            executor._analyze_audio_media(
+                executor.get_project(), "source-video", 10, -50, 0.05
+            )
+        assert any(
+            "silencedetect=n=-50.00dB:d=0.050" in part
+            for part in commands[-1]
+        )
