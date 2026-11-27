@@ -76,11 +76,16 @@ test("parser rejects overlapping cues and unsupported extensions", () => {
 });
 
 test("parser enforces 500-cue and 2,000-character limits", () => {
-  const blocks = Array.from({length: 501}, (_, index) => {
-    const start = String(index * 2).padStart(2, "0");
-    const end = String(index * 2 + 1).padStart(2, "0");
-    return (index + 1) + "\n00:00:" + start + ",000 --> 00:00:" + end + ",000\ntext";
-  });
+  const stamp = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
+  };
+  const blocks = Array.from({length: 501}, (_, index) =>
+    (index + 1) + "\n" + stamp(index * 2) + ",000 --> " +
+    stamp(index * 2 + 1) + ",000\ntext"
+  );
   assert.throws(() => parseSubtitleFile(blocks.join("\n\n"), "many.srt"), /500/);
   const long = "1\n00:00:00,000 --> 00:00:01,000\n" + "x".repeat(2001);
   assert.throws(() => parseSubtitleFile(long, "long.srt"), /overlong/);
