@@ -406,6 +406,8 @@ def validate_project(document: Any) -> dict[str, Any]:
                 for offset_key in ("shadow_x", "shadow_y"):
                     if offset_key in text_data:
                         _integer(text_data[offset_key], f"{path}.text.{offset_key}", minimum=-32, maximum=32)
+                if "shadow_blur" in text_data:
+                    _number(text_data["shadow_blur"], f"{path}.text.shadow_blur", minimum=0, maximum=10)
                 if "letter_spacing_px" in text_data:
                     _number(text_data["letter_spacing_px"], f"{path}.text.letter_spacing_px", minimum=-10, maximum=40)
                 if "line_spacing_px" in text_data:

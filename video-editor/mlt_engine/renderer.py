@@ -1089,6 +1089,7 @@ def _requires_ass_text_renderer(text_spec: dict[str, Any]) -> bool:
         or bool(text_spec.get("background_fill", False))
         or float(text_spec.get("shadow_x", 0)) != 0
         or float(text_spec.get("shadow_y", 0)) != 0
+        or float(text_spec.get("shadow_blur", 0)) > 0
         or float(text_spec.get("letter_spacing_px", 0)) != 0
         or int(text_spec.get("line_spacing_px", 0)) != 0
         or float(text_spec.get("opacity", 1)) != 1
@@ -1106,8 +1107,6 @@ def _make_ass_text_overlay_image(
     text_directory: Path,
 ) -> Path:
     """Render advanced typography through libass onto a transparent RGBA frame."""
-    if _requires_ass_text_renderer(text_spec):
-        return _make_ass_text_overlay_image(text_spec, width, height, output_path, text_directory)
     text_directory.mkdir(parents=True, exist_ok=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     content = str(text_spec.get("content", ""))
@@ -1125,6 +1124,7 @@ def _make_ass_text_overlay_image(
     outline = int(text_spec.get("outline", 0))
     shadow_x = int(text_spec.get("shadow_x", 0))
     shadow_y = int(text_spec.get("shadow_y", 0))
+    shadow_blur = float(text_spec.get("shadow_blur", 0))
     spacing = float(text_spec.get("letter_spacing_px", 0))
     line_spacing = int(text_spec.get("line_spacing_px", 0))
     line_height = max(1, round(size * 1.2 + line_spacing))
@@ -1156,21 +1156,47 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     event_lines = []
     for index, line in enumerate(lines):
         y_position = y + index * line_height
-        tags = (
+        base_tags = (
             f"\\an{anchor}\\pos({x},{y_position})\\fn{family}\\fs{size}"
-            f"\\b{weight}\\fsp{spacing:.2f}\\1c{foreground}\\1a{foreground_alpha}"
-            f"\\bord{outline}\\3c{outline_colour}\\3a{outline_alpha}"
-            f"\\xshad{shadow_x}\\yshad{shadow_y}\\4c{shadow_colour}\\4a{shadow_alpha}"
+            f"\\b{weight}\\fsp{spacing:.2f}"
         )
+        style_tags = ""
         if text_spec.get("style") == "italic":
-            tags += "\\i1"
+            style_tags += "\\i1"
         if text_spec.get("underline"):
-            tags += "\\u1"
+            style_tags += "\\u1"
         if text_spec.get("strikethrough"):
-            tags += "\\s1"
-        event_lines.append(
-            f"Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,{{{tags}}}{_ass_escape_text(line)}"
-        )
+            style_tags += "\\s1"
+        if shadow_blur > 0:
+            # Render the blurred shadow on its own transparent ASS layer so
+            # libass blur never softens the foreground glyphs or outline.
+            shadow_tags = (
+                f"{base_tags}\\1a&HFF&\\3a&HFF&"
+                f"\\xshad{shadow_x}\\yshad{shadow_y}"
+                f"\\4c{shadow_colour}\\4a{shadow_alpha}\\blur{shadow_blur:.2f}"
+                f"{style_tags}"
+            )
+            text_tags = (
+                f"{base_tags}\\1c{foreground}\\1a{foreground_alpha}"
+                f"\\bord{outline}\\3c{outline_colour}\\3a{outline_alpha}"
+                f"\\xshad0\\yshad0\\4a&HFF&{style_tags}"
+            )
+            event_lines.append(
+                f"Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,{{{shadow_tags}}}{_ass_escape_text(line)}"
+            )
+            event_lines.append(
+                f"Dialogue: 1,0:00:00.00,0:00:01.00,Default,,0,0,0,,{{{text_tags}}}{_ass_escape_text(line)}"
+            )
+        else:
+            tags = (
+                f"{base_tags}\\1c{foreground}\\1a{foreground_alpha}"
+                f"\\bord{outline}\\3c{outline_colour}\\3a{outline_alpha}"
+                f"\\xshad{shadow_x}\\yshad{shadow_y}\\4c{shadow_colour}\\4a{shadow_alpha}"
+                f"{style_tags}"
+            )
+            event_lines.append(
+                f"Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,{{{tags}}}{_ass_escape_text(line)}"
+            )
     ass_path = text_directory / f"{output_path.stem}.ass"
     ass_path.write_text(ass_colour_script + "\n".join(event_lines) + "\n", encoding="utf-8")
 
@@ -1217,6 +1243,9 @@ def _make_text_overlay_image(
     onto a transparent RGBA canvas, so the alpha channel is explicit and
     testable before MLT composites the image.
     """
+    if _requires_ass_text_renderer(text_spec):
+        return _make_ass_text_overlay_image(text_spec, width, height, output_path, text_directory)
+
     text_file = text_directory / (output_path.stem + ".txt")
     text_file.write_text(text_spec["content"], encoding="utf-8")
 

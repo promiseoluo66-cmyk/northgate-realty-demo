@@ -455,7 +455,7 @@
       "studio-text-weight", "studio-text-background-fill", "studio-text-bgcolour",
       "studio-text-bgopacity", "studio-text-pad", "studio-text-shadow-color",
       "studio-text-shadow-x", "studio-text-shadow-y", "studio-text-shadow-opacity",
-      "studio-text-letter-spacing", "studio-text-line-spacing",
+      "studio-text-shadow-blur", "studio-text-letter-spacing", "studio-text-line-spacing",
       "studio-text-halign", "studio-text-valign", "studio-text-x", "studio-text-y",
       "studio-text-width", "studio-text-height", "studio-save-text"
     ];
@@ -567,6 +567,7 @@
     setValue("studio-text-shadow-x", textData.shadow_x ?? 0);
     setValue("studio-text-shadow-y", textData.shadow_y ?? 0);
     setValue("studio-text-shadow-opacity", textData.shadow_opacity ?? 0.7);
+    setValue("studio-text-shadow-blur", textData.shadow_blur ?? 0);
     setValue("studio-text-letter-spacing", textData.letter_spacing_px ?? 0);
     setValue("studio-text-line-spacing", textData.line_spacing_px ?? 0);
     setValue("studio-text-halign", textData.halign || textData.align || "center");
@@ -1429,6 +1430,7 @@
       shadow_x: Math.round(numeric("studio-text-shadow-x")),
       shadow_y: Math.round(numeric("studio-text-shadow-y")),
       shadow_opacity: numeric("studio-text-shadow-opacity"),
+      shadow_blur: numeric("studio-text-shadow-blur"),
       letter_spacing_px: numeric("studio-text-letter-spacing"),
       line_spacing_px: Math.round(numeric("studio-text-line-spacing")),
       halign: byId("studio-text-halign").value,

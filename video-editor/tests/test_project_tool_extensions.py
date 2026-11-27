@@ -612,7 +612,7 @@ class EditorToolExpansionTests(unittest.TestCase):
         tracks = sorted(self.executor.get_project()["tracks"], key=lambda item: item["order"])
         self.assertEqual(tracks[0]["id"], "title-track")
         self.assertEqual([item["order"] for item in tracks], list(range(len(tracks))))
-        self.assertEqual(tracks[0]["clips"][0]["id"], "expanded-title-clip")
+        self.assertEqual(tracks[0]["clips"][0]["id"], "title-clip")
 
     def test_track_rename_and_lock_are_executable(self):
         self.run_tool("track.rename", {
@@ -718,7 +718,7 @@ class EditorToolExpansionTests(unittest.TestCase):
 
     def test_text_content_and_supported_styling_can_be_updated(self):
         self.run_tool("text.update_clip", {
-            "clip_id": "expanded-title-clip",
+            "clip_id": "title-clip",
             "content": "Updated title",
             "text_style": {
                 "family": "DejaVu Sans",

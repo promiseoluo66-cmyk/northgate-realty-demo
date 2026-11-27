@@ -73,7 +73,7 @@ test("Studio exposes real source preview, playhead and direct editing controls",
     "studio-remove-keyframe", "studio-reset-keyframes", "studio-reset-all-keyframes",
     "rename-project-name", "studio-rename-project", "saved-project-list",
     "refresh-saved-projects", "saved-project-status", "studio-copy-keyframes", "studio-paste-keyframes",
-    "studio-apply-motion-preset"
+    "studio-apply-motion-preset", "studio-text-shadow-blur"
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(studioScript, /setPlayhead/);
   assert.match(studioScript, /setPointerCapture/);
@@ -302,4 +302,12 @@ test("Studio exposes expanded editable title styling controls", () => {
     "weight", "background_fill", "bgcolour", "bgopacity", "shadow_color",
     "shadow_x", "shadow_y", "shadow_opacity", "letter_spacing_px", "line_spacing_px"
   ]) assert.ok(studioScript.includes(property), "Missing style property " + property);
+});
+
+
+test("Expanded text shadow blur is loaded and saved through the existing text update operation", () => {
+  assert.match(html, /id="studio-text-shadow-blur" type="number" min="0" max="10"/);
+  assert.match(studioScript, /setValue\("studio-text-shadow-blur", textData\.shadow_blur \?\? 0\)/);
+  assert.match(studioScript, /shadow_blur: numeric\("studio-text-shadow-blur"\)/);
+  assert.match(studioScript, /name: "text\.update_clip"/);
 });

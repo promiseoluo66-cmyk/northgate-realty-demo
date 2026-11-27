@@ -1439,6 +1439,13 @@ class AdvancedTextOverlayTests(unittest.TestCase):
         self.assertGreater(self.bbox(with_shadow)[2], self.bbox(no_shadow)[2] + 3)
         self.assertGreater(self.bbox(with_shadow)[3], self.bbox(no_shadow)[3] + 3)
 
+        blurred_shadow = self.render(
+            "blurred-shadow", content="A", weight=700, shadow_x=8, shadow_y=8,
+            shadow_color="#000000", shadow_opacity=1, shadow_blur=3,
+        )
+        self.assertNotEqual(with_shadow, blurred_shadow)
+        self.assertGreater(self.bbox(blurred_shadow)[2], self.bbox(with_shadow)[2])
+
         normal_weight = self.render("normal-weight", content="BOLD", weight=400)
         bold_weight = self.render("bold-weight", content="BOLD", weight=700)
         self.assertNotEqual(normal_weight, bold_weight)
