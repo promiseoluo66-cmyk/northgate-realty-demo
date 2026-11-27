@@ -109,7 +109,7 @@ When this project is opened in a new ChatGPT conversation:
 8. Before ending any session that changes project state, update this file with completed work, remaining work, decisions, blockers, exact commit(s), and test evidence. Read the updated file back from GitHub.
 
 **Suggested message for a new chat:**  
-“Continue the Northgate video-editor project. First read `PROJECT_STATE.md` on `video-editor-lab` and follow its new-chat startup instructions. Verify the current GitHub state before changing anything. Do not ask me to repeat information already recorded in the handoff.”
+“Continue the video-editor project in `promiseoluo66-cmyk/northgate-realty-demo`. First read `PROJECT_STATE.md` on branch `video-editor-lab` and follow its new-chat startup instructions. Verify the live GitHub state before changing anything. Do not ask me to repeat information already recorded in the handoff.”
 
 ## 9. Source documents
 
