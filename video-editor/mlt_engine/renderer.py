@@ -1443,6 +1443,7 @@ def _apply_text_overlay_images_ffmpeg(
 
     duration = int(plan["total_frames"]) * fps_den / fps_num
     if os.environ.get("MLT_DEBUG_TEXT_OVERLAY") == "1" and overlays:
+        print("MLT_DEBUG_TEXT_OVERLAY filtergraph=" + repr(";".join(filters)))
         sample_pixels = {}
         for debug_time in (0.20, 0.80, 1.25, 1.75):
             pixels_at_time = {}

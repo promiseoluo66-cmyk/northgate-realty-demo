@@ -121,9 +121,9 @@ class CompilePlanTests(unittest.TestCase):
                 "duration_us": 800_000, "text": {"content": "Fade me"},
                 "effects": [], "keyframes": [
                     {"property": "opacity", "time_us": 0, "value": 0.0,
-                     "interpolation": "ease_out"},
+                     "interpolation": "linear"},
                     {"property": "opacity", "time_us": 400_000, "value": 1.0,
-                     "interpolation": "ease_out"},
+                     "interpolation": "linear"},
                 ],
             }],
         })
@@ -1362,7 +1362,10 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
             }],
         })
 
-        receipt = render_project(self.project, self.root, output, timeout_seconds=120)
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"MLT_DEBUG_TEXT_OVERLAY": "1"}):
+            receipt = render_project(self.project, self.root, output, timeout_seconds=120)
         self.assertTrue(receipt["ok"], receipt)
 
         def bright_glyph_pixels(timestamp):
