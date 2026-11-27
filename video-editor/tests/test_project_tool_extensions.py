@@ -161,6 +161,36 @@ class EditorToolExpansionTests(unittest.TestCase):
             {"opacity", "scale_x", "scale_y", "position_x", "position_y", "rotation_deg"},
         )
 
+    def test_karaoke_mode_groups_supplied_words_into_one_editable_caption(self):
+        result = self.run_tool("captions.add_word_timed", {
+            "track_id": "title-track",
+            "mode": "karaoke",
+            "words": [
+                {"text": "HELLO", "start_us": 100_000, "end_us": 450_000},
+                {"text": "WORLD", "start_us": 500_000, "end_us": 900_000},
+            ],
+            "text_style": {
+                "fgcolour": "#FFFFFF", "highlight_colour": "#FFD700", "size": 48,
+            },
+        })
+        operation = result["results"][0]["result"]
+        self.assertEqual(operation["word_clip_count"], 1)
+        self.assertEqual(operation["word_count"], 2)
+        created = operation["caption_clips"]
+        self.assertEqual(len(created), 1)
+        clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == created[0]["clip_id"]
+        )
+        self.assertEqual((clip["start_us"], clip["duration_us"]), (100_000, 800_000))
+        self.assertEqual(clip["text"]["content"], "HELLO WORLD")
+        self.assertEqual(clip["text"]["fgcolour"], "#FFFFFF")
+        self.assertEqual(clip["text"]["highlight_colour"], "#FFD700")
+        self.assertEqual(clip["word_timings"], [
+            {"text": "HELLO", "start_us": 0, "end_us": 350_000},
+            {"text": "WORLD", "start_us": 400_000, "end_us": 800_000},
+        ])
+
     def test_word_timed_caption_clips_use_supplied_timing_and_highlight_style(self):
         result = self.run_tool("captions.add_word_timed", {
             "track_id": "title-track",
