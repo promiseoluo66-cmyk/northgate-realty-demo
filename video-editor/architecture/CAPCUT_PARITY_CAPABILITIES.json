@@ -739,9 +739,9 @@
     },
     "capability_entry_count": 118,
     "status_counts": {
-      "partially_implemented": 23,
+      "partially_implemented": 22,
       "planned": 47,
-      "prototype_verified": 16,
+      "prototype_verified": 17,
       "gated_optional": 31,
       "under_test": 1
     },
