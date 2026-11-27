@@ -1681,6 +1681,52 @@ class ProjectToolExecutor:
                 "height_percent": 25,
             }
             style.update(args.get("text_style", {}))
+            mode = args.get("mode", "sequential")
+            if mode == "karaoke":
+                for index, word in enumerate(words):
+                    token = str(word["text"])
+                    if not token.strip() or any(character.isspace() for character in token):
+                        raise ProjectToolExecutionError(
+                            f"Karaoke word {index} must be one non-empty word."
+                        )
+                    if word["end_us"] - word["start_us"] < 10_000:
+                        raise ProjectToolExecutionError(
+                            f"Karaoke word {index} must have at least 10 milliseconds of timing."
+                        )
+                first_start = int(words[0]["start_us"])
+                last_end = int(words[-1]["end_us"])
+                style.setdefault("highlight_colour", "#FFD700")
+                clip = {
+                    "id": _new_id("caption"),
+                    "kind": "text",
+                    "start_us": first_start,
+                    "duration_us": last_end - first_start,
+                    "text": {"content": " ".join(word["text"] for word in words), **deepcopy(style)},
+                    "word_timings": [
+                        {
+                            "text": word["text"],
+                            "start_us": int(word["start_us"]) - first_start,
+                            "end_us": int(word["end_us"]) - first_start,
+                        }
+                        for word in words
+                    ],
+                    "effects": [],
+                    "keyframes": [],
+                }
+                track["clips"].append(clip)
+                return {
+                    "track_id": track["id"],
+                    "mode": "karaoke",
+                    "word_clip_count": 1,
+                    "word_count": len(words),
+                    "caption_clips": [{
+                        "clip_id": clip["id"],
+                        "text": clip["text"]["content"],
+                        "start_us": first_start,
+                        "end_us": last_end,
+                    }],
+                    "transcription_performed": False,
+                }, True
             created = []
             for word in words:
                 clip = {

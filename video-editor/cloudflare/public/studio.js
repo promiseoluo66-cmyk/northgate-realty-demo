@@ -451,7 +451,7 @@
     const selected = findSelectedClip();
     const textControlIds = [
       "studio-text-content", "studio-text-family", "studio-text-size",
-      "studio-text-fgcolour", "studio-text-olcolour", "studio-text-outline",
+      "studio-text-fgcolour", "studio-text-highlight-colour", "studio-text-olcolour", "studio-text-outline",
       "studio-text-weight", "studio-text-background-fill", "studio-text-bgcolour",
       "studio-text-bgopacity", "studio-text-pad", "studio-text-shadow-color",
       "studio-text-shadow-x", "studio-text-shadow-y", "studio-text-shadow-opacity",
@@ -556,6 +556,7 @@
     setValue("studio-text-family", textData.family || "Sans");
     setValue("studio-text-size", textData.size ?? 48);
     setValue("studio-text-fgcolour", textData.fgcolour || "#FFFFFF");
+    setValue("studio-text-highlight-colour", textData.highlight_colour || "#FFD700");
     setValue("studio-text-olcolour", textData.olcolour || "#000000");
     setValue("studio-text-outline", textData.outline ?? 1);
     setValue("studio-text-weight", textData.weight ?? 400);
@@ -1429,6 +1430,7 @@
       family: byId("studio-text-family").value.trim() || "Sans",
       size: Math.round(numeric("studio-text-size")),
       fgcolour: byId("studio-text-fgcolour").value.trim(),
+      highlight_colour: byId("studio-text-highlight-colour").value,
       olcolour: byId("studio-text-olcolour").value.trim(),
       outline: Math.round(numeric("studio-text-outline")),
       weight: Math.round(numeric("studio-text-weight")),
@@ -1451,8 +1453,9 @@
       height_percent: numeric("studio-text-height")
     };
     const colourPattern = /^(#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?|0x[0-9a-fA-F]{8}|white|black|red|green|blue)$/i;
-    if (!colourPattern.test(textStyle.fgcolour) || !colourPattern.test(textStyle.olcolour) ||
-        !colourPattern.test(textStyle.bgcolour) || !colourPattern.test(textStyle.shadow_color)) {
+    if (!colourPattern.test(textStyle.fgcolour) || !colourPattern.test(textStyle.highlight_colour) ||
+        !colourPattern.test(textStyle.olcolour) || !colourPattern.test(textStyle.bgcolour) ||
+        !colourPattern.test(textStyle.shadow_color)) {
       throw new Error("Use a supported colour name or a hex colour such as #FFFFFF.");
     }
     if (textStyle.x_percent + textStyle.width_percent > 100 ||

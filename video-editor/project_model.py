@@ -182,6 +182,41 @@ def _validate_keyframes(value: Any, path: str, clip_duration_us: int) -> None:
                         minimum=0, maximum=1)
 
 
+def _validate_word_timings(
+    value: Any, path: str, clip_duration_us: int, content: str
+) -> None:
+    words = _array(value, path)
+    if not 1 <= len(words) <= 500:
+        raise ProjectValidationError(f"{path} must contain between 1 and 500 timed words.")
+    previous_end = 0
+    tokens: list[str] = []
+    for index, raw in enumerate(words):
+        item_path = f"{path}[{index}]"
+        item = _object(raw, item_path)
+        unknown = set(item) - {"text", "start_us", "end_us"}
+        if unknown:
+            raise ProjectValidationError(
+                f"{item_path} contains unsupported fields: {', '.join(sorted(unknown))}."
+            )
+        token = _string(item.get("text"), f"{item_path}.text", max_length=100)
+        if not token.strip() or any(character.isspace() for character in token):
+            raise ProjectValidationError(f"{item_path}.text must be one non-empty word.")
+        start_us = _integer(item.get("start_us"), f"{item_path}.start_us", minimum=0)
+        end_us = _integer(item.get("end_us"), f"{item_path}.end_us", minimum=1)
+        if end_us - start_us < 10_000:
+            raise ProjectValidationError(f"{item_path} word timing must be at least 10 milliseconds.")
+        if end_us <= start_us:
+            raise ProjectValidationError(f"{item_path}.end_us must be after start_us.")
+        if start_us < previous_end:
+            raise ProjectValidationError(f"{item_path} word timing overlaps or is out of order.")
+        if end_us > clip_duration_us:
+            raise ProjectValidationError(f"{item_path} word timing is outside the text clip.")
+        previous_end = end_us
+        tokens.append(token)
+    if " ".join(tokens) != content:
+        raise ProjectValidationError(f"{path} words must match the text content exactly.")
+
+
 def _validate_effects(value: Any, path: str) -> None:
     effects = _array(value, path)
     ids: set[str] = set()
@@ -383,7 +418,7 @@ def validate_project(document: Any) -> dict[str, Any]:
                     _integer(text_data["size"], f"{path}.text.size", minimum=8, maximum=256)
                 if "weight" in text_data:
                     _integer(text_data["weight"], f"{path}.text.weight", minimum=100, maximum=1000)
-                for colour_key in ("fgcolour", "bgcolour", "olcolour", "shadow_color"):
+                for colour_key in ("fgcolour", "highlight_colour", "bgcolour", "olcolour", "shadow_color"):
                     if colour_key in text_data:
                         colour = _string(text_data[colour_key], f"{path}.text.{colour_key}", max_length=16)
                         if not (
@@ -479,6 +514,13 @@ def validate_project(document: Any) -> dict[str, Any]:
                     raise ProjectValidationError(f"{path}.crop cannot be combined with automatic framing.")
                 _validate_crop(clip["crop"], f"{path}.crop")
             _validate_keyframes(clip.get("keyframes", []), f"{path}.keyframes", duration)
+            if "word_timings" in clip:
+                if kind != "text":
+                    raise ProjectValidationError(f"{path}.word_timings is only valid for text clips.")
+                _validate_word_timings(
+                    clip["word_timings"], f"{path}.word_timings",
+                    duration, text_data["content"],
+                )
             if kind == "text":
                 text_keyframe_limits = {
                     "position_x": (-8192, 8192), "position_y": (-8192, 8192),

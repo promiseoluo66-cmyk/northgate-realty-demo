@@ -804,7 +804,8 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                     clip.get("keyframes", []), fps_num, fps_den
                 )
                 _ffmpeg_text_transform_filters(
-                    clip.get("keyframes", []), fps_num, fps_den, 0.0
+                    clip.get("keyframes", []), fps_num, fps_den, 0.0,
+                    profile["width"], profile["height"],
                 )
                 clip_transform = None
             else:
@@ -913,6 +914,8 @@ def compile_render_plan(project_document: Any, asset_root: str | Path) -> dict[s
                 "transform": clip_transform,
                 "audio_keyframes": audio_keyframes,
                 "keyframes": clip.get("keyframes", []) if clip["kind"] == "text" else [],
+                "word_timings": clip.get("word_timings", []) if clip["kind"] == "text" else [],
+                "duration_us": clip["duration_us"],
             })
             cursor_frame = end_frame
             previous_clip_id = clip["id"]
@@ -1265,6 +1268,129 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return output_path
 
 
+def _ass_timestamp_from_us(value_us: int) -> str:
+    total_centiseconds = max(0, int(round(int(value_us) / 10_000)))
+    hours, remainder = divmod(total_centiseconds, 360_000)
+    minutes, remainder = divmod(remainder, 6_000)
+    seconds, centiseconds = divmod(remainder, 100)
+    return f"{hours}:{minutes:02d}:{seconds:02d}.{centiseconds:02d}"
+
+
+def _ass_style_colour(value: str, opacity: float) -> str:
+    colour, alpha = _ass_colour(value, opacity)
+    return f"&H{alpha[2:4]}{colour[2:-1]}&"
+
+
+def _make_karaoke_text_overlay_video(
+    text_spec: dict[str, Any],
+    word_timings: list[dict[str, Any]],
+    width: int,
+    height: int,
+    fps_num: int,
+    fps_den: int,
+    duration_frames: int,
+    duration_us: int,
+    output_path: Path,
+    text_directory: Path,
+) -> Path:
+    """Render one editable timed-word caption as a transparent ASS karaoke stream."""
+    text_directory.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    family = re.sub(r"[^A-Za-z0-9 _-]", "", str(text_spec.get("family", "Sans")))[:80] or "Sans"
+    size = int(text_spec.get("size", 48))
+    weight = int(text_spec.get("weight", 700))
+    opacity = float(text_spec.get("opacity", 1.0))
+    foreground = _ass_style_colour(text_spec.get("fgcolour", "#FFFFFF"), opacity)
+    highlight = _ass_style_colour(text_spec.get("highlight_colour", "#FFD700"), opacity)
+    outline_colour = _ass_style_colour(text_spec.get("olcolour", "#000000"), opacity)
+    background_opacity = float(text_spec.get("bgopacity", 0.45))
+    background = _ass_style_colour(
+        text_spec.get("bgcolour", "#000000"),
+        background_opacity if text_spec.get("background_fill") else 0.0,
+    )
+    outline = int(text_spec.get("outline", 0))
+    spacing = float(text_spec.get("letter_spacing_px", 0))
+    box_x = round(float(text_spec.get("x_percent", 5)) * width / 100)
+    box_y = round(float(text_spec.get("y_percent", 68)) * height / 100)
+    box_width = round(float(text_spec.get("width_percent", 90)) * width / 100)
+    box_height = round(float(text_spec.get("height_percent", 25)) * height / 100)
+    horizontal = text_spec.get("halign", text_spec.get("align", "center"))
+    vertical = text_spec.get("valign", "middle")
+    anchor = {"left": 7, "center": 8, "right": 9}.get(horizontal, 8)
+    x = box_x if horizontal == "left" else box_x + box_width // 2 if horizontal == "center" else box_x + box_width
+    y = box_y if vertical == "top" else box_y + box_height // 2 if vertical == "middle" else box_y + box_height
+    bold = 1 if weight >= 600 else 0
+    italic = 1 if text_spec.get("style") == "italic" else 0
+    underline = 1 if text_spec.get("underline") else 0
+    strike = 1 if text_spec.get("strikethrough") else 0
+    border_style = 3 if text_spec.get("background_fill") else 1
+    border_width = int(text_spec.get("pad", 12)) if border_style == 3 else outline
+    shadow = max(abs(int(text_spec.get("shadow_x", 0))), abs(int(text_spec.get("shadow_y", 0))))
+
+    script = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {width}
+PlayResY: {height}
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,{family},{size},{highlight},{foreground},{outline_colour},{background},{bold},{italic},{underline},{strike},100,100,{spacing:.2f},0,{border_style},{border_width},{shadow},{anchor},0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    event_parts = [
+        f"{{\\an{anchor}\\pos({x},{y})\\fn{family}\\fs{size}"
+        f"\\b{bold}\\i{italic}\\u{underline}\\s{strike}\\fsp{spacing:.2f}"
+        f"\\bord{outline}\\3c{outline_colour}\\xshad{int(text_spec.get('shadow_x', 0))}"
+        f"\\yshad{int(text_spec.get('shadow_y', 0))}}}"
+    ]
+    cursor_centiseconds = 0
+    for word in word_timings:
+        start_centiseconds = int(round(int(word["start_us"]) / 10_000))
+        end_centiseconds = int(round(int(word["end_us"]) / 10_000))
+        gap_centiseconds = max(0, start_centiseconds - cursor_centiseconds)
+        if gap_centiseconds:
+            event_parts.append(f"{{\\k{gap_centiseconds}}} ")
+        word_centiseconds = max(1, end_centiseconds - start_centiseconds)
+        event_parts.append(
+            f"{{\\kf{word_centiseconds}}}{_ass_escape_text(str(word['text']))}"
+        )
+        event_parts.append(" ")
+        cursor_centiseconds = max(cursor_centiseconds, end_centiseconds)
+    event_end_centiseconds = max(1, int(round(int(duration_us) / 10_000)))
+    if event_end_centiseconds > cursor_centiseconds:
+        event_parts.append(f"{{\\k{event_end_centiseconds - cursor_centiseconds}}} ")
+    event_text = "".join(event_parts)
+    dialogue = (
+        f"Dialogue: 0,0:00:00.00,{_ass_timestamp_from_us(duration_us)},"
+        f"Default,,0,0,0,,{event_text}"
+    )
+    ass_path = text_directory / f"{output_path.stem}.ass"
+    ass_path.write_text(script + dialogue + "\n", encoding="utf-8")
+    ass_file = str(ass_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    duration_seconds = duration_frames * fps_den / fps_num
+    canvas_source = (
+        f"color=c=black@0.0:s={width}x{height}:"
+        f"r={fps_num}/{fps_den}:d={duration_seconds:.9f},format=rgba"
+    )
+    command = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "lavfi", "-i", canvas_source,
+        "-vf", f"ass=filename='{ass_file}':alpha=1",
+        "-frames:v", str(duration_frames),
+        "-an", "-c:v", "qtrle", "-pix_fmt", "argb", str(output_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0 or not output_path.is_file() or output_path.stat().st_size == 0:
+        raise MltRenderError(
+            "FFmpeg could not render the timed karaoke overlay. Check that the worker's FFmpeg build includes libass."
+        )
+    return output_path
+
+
 def _make_text_overlay_image(
     text_spec: dict[str, Any],
     width: int,
@@ -1512,12 +1638,24 @@ def _ffmpeg_text_transform_filters(
     fps_num: int,
     fps_den: int,
     clip_start_seconds: float,
+    width: int,
+    height: int,
 ) -> tuple[list[str], str, str]:
     """Compile text position/scale/rotation keyframes for the FFmpeg overlay pass."""
     local_time = f"(t-{float(clip_start_seconds):.9f})"
     filters: list[str] = []
     has_scale = any(item["property"] in {"scale_x", "scale_y"} for item in keyframes)
     if has_scale:
+        scale_x_values = [1.0] + [
+            float(item["value"]) for item in keyframes if item["property"] == "scale_x"
+        ]
+        scale_y_values = [1.0] + [
+            float(item["value"]) for item in keyframes if item["property"] == "scale_y"
+        ]
+        maximum_width = width * max(scale_x_values)
+        maximum_height = height * max(scale_y_values)
+        if maximum_width > 8192 or maximum_height > 8192:
+            raise MltRenderError("Animated text scale would exceed the 8192-pixel render safety limit.")
         scale_x = _ffmpeg_expression_for_keyframes(keyframes, "scale_x", 1.0, local_time)
         scale_y = _ffmpeg_expression_for_keyframes(keyframes, "scale_y", 1.0, local_time)
         filters.append(
@@ -1527,9 +1665,19 @@ def _ffmpeg_text_transform_filters(
         rotation = _ffmpeg_expression_for_keyframes(
             keyframes, "rotation_deg", 0.0, local_time
         )
+        maximum_width = width * max(
+            [1.0] + [float(item["value"]) for item in keyframes if item["property"] == "scale_x"]
+        )
+        maximum_height = height * max(
+            [1.0] + [float(item["value"]) for item in keyframes if item["property"] == "scale_y"]
+        )
+        if math.hypot(maximum_width, maximum_height) > 8192:
+            raise MltRenderError("Animated text rotation would exceed the 8192-pixel render safety limit.")
+        # rotate evaluates output dimensions only once, so use the full diagonal
+        # to avoid clipping at intermediate angles.
         filters.append(
             f"rotate=angle='({rotation})*PI/180':"
-            "ow='rotw(iw)':oh='roth(ih)':c=black@0"
+            "ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=black@0"
         )
     position_x = _ffmpeg_expression_for_keyframes(
         keyframes, "position_x", 0.0, local_time
@@ -1554,10 +1702,13 @@ def _apply_text_overlay_images_ffmpeg(
     previous = "[0:v]"
 
     for index, overlay in enumerate(overlays, start=1):
-        inputs.extend([
-            "-loop", "1", "-framerate", f"{fps_num}/{fps_den}",
-            "-i", str(overlay["path"]),
-        ])
+        if overlay.get("kind") == "karaoke":
+            inputs.extend(["-i", str(overlay["path"])])
+        else:
+            inputs.extend([
+                "-loop", "1", "-framerate", f"{fps_num}/{fps_den}",
+                "-i", str(overlay["path"]),
+            ])
         start = overlay["start_frame"] * fps_den / fps_num
         end = (overlay["start_frame"] + overlay["duration_frames"]) * fps_den / fps_num
         # Escape commas inside the enable expression for the filtergraph parser.
@@ -1570,18 +1721,24 @@ def _apply_text_overlay_images_ffmpeg(
             if keyframes else []
         )
         transform_filters, overlay_x, overlay_y = (
-            _ffmpeg_text_transform_filters(keyframes, fps_num, fps_den, start)
-            if overlay.get("kind") == "text" and keyframes
+            _ffmpeg_text_transform_filters(
+                keyframes, fps_num, fps_den, start,
+                int(plan["width"]), int(plan["height"]),
+            )
+            if overlay.get("kind") in {"text", "karaoke"} and keyframes
             else ([], "0", "0")
         )
-        if opacity_filters or transform_filters or (
+        is_karaoke_video = overlay.get("kind") == "karaoke"
+        if opacity_filters or transform_filters or is_karaoke_video or (
             overlay.get("kind") == "text"
             and any(item["property"] in {"position_x", "position_y"} for item in keyframes)
         ):
-            chain = (
-                f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB)+{start:.9f}/TB,"
-                "format=yuva444p"
+            input_pts = (
+                f"PTS-STARTPTS+{start:.9f}/TB"
+                if is_karaoke_video
+                else f"N*{fps_den}/({fps_num}*TB)+{start:.9f}/TB"
             )
+            chain = f"[{index}:v]setpts={input_pts},format=yuva444p"
             if opacity_filters:
                 chain += "," + ",".join(opacity_filters)
             chain += f",format=rgba,scale={int(plan['width'])}:{int(plan['height'])},format=rgba"
@@ -1851,6 +2008,24 @@ def render_project(
     for index, text_clip in enumerate(
         sorted(text_track_clips, key=lambda item: (item["track_order"], item["start_frame"]))
     ):
+        if text_clip.get("word_timings"):
+            karaoke_video = text_directory / f"karaoke-{index:04d}.mov"
+            _make_karaoke_text_overlay_video(
+                text_clip["text"], text_clip["word_timings"],
+                plan["width"], plan["height"],
+                plan["fps_num"], plan["fps_den"],
+                text_clip["duration_frames"], text_clip["duration_us"],
+                karaoke_video, text_directory,
+            )
+            visual_overlays.append({
+                "path": karaoke_video,
+                "kind": "karaoke",
+                "start_frame": text_clip["start_frame"],
+                "duration_frames": text_clip["duration_frames"],
+                "track_order": text_clip["track_order"],
+                "keyframes": text_clip.get("keyframes", []),
+            })
+            continue
         title_image = text_directory / f"title-{index:04d}.png"
         _make_text_overlay_image(
             text_clip["text"],

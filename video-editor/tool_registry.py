@@ -72,6 +72,7 @@ _TEXT_STYLE_SCHEMA = {
         "size": _field("integer", minimum=8, maximum=256),
         "weight": _field("integer", minimum=100, maximum=1000),
         "fgcolour": _field("string", max_length=16),
+        "highlight_colour": _field("string", max_length=16),
         "bgcolour": _field("string", max_length=16),
         "bgopacity": _field("number", minimum=0, maximum=1),
         "background_fill": _field("boolean"),
@@ -334,9 +335,10 @@ TOOL_DEFINITIONS = (
     ),
     ToolDefinition(
         "captions.add_word_timed", "captions",
-        "Create sequential word-synchronised caption clips from a supplied transcript and verified word start/end timestamps. This tool does not transcribe audio.",
+        "Create sequential word-synchronised caption clips or one ASS karaoke caption from supplied transcript words and verified start/end timestamps. This tool does not transcribe audio.",
         _schema({
             "track_id": _field("string", max_length=64),
+            "mode": _field("string", choices=("sequential", "karaoke")),
             "words": _field("array", nested={
                 "minItems": 1,
                 "maxItems": 500,

@@ -269,6 +269,8 @@ test("Stage 2 Task 2.1 exposes selected-caption editing and SRT/VTT sidecar expo
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(html, /caption_io\.js/);
   assert.match(studioScript, /text\.update_clip/);
+  assert.match(studioScript, /highlight_colour: byId\("studio-text-highlight-colour"\)/);
+  assert.match(studioScript, /textData\.highlight_colour/);
   assert.match(studioScript, /captionIO\.exportSubtitleTrack/);
   assert.match(studioScript, /studio-text-content/);
 });
