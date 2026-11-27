@@ -291,7 +291,7 @@
       "features": [
         [
           "manual_subtitles",
-          "SRT/VTT subtitle import and export, selected text-clip correction through the Studio and existing revision-checked text operation, and generated-media rendering are offline-verified. Speech recognition, transcript-driven cuts and full advanced caption controls remain pending.",
+          "SRT/VTT subtitle import/export, selected text-clip correction, transcript-driven word cuts and measured-silence review with individual approval are offline-verified; automatic speech recognition and advanced caption animation remain pending.",
           "prototype_verified"
         ],
         [
@@ -331,7 +331,7 @@
         ],
         [
           "transcript_driven_editing",
-          "A timed transcript can be searched, and an inclusive word range can be previewed against one selected source clip then applied after explicit confirmation with a single undoable split/ripple-delete transaction. Pause/filler detection, corrected-script assembly and automatic multi-track A/V synchronisation remain pending.",
+          "Timed transcript search and inclusive word-range cuts are previewed against one selected source clip and applied only after explicit confirmation. Measured silence between adjacent words can also be reviewed and individually approved after fresh audio remeasurement. Multi-track A/V synchronisation and filler-word recognition remain pending.",
           "prototype_verified"
         ]
       ]
@@ -420,7 +420,7 @@
         ],
         [
           "silence_filler_detect",
-          "Technical silence intervals are measured; filler-word recognition, reviewed cut lists and automatic transcript-aware cleanup are not implemented.",
+          "FFmpeg measures technical silence intervals; transcript-aware review returns candidates between adjacent words and supports individually approved, freshly remeasured cuts. Filler-word recognition and automatic multi-track cleanup remain unimplemented.",
           "partially_implemented"
         ],
         [
@@ -805,5 +805,24 @@
         "pause and filler review are separate pending work"
       ]
     }
+  },
+  "stage2_task_2_4": {
+    "status": "offline_ci_passed",
+    "workflow_run_id": 46000233242,
+    "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46000233242",
+    "commit": "c8bb6b24835a188f689aaf111b84ba7aa9440039",
+    "python_tests_passed": 314,
+    "node_tests_passed": 69,
+    "node_tests_failed": 0,
+    "d1_migrations": "passed",
+    "silence_review_and_fresh_remeasurement": "passed",
+    "real_mlt_silence_cut_render": "passed",
+    "source_media_preservation": "byte_for_byte_verified",
+    "worker_deployment_and_android_acceptance": "not_performed",
+    "limitations": [
+      "one selected source clip and its track only",
+      "no automatic multi-track audio/video synchronisation",
+      "no filler-word recognition"
+    ]
   }
 }

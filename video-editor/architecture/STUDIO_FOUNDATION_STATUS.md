@@ -191,3 +191,19 @@ No automatic transcription, hosted Worker deployment or Android usability test w
 **GitHub Actions evidence:** run #45986714784 passed on commit `25c1b4cf240f36c4ead03a0975f9d22b1509c71d`: 304 Python tests, 64 Node tests, 0 Node failures and all checked-in D1 migrations passed.
 
 **Current limitation:** the operation edits one selected clip and ripple-shifts later clips on that track only. It does not automatically cut and synchronise corresponding audio/video clips on other tracks. Pause/filler detection, transcript text correction and a full Studio transcript-selection interface remain future tasks.
+
+
+### Task 2.4 — measured silence review and approval-gated cuts
+
+**Offline implementation and CI accepted on `video-editor-lab`.**
+
+- Added read-only `transcript.review_silence` using the existing FFmpeg analyser. The requested minimum duration is applied to the actual silence detector.
+- Candidate results include measured source and timeline bounds, adjacent transcript words, duration, scan coverage and safety blockers. Silence is explicitly not classified as a filler word.
+- Added `transcript.apply_silence_cut` with explicit confirmation, optimistic revision checks and fresh audio remeasurement immediately before the cut.
+- A valid cut uses an atomic split/ripple-delete transaction and supports undo/redo. Unsafe clips (locked track, linked group, keyframes, transition, source-range mismatch or same-track overlap) are rejected. The source file and transcript are preserved.
+- Added a Worker analysis-only job that returns candidates through D1 without triggering a video render, plus individual approval controls in the responsive Studio.
+- Worker confirmation checks now include both transcript word cuts and measured silence cuts.
+
+**GitHub Actions evidence:** run #46000233242 passed on commit `c8bb6b24835a188f689aaf111b84ba7aa9440039`: 314 Python tests, 69 Node tests, 0 Node failures and all checked-in D1 migrations passed. A real MLT integration test verified the shortened output duration and decoded the expected 880 Hz audio after the cut; the original source media remained byte-for-byte unchanged.
+
+This is offline/code acceptance only. No Worker deployment, live private Release upload or Android usability test was performed. Multi-track A/V synchronisation and filler-word recognition remain open.

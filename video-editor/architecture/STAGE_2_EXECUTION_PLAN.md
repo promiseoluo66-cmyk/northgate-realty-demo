@@ -17,7 +17,7 @@ A feature is complete only after its data contract, permission and validation ru
 | 2.1 | `manual_subtitles`, `subtitle_import_export` | Edit existing caption text in Studio; import/export SRT/VTT; preserve cue text/timestamps to millisecond precision; reject malformed, overlapping and oversized cues; verify real MLT rendered edits. Reuse `captions.import_subtitles` and `text.update_clip`. | **Offline CI accepted** — run #45983414095 (276 Python, 64 Node, D1 migrations; real MLT caption render passed). Hosted/Android acceptance remains separate. |
 | 2.2 | `word_timing` | Define validated source-linked transcript records with word text, start/end timestamps and optional speaker/confidence; ingest user-supplied timing; exact phrase search; map matches to timeline clips at constant speed and flag animated-speed mappings as unsupported. | **Offline CI accepted** — run #45985231376 (296 Python, 64 Node, D1 migrations passed). Hosted/Android acceptance remains separate. |
 | 2.3 | `transcript_driven_editing` | Select inclusive timed word ranges on one chosen source clip; preview exact source/timeline range; apply only after explicit confirmation through an atomic split+ripple-delete transaction with undo/redo. Refuses keyframes, linked groups, transitions, locked tracks and overlapping clips. Limitation: one selected clip and its track; automatic multi-track A/V sync and pause/filler removal remain open. | **Offline CI accepted** — run #45986714784 (304 Python, 64 Node, D1 migrations passed). |
-| 2.4 | `transcript_driven_editing` | Combine transcript timing with measured silence candidates; never label technical silence as a filler word; show before/after timing in a reviewable cut list. | Planned |
+| 2.4 | `transcript_driven_editing` | Combine transcript timing with measured silence candidates; never label technical silence as a filler word; show source/timeline bounds and adjacent words; apply only one freshly remeasured cut after explicit approval. | **Offline CI accepted** — run #46000233242 (314 Python, 69 Node, 0 Node failures, D1 migrations and real MLT silence-cut render passed). |
 | 2.5 | `auto_captions` | Evaluate local/free speech-to-text runtimes, licences, model size/download, runner/mobile fit, compute and retention. Enable only after a genuinely $0 route passes real-footage timing tests; otherwise remain visibly gated. | Gated pending evidence |
 | 2.6 | `text_style` | Add validated typography, background, shadow and spacing settings; render generated frame fixtures for every supported control. | Planned |
 | 2.7 | `text_animation`, `caption_animations`, `karaoke_lyrics` | Add entrance/exit/loop and word-highlight animation through the canonical timing model; render boundary frames and verify timing. | Planned |
@@ -51,3 +51,19 @@ A feature is complete only after its data contract, permission and validation ru
 **Non-goals:** no speech-to-text; no translation/TTS; no duplicate caption edit tool; no Worker deployment, live media upload or public Release.
 
 **Completion evidence:** update this ledger and capability catalogue only after the relevant GitHub Actions run passes. Android/hosted acceptance is separate and must not be claimed without an authorized real test.
+
+
+## Task 2.4 — measured silence review and approval-gated cuts
+
+**Offline implementation and CI accepted on `video-editor-lab`.**
+
+- Added read-only `transcript.review_silence`. It uses the existing FFmpeg/FFprobe audio analyser, with the requested minimum silence duration applied to the actual `silencedetect` filter.
+- Review returns only measured silence intervals wholly between adjacent timed transcript words. Each candidate includes source and timeline bounds, measured duration, adjacent words, scan coverage, blockers and a `not_evaluated` semantic assessment. It never calls silence a filler word.
+- Added `transcript.apply_silence_cut`, which requires explicit confirmation, a current project revision and a fresh measurement that still covers the exact requested interval.
+- The cut uses one atomic split/ripple-delete transaction. Locked tracks, linked groups, keyframed clips, transitions, source-range errors and same-track overlaps block the cut. Source media and transcript words remain unchanged; undo/redo restore the edit as separate revisions.
+- Added a Worker analysis-only job path. It returns measured candidates through D1 without rendering a new video. Worker confirmation rules now include transcript word cuts and silence cuts.
+- Added mobile Studio controls to select a timed transcript, set scan/threshold/minimum values, inspect each candidate and approve cuts individually.
+
+**GitHub Actions evidence:** run #46000233242 passed on commit `c8bb6b24835a188f689aaf111b84ba7aa9440039`: 314 Python tests, 69 Node tests, 0 Node failures and all checked-in D1 migrations passed. The real MLT integration test generated a video with a 500 ms silent section, reviewed and cut it, rendered the edited project, verified the shorter duration and decoded the expected post-cut 880 Hz audio segment. The original source file was byte-for-byte unchanged.
+
+No Worker deployment, live private Release upload or Android usability test was performed. Multi-track A/V synchronisation and filler-word recognition remain outside this task.

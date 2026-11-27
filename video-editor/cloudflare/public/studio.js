@@ -1208,7 +1208,9 @@
       const detail = element("p", "hint",
         "Between “" + candidate.adjacent_words.before + "” and “" +
         candidate.adjacent_words.after + "” · " +
-        (Number(candidate.measured_duration_us || 0) / 1000).toFixed(0) + " ms");
+        (Number(candidate.measured_duration_us || 0) / 1000).toFixed(0) + " ms · timeline " +
+        formatTime(candidate.timeline_cut_start_us) + "–" +
+        formatTime(candidate.timeline_cut_end_us));
       const assessment = element("p", "hint",
         "Semantic assessment: " + String(candidate.semantic_assessment || "not_evaluated") +
         ". This does not decide whether the pause is unwanted.");
@@ -1221,9 +1223,9 @@
       approve.type = "button";
       approve.disabled = !candidate.can_apply;
       approve.addEventListener("click", async () => {
-        const seconds = Number(byId("studio-silence-analysis-seconds")?.value || 600);
-        const threshold = Number(byId("studio-silence-threshold")?.value || -50);
-        const minimumUs = Math.round(Number(byId("studio-silence-minimum-ms")?.value || 100) * 1000);
+        const seconds = Number(payload.analysis_seconds || 600);
+        const threshold = Number(payload.silence_threshold_db ?? -50);
+        const minimumUs = Number(payload.minimum_silence_us || 100000);
         const question = "Remove only the measured " +
           (Number(candidate.measured_duration_us || 0) / 1000).toFixed(0) +
           " ms silence between “" + candidate.adjacent_words.before + "” and “" +

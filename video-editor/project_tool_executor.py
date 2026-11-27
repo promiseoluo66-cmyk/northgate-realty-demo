@@ -1128,6 +1128,7 @@ class ProjectToolExecutor:
                 "transcript_id": transcript["id"],
                 "source_media_id": transcript["source_media_id"],
                 "clip_id": args["clip_id"],
+                "analysis_seconds": int(args["analysis_seconds"]),
                 "silence_threshold_db": float(args["silence_threshold_db"]),
                 "minimum_silence_us": minimum_silence_us,
                 "analysis_coverage_seconds": analysis.get("analysis_coverage_seconds", 0),
