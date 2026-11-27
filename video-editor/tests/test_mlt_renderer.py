@@ -1445,8 +1445,14 @@ class AdvancedTextOverlayTests(unittest.TestCase):
             shadow_color="#000000", shadow_opacity=1, shadow_blur=3,
         )
         self.assertNotEqual(with_shadow, blurred_shadow)
-        visible_pixels = lambda raw: sum(1 for offset in range(3, len(raw), 4) if raw[offset] > 0)
-        self.assertGreater(visible_pixels(blurred_shadow), visible_pixels(with_shadow))
+        ass_script = (self.root / "blurred-shadow.ass").read_text(encoding="utf-8")
+        self.assertEqual(ass_script.count(r"\\blur3.00"), 1)
+        self.assertIn(r"\\1a&HFF&\\3a&HFF&", ass_script)
+        self.assertIn(r"\\4a&HFF&", ass_script)
+        for y in range(24, 28):
+            for x in range(32, 40):
+                offset = (y * 320 + x) * 4
+                self.assertEqual(with_shadow[offset:offset + 4], blurred_shadow[offset:offset + 4])
 
         normal_weight = self.render("normal-weight", content="BOLD", weight=400)
         bold_weight = self.render("bold-weight", content="BOLD", weight=700)
