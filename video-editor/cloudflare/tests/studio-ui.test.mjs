@@ -305,6 +305,12 @@ test("Studio exposes expanded editable title styling controls", () => {
 });
 
 
+test("Text clips expose only the supported opacity keyframe property and fade presets", () => {
+  assert.match(studioScript, /option\.disabled = clip\.kind === "text" && option\.value !== "opacity"/);
+  assert.match(studioScript, /\["video","image","text"\]\.includes\(clip\.kind\)/);
+  assert.match(studioScript, /fade_in/);
+});
+
 test("Expanded text shadow blur is loaded and saved through the existing text update operation", () => {
   assert.match(html, /id="studio-text-shadow-blur" type="number" min="0" max="10"/);
   assert.match(studioScript, /setValue\("studio-text-shadow-blur", textData\.shadow_blur \?\? 0\)/);
