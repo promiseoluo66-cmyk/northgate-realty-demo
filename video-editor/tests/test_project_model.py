@@ -392,6 +392,36 @@ def test_legacy_project_without_transcripts_remains_unchanged():
     assert "transcripts" not in validated
 
 
+def test_text_karaoke_clip_accepts_local_word_timings_and_highlight_colour():
+    project = sample_project()
+    clip = project["tracks"][2]["clips"][0]
+    clip["duration_us"] = 800_000
+    clip["text"] = {"content": "HELLO WORLD", "highlight_colour": "#FFD700"}
+    clip["word_timings"] = [
+        {"text": "HELLO", "start_us": 0, "end_us": 350_000},
+        {"text": "WORLD", "start_us": 400_000, "end_us": 800_000},
+    ]
+    validated = validate_project(project)
+    assert validated["tracks"][2]["clips"][0]["word_timings"] == clip["word_timings"]
+
+
+def test_text_karaoke_rejects_word_timings_outside_clip_and_mismatched_text():
+    project = sample_project()
+    clip = project["tracks"][2]["clips"][0]
+    clip["duration_us"] = 800_000
+    clip["text"] = {"content": "HELLO WORLD", "highlight_colour": "#FFD700"}
+    clip["word_timings"] = [
+        {"text": "HELLO", "start_us": 0, "end_us": 350_000},
+        {"text": "WORLD", "start_us": 400_000, "end_us": 900_000},
+    ]
+    with pytest.raises(ProjectValidationError, match="word timing"):
+        validate_project(project)
+    clip["word_timings"][1]["end_us"] = 800_000
+    clip["text"]["content"] = "HELLO OTHER"
+    with pytest.raises(ProjectValidationError, match="match the text content"):
+        validate_project(project)
+
+
 def test_transcript_requires_existing_audio_or_video_source_asset():
     project = sample_project()
     project["transcripts"] = [{
