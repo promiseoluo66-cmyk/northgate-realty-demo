@@ -266,6 +266,60 @@ def validate_project(document: Any) -> dict[str, Any]:
                 _number(sample, f"{path}.waveform.samples[{sample_index}]", minimum=0, maximum=1)
         assets[asset_id] = asset
 
+    transcripts = _array(project.get("transcripts", []), "project.transcripts")
+    if len(transcripts) > 100:
+        raise ProjectValidationError("project.transcripts must contain at most 100 transcripts.")
+    transcript_ids: set[str] = set()
+    project_word_count = 0
+    project_transcript_characters = 0
+    for transcript_index, raw_transcript in enumerate(transcripts):
+        path = f"project.transcripts[{transcript_index}]"
+        transcript = _object(raw_transcript, path)
+        transcript_id = _identifier(transcript.get("id"), f"{path}.id")
+        if transcript_id in transcript_ids:
+            raise ProjectValidationError(f"{path}.id is duplicated.")
+        transcript_ids.add(transcript_id)
+        _string(transcript.get("name", "Transcript"), f"{path}.name", max_length=120)
+        source_media_id = _identifier(transcript.get("source_media_id"), f"{path}.source_media_id")
+        if source_media_id not in assets:
+            raise ProjectValidationError(f"{path}.source_media_id does not exist.")
+        source_asset = assets[source_media_id]
+        if source_asset.get("media_type") not in {"video", "audio"}:
+            raise ProjectValidationError(f"{path}.source_media_id must reference video or audio media.")
+        language = _string(transcript.get("language", "und"), f"{path}.language", max_length=35)
+        if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", language):
+            raise ProjectValidationError(f"{path}.language must be a valid short language tag such as en or en-US.")
+        words = _array(transcript.get("words"), f"{path}.words")
+        if not 1 <= len(words) <= 20000:
+            raise ProjectValidationError(f"{path}.words must contain 1 to 20000 timed words.")
+        project_word_count += len(words)
+        if project_word_count > 100000:
+            raise ProjectValidationError("Project transcripts exceed the 100,000-word limit.")
+        previous_start = -1
+        source_duration = source_asset.get("duration_us")
+        for word_index, raw_word in enumerate(words):
+            word_path = f"{path}.words[{word_index}]"
+            word = _object(raw_word, word_path)
+            word_text = _string(word.get("text"), f"{word_path}.text", max_length=100)
+            if not any(character.isalnum() for character in word_text):
+                raise ProjectValidationError(f"{word_path}.text must contain a word or spoken token.")
+            start_us = _integer(word.get("start_us"), f"{word_path}.start_us", maximum=2**53 - 1)
+            end_us = _integer(word.get("end_us"), f"{word_path}.end_us", minimum=1, maximum=2**53 - 1)
+            if end_us <= start_us:
+                raise ProjectValidationError(f"{word_path}.end_us must be after start_us.")
+            if start_us < previous_start:
+                raise ProjectValidationError(f"{path}.words must be ordered by source start time.")
+            if source_duration is not None and end_us > int(source_duration):
+                raise ProjectValidationError(f"{word_path}.end_us exceeds the source media duration.")
+            previous_start = start_us
+            project_transcript_characters += len(word_text)
+            if project_transcript_characters > 1000000:
+                raise ProjectValidationError("Project transcript text exceeds the 1,000,000-character limit.")
+            if "speaker_id" in word:
+                _identifier(word["speaker_id"], f"{word_path}.speaker_id")
+            if "confidence" in word:
+                _number(word["confidence"], f"{word_path}.confidence", minimum=0, maximum=1)
+
     tracks: dict[str, dict[str, Any]] = {}
     track_orders: set[int] = set()
     clips: dict[str, dict[str, Any]] = {}
