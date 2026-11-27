@@ -582,6 +582,13 @@
     setValue("keyframe-time", keyframeTime / 1000000);
     const setDisabled = (id, value) => { if (byId(id)) byId(id).disabled = value; };
     const visual = ["video", "image"].includes(clip.kind);
+    const keyframeProperty = byId("keyframe-property");
+    if (keyframeProperty) {
+      Array.from(keyframeProperty.options).forEach((option) => {
+        option.disabled = clip.kind === "text" && option.value !== "opacity";
+      });
+      if (clip.kind === "text") keyframeProperty.value = "opacity";
+    }
     ["clip-crop-x", "clip-crop-y", "clip-crop-width", "clip-crop-height",
       "studio-apply-crop", "studio-reset-crop"].forEach((id) => setDisabled(id, !visual));
     setDisabled("clip-framing", !visual);
@@ -1668,7 +1675,7 @@
       }});
     };
     if(preset==="fade_in"||preset==="fade_out"){
-      if(!["video","image"].includes(clip.kind))throw new Error("Fade presets require a video or image clip.");
+      if(!["video","image","text"].includes(clip.kind))throw new Error("Fade presets require a visual or text clip.");
       if(preset==="fade_in"){
         add("opacity",0,0,"ease_out");add("opacity",windowUs,1,"ease_out");
       }else{
