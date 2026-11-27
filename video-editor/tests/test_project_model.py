@@ -471,7 +471,7 @@ def test_transcript_rejects_duplicate_ids_invalid_confidence_and_unknown_fields(
         **valid_item,
         "words": [{"text": "Hello", "start_us": 0, "end_us": 100_000, "unexpected": True}],
     }]
-    with pytest.raises(ProjectValidationError, match="unexpected"):
+    with pytest.raises(ProjectValidationError, match="unsupported fields"):
         validate_project(project)
 
 
