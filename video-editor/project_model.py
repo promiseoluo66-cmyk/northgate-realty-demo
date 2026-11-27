@@ -275,6 +275,8 @@ def validate_project(document: Any) -> dict[str, Any]:
     for transcript_index, raw_transcript in enumerate(transcripts):
         path = f"project.transcripts[{transcript_index}]"
         transcript = _object(raw_transcript, path)
+        if set(transcript) - {"id", "name", "source_media_id", "language", "words"}:
+            raise ProjectValidationError(f"{path} contains unsupported fields.")
         transcript_id = _identifier(transcript.get("id"), f"{path}.id")
         if transcript_id in transcript_ids:
             raise ProjectValidationError(f"{path}.id is duplicated.")
@@ -300,6 +302,8 @@ def validate_project(document: Any) -> dict[str, Any]:
         for word_index, raw_word in enumerate(words):
             word_path = f"{path}.words[{word_index}]"
             word = _object(raw_word, word_path)
+            if set(word) - {"text", "start_us", "end_us", "speaker_id", "confidence"}:
+                raise ProjectValidationError(f"{word_path} contains unsupported fields.")
             word_text = _string(word.get("text"), f"{word_path}.text", max_length=100)
             if not any(character.isalnum() for character in word_text):
                 raise ProjectValidationError(f"{word_path}.text must contain a word or spoken token.")

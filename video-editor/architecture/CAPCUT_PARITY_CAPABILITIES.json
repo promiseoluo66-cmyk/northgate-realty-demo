@@ -729,7 +729,7 @@
     "base_commit": "38bb9f5bde89191bda1a48a27aa99b4e47d0e6da",
     "registered_tool_count": 34,
     "registered_tool_names_are_unique": true,
-    "scope_note": "The 112 CapCut-style entries were retained and six missing cross-repository capabilities were added: transcript-driven editing, audio synchronisation, technical quality inspection, visual review evidence, reference matching and workflow quality receipts. The Stage 1 Studio implementation extends the 34-tool Stable baseline to 52 unique registered operations.",
+    "scope_note": "The 118 CapCut-style entries were retained and six missing cross-repository capabilities were added. The Stage 1 Studio implementation extended the 34-tool Stable baseline to 52 unique operations; Stage 2 Task 2.2 currently adds two more registered operations for source-linked timed transcript import and exact phrase search (54 total).",
     "status_definitions": {
       "prototype_verified": "A limited supported subset has passed the relevant generated-media/render or integration assertions. This is not full feature-family parity.",
       "partially_implemented": "A real tool, API or engine path exists, but important parts of the broader capability are still absent.",
@@ -771,6 +771,8 @@
       "d1_migrations": "passed",
       "rendered_caption_integration": "passed",
       "hosted_worker_and_android_acceptance": "not_performed"
-    }
+    },
+    "stage2_registered_tool_count": 54,
+    "stage2_registered_tool_names_are_unique": true
   }
 }

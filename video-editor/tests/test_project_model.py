@@ -460,14 +460,17 @@ def test_transcript_rejects_duplicate_ids_invalid_confidence_and_unknown_fields(
     project["transcripts"] = [item, copy.deepcopy(item)]
     with pytest.raises(ProjectValidationError, match="confidence"):
         validate_project(project)
-    project["transcripts"] = [item, {**copy.deepcopy(item), "words": [
+    valid_item = copy.deepcopy(item)
+    valid_item["words"][0]["confidence"] = 0.9
+    project["transcripts"] = [valid_item, {**copy.deepcopy(valid_item), "words": [
         {"text": "Again", "start_us": 100_000, "end_us": 200_000}
     ]}]
     with pytest.raises(ProjectValidationError, match="id is duplicated"):
         validate_project(project)
-    project["transcripts"] = [{**copy.deepcopy(item), "words": [
-        {"text": "Hello", "start_us": 0, "end_us": 100_000, "unexpected": True}
-    ]}]
+    project["transcripts"] = [{
+        **valid_item,
+        "words": [{"text": "Hello", "start_us": 0, "end_us": 100_000, "unexpected": True}],
+    }]
     with pytest.raises(ProjectValidationError, match="unexpected"):
         validate_project(project)
 
@@ -492,4 +495,15 @@ def test_transcript_enforces_project_and_per_transcript_word_limits():
         for index in range(101)
     ]
     with pytest.raises(ProjectValidationError, match="at most 100"):
+        validate_project(project)
+
+
+def test_transcript_rejects_unknown_top_level_fields():
+    project = sample_project()
+    project["transcripts"] = [{
+        "id": "transcript-main", "source_media_id": "asset-video",
+        "language": "en", "words": [{"text": "Hi", "start_us": 0, "end_us": 100_000}],
+        "remote_url": "https://example.invalid/transcript.json",
+    }]
+    with pytest.raises(ProjectValidationError, match="unsupported fields"):
         validate_project(project)

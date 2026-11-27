@@ -2,7 +2,9 @@
 
 import unittest
 
+from project_model import ProjectValidationError
 from project_tool_executor import (
+    ProjectRevisionConflict,
     ProjectToolExecutionError,
     ProjectToolExecutor,
 )
@@ -1072,7 +1074,7 @@ class TimedTranscriptTests(unittest.TestCase):
             {"text": "red,", "start_us": 300_000, "end_us": 500_000},
             {"text": "fox", "start_us": 500_000, "end_us": 800_000},
             {"text": "there", "start_us": 1_000_000, "end_us": 1_250_000},
-            {"text": "redder", "start_us": 1_500_000, "end_us": 1_800_000},
+            {"text": "red.", "start_us": 1_500_000, "end_us": 1_800_000},
         ]
 
     def import_words(self, words=None, **extra):
@@ -1139,7 +1141,7 @@ class TimedTranscriptTests(unittest.TestCase):
         partial = self.executor.execute("transcript.search", {
             "transcript_id": transcript_id, "query": "he",
         })["results"][0]["result"]
-        self.assertEqual(exact["match_count"], 1)
+        self.assertEqual(exact["match_count"], 2)
         self.assertEqual(exact["matches"][0]["text"], "red,")
         self.assertEqual(partial["match_count"], 0)
 
@@ -1237,7 +1239,7 @@ class TimedTranscriptTests(unittest.TestCase):
                 "words": [{"text": "x", "start_us": 0, "end_us": 100_000}],
             })
         before_revision = self.executor.revision
-        with self.assertRaises(Exception):
+        with self.assertRaises(ProjectValidationError):
             self.import_words([
                 {"text": "later", "start_us": 500_000, "end_us": 700_000},
                 {"text": "earlier", "start_us": 100_000, "end_us": 300_000},
@@ -1246,7 +1248,7 @@ class TimedTranscriptTests(unittest.TestCase):
         self.assertEqual(self.executor.get_project().get("transcripts", []), [])
 
     def test_transcript_import_rejects_stale_revision_without_mutating(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(ProjectRevisionConflict):
             self.executor.execute(
                 "transcript.import_words",
                 {"media_id": "video-asset", "words": self.sample_words()},
