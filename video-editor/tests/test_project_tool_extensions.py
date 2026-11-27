@@ -1060,3 +1060,198 @@ class EditorToolExpansionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TimedTranscriptTests(unittest.TestCase):
+    def setUp(self):
+        self.executor = ProjectToolExecutor(make_project())
+
+    def sample_words(self):
+        return [
+            {"text": "The", "start_us": 100_000, "end_us": 250_000},
+            {"text": "red,", "start_us": 300_000, "end_us": 500_000},
+            {"text": "fox", "start_us": 500_000, "end_us": 800_000},
+            {"text": "there", "start_us": 1_000_000, "end_us": 1_250_000},
+            {"text": "redder", "start_us": 1_500_000, "end_us": 1_800_000},
+        ]
+
+    def import_words(self, words=None, **extra):
+        return self.executor.execute(
+            "transcript.import_words",
+            {
+                "media_id": "video-asset",
+                "language": "en-US",
+                "words": self.sample_words() if words is None else words,
+                **extra,
+            },
+        )
+
+    def test_transcript_tools_are_in_the_catalogue(self):
+        names = {item["name"] for item in get_tool_catalog()}
+        self.assertTrue({"transcript.import_words", "transcript.search"}.issubset(names))
+        self.assertTrue(validate_tool_call("transcript.search", {
+            "transcript_id": "transcript-1", "query": "hello",
+        })["query"] == "hello")
+
+    def test_import_is_revisioned_and_restored_by_undo_redo(self):
+        result = self.import_words(name="Test transcript")
+        created = result["results"][0]["result"]
+        transcript_id = created["transcript_id"]
+        self.assertEqual(result["revision"], 2)
+        self.assertEqual(created["word_count"], 5)
+        self.assertFalse(created["transcription_performed"])
+        project = self.executor.get_project()
+        self.assertEqual(project["transcripts"][0]["id"], transcript_id)
+        self.assertEqual(project["transcripts"][0]["source_media_id"], "video-asset")
+        self.assertEqual(project["transcripts"][0]["language"], "en-US")
+        self.executor.execute("history.undo", {})
+        self.assertEqual(self.executor.get_project().get("transcripts", []), [])
+        self.executor.execute("history.redo", {})
+        self.assertEqual(len(self.executor.get_project()["transcripts"][0]["words"]), 5)
+
+    def test_search_matches_exact_phrase_and_maps_source_time_to_timeline(self):
+        imported = self.import_words()
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        revision = self.executor.revision
+        result = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "RED fox",
+        })
+        payload = result["results"][0]["result"]
+        self.assertFalse(result["changed"])
+        self.assertEqual(self.executor.revision, revision)
+        self.assertEqual(payload["match_count"], 1)
+        match = payload["matches"][0]
+        self.assertEqual((match["text"], match["start_us"], match["end_us"]),
+                         ("red, fox", 300_000, 800_000))
+        self.assertEqual((match["word_start_index"], match["word_end_index"]), (1, 2))
+        self.assertEqual(match["timeline_locations"], [{
+            "clip_id": "main-clip", "track_id": "main-video",
+            "partial_source_match": False, "mapping_supported": True,
+            "timeline_start_us": 300_000, "timeline_end_us": 800_000,
+        }])
+
+    def test_search_uses_exact_word_boundaries_not_substring_matches(self):
+        imported = self.import_words()
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        exact = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "red",
+        })["results"][0]["result"]
+        partial = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "he",
+        })["results"][0]["result"]
+        self.assertEqual(exact["match_count"], 1)
+        self.assertEqual(exact["matches"][0]["text"], "red,")
+        self.assertEqual(partial["match_count"], 0)
+
+    def test_search_respects_case_sensitive_option_and_limit(self):
+        imported = self.import_words()
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        case_sensitive = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "Red", "case_sensitive": True,
+        })["results"][0]["result"]
+        limited = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "red", "limit": 1,
+        })["results"][0]["result"]
+        self.assertEqual(case_sensitive["match_count"], 0)
+        self.assertTrue(limited["truncated"])
+        self.assertEqual(len(limited["matches"]), 1)
+
+    def test_search_maps_source_time_through_constant_playback_speed(self):
+        project = make_project()
+        project["tracks"][0]["clips"][0].update({
+            "playback_rate": 2.0, "source_out_us": 4_000_000,
+        })
+        self.executor = ProjectToolExecutor(project)
+        imported = self.import_words([
+            {"text": "hello", "start_us": 1_000_000, "end_us": 1_200_000},
+        ])
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        match = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "hello",
+        })["results"][0]["result"]["matches"][0]
+        location = match["timeline_locations"][0]
+        self.assertEqual((location["timeline_start_us"], location["timeline_end_us"]),
+                         (500_000, 600_000))
+
+    def test_search_marks_animated_speed_mapping_as_unsupported(self):
+        project = make_project()
+        project["tracks"][0]["clips"][0].update({
+            "source_out_us": 3_000_000,
+            "keyframes": [
+                {"property": "playback_rate", "time_us": 0, "value": 1.0},
+                {"property": "playback_rate", "time_us": 1_000_000, "value": 1.5},
+            ],
+        })
+        self.executor = ProjectToolExecutor(project)
+        imported = self.import_words([
+            {"text": "hello", "start_us": 500_000, "end_us": 700_000},
+        ])
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        match = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "hello",
+        })["results"][0]["result"]["matches"][0]
+        self.assertFalse(match["timeline_locations"][0]["mapping_supported"])
+        self.assertEqual(match["timeline_locations"][0]["reason"], "animated_speed_curve")
+
+    def test_search_reports_partial_source_window_matches(self):
+        project = make_project()
+        project["tracks"][0]["clips"][0].update({
+            "source_in_us": 500_000, "source_out_us": 2_500_000,
+        })
+        self.executor = ProjectToolExecutor(project)
+        imported = self.import_words([
+            {"text": "hello", "start_us": 300_000, "end_us": 700_000},
+        ])
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        match = self.executor.execute("transcript.search", {
+            "transcript_id": transcript_id, "query": "hello",
+        })["results"][0]["result"]["matches"][0]
+        location = match["timeline_locations"][0]
+        self.assertTrue(location["partial_source_match"])
+        self.assertEqual((location["timeline_start_us"], location["timeline_end_us"]),
+                         (0, 200_000))
+
+    def test_search_rejects_missing_id_empty_terms_and_excessive_phrase(self):
+        with self.assertRaises(ProjectToolExecutionError):
+            self.executor.execute("transcript.search", {"transcript_id": "missing", "query": "hello"})
+        imported = self.import_words()
+        transcript_id = imported["results"][0]["result"]["transcript_id"]
+        with self.assertRaises(ProjectToolExecutionError):
+            self.executor.execute("transcript.search", {"transcript_id": transcript_id, "query": " !!! "})
+        with self.assertRaises(ProjectToolExecutionError):
+            self.executor.execute("transcript.search", {
+                "transcript_id": transcript_id,
+                "query": "one two three four five six seven eight nine ten eleven",
+            })
+
+    def test_transcript_import_rejects_wrong_asset_type_and_unsorted_words_atomically(self):
+        project = make_project()
+        project["assets"].append({
+            "id": "font-asset", "media_type": "font", "file_name": "font.ttf",
+            "storage_key": "font.ttf", "size_bytes": 10,
+        })
+        self.executor = ProjectToolExecutor(project)
+        with self.assertRaises(ProjectToolExecutionError):
+            self.executor.execute("transcript.import_words", {
+                "media_id": "font-asset",
+                "words": [{"text": "x", "start_us": 0, "end_us": 100_000}],
+            })
+        before_revision = self.executor.revision
+        with self.assertRaises(Exception):
+            self.import_words([
+                {"text": "later", "start_us": 500_000, "end_us": 700_000},
+                {"text": "earlier", "start_us": 100_000, "end_us": 300_000},
+            ])
+        self.assertEqual(self.executor.revision, before_revision)
+        self.assertEqual(self.executor.get_project().get("transcripts", []), [])
+
+    def test_transcript_import_rejects_stale_revision_without_mutating(self):
+        with self.assertRaises(Exception):
+            self.executor.execute(
+                "transcript.import_words",
+                {"media_id": "video-asset", "words": self.sample_words()},
+                expected_revision=99,
+            )
+        self.assertEqual(self.executor.revision, 1)
+        self.assertEqual(self.executor.get_project().get("transcripts", []), [])
+

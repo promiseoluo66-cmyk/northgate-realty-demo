@@ -368,3 +368,128 @@ def test_track_visual_visibility_rejects_non_boolean_values():
     project["tracks"][0]["visible"] = "hidden"
     with pytest.raises(ProjectValidationError, match="visible must be true or false"):
         validate_project(project)
+
+
+def test_valid_timed_transcript_is_preserved_with_source_asset_and_language():
+    project = sample_project()
+    project["transcripts"] = [{
+        "id": "transcript-main",
+        "name": "Interview transcript",
+        "source_media_id": "asset-video",
+        "language": "en-US",
+        "words": [
+            {"text": "Hello,", "start_us": 100_000, "end_us": 350_000, "confidence": 0.98},
+            {"text": "world!", "start_us": 350_000, "end_us": 600_000, "speaker_id": "speaker-1"},
+        ],
+    }]
+    validated = validate_project(project)
+    assert validated["transcripts"] == project["transcripts"]
+
+
+def test_legacy_project_without_transcripts_remains_unchanged():
+    project = sample_project()
+    validated = validate_project(project)
+    assert "transcripts" not in validated
+
+
+def test_transcript_requires_existing_audio_or_video_source_asset():
+    project = sample_project()
+    project["transcripts"] = [{
+        "id": "transcript-main", "source_media_id": "missing-asset",
+        "language": "en", "words": [{"text": "Hello", "start_us": 0, "end_us": 100_000}],
+    }]
+    with pytest.raises(ProjectValidationError, match="source_media_id does not exist"):
+        validate_project(project)
+
+
+def test_transcript_rejects_image_or_font_source_asset():
+    project = sample_project()
+    project["assets"].append({
+        "id": "font-asset", "media_type": "font", "file_name": "font.ttf",
+        "storage_key": "font.ttf", "size_bytes": 10,
+    })
+    project["transcripts"] = [{
+        "id": "transcript-main", "source_media_id": "font-asset",
+        "language": "en", "words": [{"text": "Hello", "start_us": 0, "end_us": 100_000}],
+    }]
+    with pytest.raises(ProjectValidationError, match="video or audio media"):
+        validate_project(project)
+
+
+def test_transcript_rejects_unsorted_and_out_of_source_timing():
+    project = sample_project()
+    project["transcripts"] = [{
+        "id": "transcript-main", "source_media_id": "asset-video",
+        "language": "en", "words": [
+            {"text": "later", "start_us": 500_000, "end_us": 600_000},
+            {"text": "earlier", "start_us": 200_000, "end_us": 400_000},
+        ],
+    }]
+    with pytest.raises(ProjectValidationError, match="ordered by source start"):
+        validate_project(project)
+    project["transcripts"][0]["words"] = [
+        {"text": "too late", "start_us": 9_900_000, "end_us": 10_100_000},
+    ]
+    with pytest.raises(ProjectValidationError, match="exceeds the source media duration"):
+        validate_project(project)
+
+
+def test_transcript_rejects_invalid_language_spoken_text_and_word_range():
+    project = sample_project()
+    project["transcripts"] = [{
+        "id": "transcript-main", "source_media_id": "asset-video",
+        "language": "english-us", "words": [{"text": "Hello", "start_us": 0, "end_us": 100_000}],
+    }]
+    with pytest.raises(ProjectValidationError, match="language"):
+        validate_project(project)
+    project["transcripts"][0]["language"] = "en"
+    project["transcripts"][0]["words"] = [{"text": "!!!", "start_us": 0, "end_us": 100_000}]
+    with pytest.raises(ProjectValidationError, match="spoken token"):
+        validate_project(project)
+    project["transcripts"][0]["words"] = [{"text": "Hello", "start_us": 100_000, "end_us": 100_000}]
+    with pytest.raises(ProjectValidationError, match="end_us must be after"):
+        validate_project(project)
+
+
+def test_transcript_rejects_duplicate_ids_invalid_confidence_and_unknown_fields():
+    project = sample_project()
+    item = {
+        "id": "transcript-main", "source_media_id": "asset-video", "language": "en",
+        "words": [{"text": "Hello", "start_us": 0, "end_us": 100_000, "confidence": 1.2}],
+    }
+    project["transcripts"] = [item, copy.deepcopy(item)]
+    with pytest.raises(ProjectValidationError, match="confidence"):
+        validate_project(project)
+    project["transcripts"] = [item, {**copy.deepcopy(item), "words": [
+        {"text": "Again", "start_us": 100_000, "end_us": 200_000}
+    ]}]
+    with pytest.raises(ProjectValidationError, match="id is duplicated"):
+        validate_project(project)
+    project["transcripts"] = [{**copy.deepcopy(item), "words": [
+        {"text": "Hello", "start_us": 0, "end_us": 100_000, "unexpected": True}
+    ]}]
+    with pytest.raises(ProjectValidationError, match="unexpected"):
+        validate_project(project)
+
+
+def test_transcript_enforces_project_and_per_transcript_word_limits():
+    project = sample_project()
+    project["transcripts"] = [{
+        "id": "transcript-main", "source_media_id": "asset-video", "language": "en",
+        "words": [
+            {"text": "word", "start_us": index, "end_us": index + 1}
+            for index in range(20_001)
+        ],
+    }]
+    with pytest.raises(ProjectValidationError, match="1 to 20000"):
+        validate_project(project)
+    project = sample_project()
+    project["transcripts"] = [
+        {
+            "id": f"transcript-{index}", "source_media_id": "asset-video", "language": "en",
+            "words": [{"text": "word", "start_us": 0, "end_us": 1}],
+        }
+        for index in range(101)
+    ]
+    with pytest.raises(ProjectValidationError, match="at most 100"):
+        validate_project(project)
