@@ -126,15 +126,15 @@ class CompilePlanTests(unittest.TestCase):
                      "interpolation": "linear"},
                     {"property": "opacity", "time_us": 400_000, "value": 1.0,
                      "interpolation": "linear"},
-                    {"property": "position_x", "time_us": 0, "value": -40,
+                    {"property": "position_x", "time_us": 0, "value": -80,
                      "interpolation": "ease_in_out"},
                     {"property": "position_x", "time_us": 400_000, "value": 0,
                      "interpolation": "ease_in_out"},
-                    {"property": "scale_x", "time_us": 0, "value": 0.7,
+                    {"property": "scale_x", "time_us": 0, "value": 0.5,
                      "interpolation": "ease_in_out"},
                     {"property": "scale_x", "time_us": 400_000, "value": 1.0,
                      "interpolation": "ease_in_out"},
-                    {"property": "scale_y", "time_us": 0, "value": 0.7,
+                    {"property": "scale_y", "time_us": 0, "value": 0.5,
                      "interpolation": "ease_in_out"},
                     {"property": "scale_y", "time_us": 400_000, "value": 1.0,
                      "interpolation": "ease_in_out"},
@@ -1456,7 +1456,7 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
             return sum(samples) / len(samples)
 
         early_frame = decoded_frame(0.5)
-        transform_start_frame = decoded_frame(0.65)
+        transform_start_frame = decoded_frame(0.6)
         visible_frame = decoded_frame(0.9)
         after_frame = decoded_frame(1.4)
         early = bright_glyph_pixels(early_frame)
