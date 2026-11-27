@@ -16,6 +16,7 @@ This is an isolated engine prototype, not the production renderer.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -26,6 +27,9 @@ from pathlib import Path
 from typing import Any
 
 from project_model import validate_project
+
+
+logger = logging.getLogger(__name__)
 
 
 class MltRenderError(RuntimeError):
@@ -1358,6 +1362,33 @@ def _make_text_overlay_image(
     return output_path
 
 
+def _log_visual_overlay_diagnostics(
+    overlay: dict[str, Any],
+    fps_num: int,
+    fps_den: int,
+    opacity_filters: list[str],
+) -> None:
+    """Emit opt-in, privacy-safe metadata about a prepared visual overlay."""
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+    start_frame = int(overlay["start_frame"])
+    duration_frames = int(overlay["duration_frames"])
+    timeline_start = start_frame * fps_den / fps_num
+    timeline_end = (start_frame + duration_frames) * fps_den / fps_num
+    logger.debug(
+        "visual_overlay_prepared",
+        extra={
+            "overlay_kind": str(overlay.get("kind", "unknown")),
+            "overlay_start_frame": start_frame,
+            "overlay_duration_frames": duration_frames,
+            "overlay_timeline_start_seconds": round(timeline_start, 6),
+            "overlay_timeline_end_seconds": round(timeline_end, 6),
+            "overlay_has_opacity_animation": bool(opacity_filters),
+            "overlay_opacity_filter_count": len(opacity_filters),
+        },
+    )
+
+
 def _ffmpeg_text_opacity_filters(
     keyframes: list[dict[str, Any]], fps_num: int, fps_den: int
 ) -> list[str]:
@@ -1421,8 +1452,11 @@ def _apply_text_overlay_images_ffmpeg(
         label = f"[title{index}]"
         prepared = f"[prepared{index}]"
         keyframes = overlay.get("keyframes", [])
-        if keyframes:
-            opacity_filters = _ffmpeg_text_opacity_filters(keyframes, fps_num, fps_den)
+        opacity_filters = (
+            _ffmpeg_text_opacity_filters(keyframes, fps_num, fps_den)
+            if keyframes else []
+        )
+        if opacity_filters:
             filters.append(
                 f"[{index}:v]setpts=N*{fps_den}/({fps_num}*TB)+{start:.9f}/TB,format=yuva444p,"
                 + ",".join(opacity_filters)
@@ -1434,6 +1468,9 @@ def _apply_text_overlay_images_ffmpeg(
                 f"[{index}:v]scale={int(plan['width'])}:{int(plan['height'])},"
                 f"format=rgba{prepared}"
             )
+        _log_visual_overlay_diagnostics(
+            overlay, fps_num, fps_den, opacity_filters
+        )
         filters.append(
             f"{previous}{prepared}"
             f"overlay=x=0:y=0:format=auto:eof_action=pass:"
@@ -1442,69 +1479,6 @@ def _apply_text_overlay_images_ffmpeg(
         previous = label
 
     duration = int(plan["total_frames"]) * fps_den / fps_num
-    if os.environ.get("MLT_DEBUG_TEXT_OVERLAY") == "1" and overlays:
-        print("MLT_DEBUG_TEXT_OVERLAY filtergraph=" + repr(";".join(filters)))
-        for overlay in overlays:
-            if overlay.get("keyframes"):
-                diagnostic_filters = _ffmpeg_text_opacity_filters(
-                    overlay["keyframes"], fps_num, fps_den
-                )
-                diagnostic_command = [
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-loop", "1", "-framerate", f"{fps_num}/{fps_den}",
-                    "-i", str(overlay["path"]),
-                    "-vf",
-                    ",".join([
-                        f"setpts=N*{fps_den}/({fps_num}*TB)",
-                        "format=yuva444p",
-                        *diagnostic_filters,
-                        "alphaextract",
-                    ]),
-                    "-frames:v", "12", "-f", "rawvideo", "-pix_fmt", "gray", "-",
-                ]
-                diagnostic = subprocess.run(
-                    diagnostic_command, check=True, capture_output=True, timeout=30
-                ).stdout
-                frame_size = int(plan["width"]) * int(plan["height"])
-                alpha_means = [
-                    round(
-                        sum(diagnostic[offset:offset + frame_size]) / frame_size, 3
-                    )
-                    for offset in range(0, len(diagnostic), frame_size)
-                    if len(diagnostic[offset:offset + frame_size]) == frame_size
-                ]
-                print(
-                    "MLT_DEBUG_TEXT_OVERLAY alpha_frame_means="
-                    + repr(alpha_means)
-                )
-        sample_pixels = {}
-        for debug_time in (0.20, 0.80, 1.25, 1.75):
-            pixels_at_time = {}
-            for label, x, y in (("corner", 8, 8), ("center", plan["width"] // 2, plan["height"] // 2)):
-                debug_pixel = subprocess.run(
-                    [
-                        "ffmpeg", "-hide_banner", "-loglevel", "error",
-                        "-ss", f"{debug_time:.6f}", "-i", str(base_output),
-                        "-vf", f"crop=2:2:{x}:{y},scale=1:1:flags=area,format=rgb24",
-                        "-frames:v", "1", "-f", "rawvideo", "-",
-                    ],
-                    check=True, capture_output=True,
-                ).stdout
-                pixels_at_time[label] = tuple(debug_pixel[:3])
-            sample_pixels[f"{debug_time:.2f}s"] = pixels_at_time
-        duration_result = subprocess.run(
-            [
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", str(base_output),
-            ],
-            check=True, capture_output=True, text=True,
-        )
-        print(
-            "MLT_DEBUG_TEXT_OVERLAY base_duration="
-            + duration_result.stdout.strip()
-            + " base_pixels="
-            + repr(sample_pixels)
-        )
     command = inputs + [
         "-filter_complex", ";".join(filters),
         "-map", previous,
@@ -1523,26 +1497,6 @@ def _apply_text_overlay_images_ffmpeg(
         detail = (exc.stderr or exc.stdout or str(exc)).strip()
         raise MltRenderError(f"FFmpeg could not composite visual overlays: {detail[-1600:]}") from exc
 
-    if os.environ.get("MLT_DEBUG_TEXT_OVERLAY") == "1" and overlays:
-        debug_overlay = next(
-            (item for item in overlays if item.get("kind") == "text"), overlays[0]
-        )
-        final_time = (
-            debug_overlay["start_frame"] + debug_overlay["duration_frames"] / 2
-        ) * fps_den / fps_num
-        final_pixel = subprocess.run(
-            [
-                "ffmpeg", "-hide_banner", "-loglevel", "error",
-                "-ss", f"{final_time:.6f}", "-i", str(destination),
-                "-vf", "crop=1:1:8:8,format=rgb24",
-                "-frames:v", "1", "-f", "rawvideo", "-",
-            ],
-            check=True, capture_output=True,
-        ).stdout
-        print(
-            "MLT_DEBUG_TEXT_OVERLAY final_pixel_rgb="
-            + str(tuple(final_pixel[:3]))
-        )
 
 
 
@@ -1767,18 +1721,6 @@ def render_project(
     text_temp = tempfile.TemporaryDirectory(prefix="mlt-visual-overlays-", dir=target.parent)
     text_directory = Path(text_temp.name)
     visual_overlays: list[dict[str, Any]] = list(image_overlays)
-    if os.environ.get("MLT_DEBUG_TEXT_OVERLAY") == "1":
-        print(
-            "MLT_DEBUG_TEXT_OVERLAY prepared="
-            + repr([
-                (
-                    item.get("kind"), item["start_frame"],
-                    item["duration_frames"], item["track_order"],
-                    str(item["path"]),
-                )
-                for item in visual_overlays
-            ])
-        )
     if text_track_clips and not visual_track_indexes:
         raise MltRenderError("Text/caption clips require an enabled visual track underneath.")
     for index, text_clip in enumerate(

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from mlt_engine.renderer import (
@@ -1296,6 +1298,43 @@ class EditedCaptionMltRenderTests(unittest.TestCase):
         )
 
 
+class VisualOverlayDiagnosticsTests(unittest.TestCase):
+    def test_debug_diagnostics_are_structured_and_exclude_private_text(self):
+        from mlt_engine.renderer import _log_visual_overlay_diagnostics
+
+        overlay = {
+            "kind": "text",
+            "start_frame": 10,
+            "duration_frames": 20,
+            "text": {"content": "PRIVATE TITLE CONTENT"},
+        }
+        with self.assertLogs("mlt_engine.renderer", level="DEBUG") as captured:
+            _log_visual_overlay_diagnostics(
+                overlay, 25, 1, ["fade=t=in:s=0:n=10:alpha=1"]
+            )
+
+        record = captured.records[0]
+        self.assertEqual(record.getMessage(), "visual_overlay_prepared")
+        self.assertEqual(record.overlay_kind, "text")
+        self.assertEqual(record.overlay_start_frame, 10)
+        self.assertEqual(record.overlay_duration_frames, 20)
+        self.assertEqual(record.overlay_timeline_start_seconds, 0.4)
+        self.assertEqual(record.overlay_timeline_end_seconds, 1.2)
+        self.assertTrue(record.overlay_has_opacity_animation)
+        self.assertEqual(record.overlay_opacity_filter_count, 1)
+        self.assertNotIn("PRIVATE TITLE CONTENT", record.getMessage())
+
+    def test_debug_diagnostics_are_silent_when_debug_logging_is_disabled(self):
+        from mlt_engine.renderer import _log_visual_overlay_diagnostics
+
+        overlay = {"kind": "text", "start_frame": 0, "duration_frames": 10}
+        logger = logging.getLogger("mlt_engine.renderer")
+        with patch.object(logger, "isEnabledFor", return_value=False):
+            with patch.object(logger, "debug") as debug:
+                _log_visual_overlay_diagnostics(overlay, 25, 1, [])
+        debug.assert_not_called()
+
+
 class TextOpacityExpressionTests(unittest.TestCase):
     def test_opacity_keyframes_compile_to_native_alpha_fade_filter(self):
         from mlt_engine.renderer import _ffmpeg_text_opacity_filters
@@ -1362,10 +1401,7 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
             }],
         })
 
-        import os
-        from unittest.mock import patch
-        with patch.dict(os.environ, {"MLT_DEBUG_TEXT_OVERLAY": "1"}):
-            receipt = render_project(self.project, self.root, output, timeout_seconds=120)
+        receipt = render_project(self.project, self.root, output, timeout_seconds=120)
         self.assertTrue(receipt["ok"], receipt)
 
         def decoded_frame(timestamp):
@@ -1402,14 +1438,10 @@ class AnimatedTextOpacityMltRenderTests(unittest.TestCase):
         early_mean = title_region_red_green_mean(early_frame)
         visible_mean = title_region_red_green_mean(visible_frame)
         after_mean = title_region_red_green_mean(after_frame)
-        print(
-            "MLT_TEXT_FADE_FRAME_DIAGNOSTIC "
-            f"bright_pixels={{'early': {early}, 'visible': {fully_visible}, 'after': {after_clip}}} "
-            f"title_region_rg_mean={{'early': {early_mean:.4f}, 'visible': {visible_mean:.4f}, 'after': {after_mean:.4f}}}"
-        )
         self.assertLess(
             early_mean, visible_mean,
-            "Text should become brighter during its fade-in; see frame diagnostics above.",
+            "Text should become brighter during its fade-in "
+            f"(early={early_mean:.4f}, visible={visible_mean:.4f}).",
         )
         self.assertGreater(fully_visible, 20, "Fully faded text should be visible in decoded frames.")
         self.assertEqual(after_clip, 0, "Text must disappear after its clip ends.")

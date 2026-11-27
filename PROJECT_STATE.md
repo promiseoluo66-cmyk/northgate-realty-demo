@@ -321,3 +321,13 @@ The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not star
 - The current decoded-frame test now measures title-region luminance as well as glyph pixels and checks that the title disappears after its clip. The test remains red until run #184 proves the PTS correction.
 - Task 2.7 remains partial and not accepted. Word-by-word highlighting, loop animation presets, further transforms, comprehensive boundary/fallback tests, full regression/security review, permanent diagnostics, documentation/capability ledger reconciliation, and fresh full CI success remain outstanding.
 - No Task 2.8 or Stage 3 work has started. All changes remain on video-editor-lab; main is untouched. No merge, deployment, release, or external action occurred.
+
+## 19. Task 2.7 fade-in accepted and diagnostics made permanent — 2026-11-27
+
+- GitHub Actions run #184 passed the full Stage 1 workflow after the overlay PTS correction: **324 Python tests passed**, **72 Studio/Worker Node tests passed**, and all checked-in D1 migrations applied successfully to in-memory SQLite. The generated MLT/FFmpeg test decoded real video frames and confirmed increasing title luminance during fade-in plus disappearance after the clip boundary.
+- The supported text-animation implementation is still intentionally limited to linear opacity fade-in/fade-out; do not claim word highlighting, loop animation, or animated transforms are complete.
+- The temporary MLT_DEBUG_TEXT_OVERLAY environment-variable prints and extra diagnostic FFmpeg probes have been replaced with permanent opt-in Python logging. The renderer now emits structured, privacy-safe overlay metadata only when its logger is enabled at DEBUG level. It does not log title text or file paths, and normal renders remain quiet. Added tests cover structured fields and disabled-by-default behavior.
+- Fresh full CI for the permanent diagnostics change is required before treating that logging change as verified.
+- User explicitly requested that the temporary diagnostic logging become permanent later; this implementation fulfils that request using the standard Python logging system rather than always-on print statements.
+- Task 2.7 remains partial and not accepted. Word-by-word highlighting, loop animation presets, additional transforms, broader malformed-input/static-legacy/boundary tests, full architecture/security review, and final Stage 2 documentation reconciliation remain open.
+- No Task 2.8 or Stage 3 work has started. Changes remain on video-editor-lab; main is untouched. No merge, deployment, release, or external action occurred.
