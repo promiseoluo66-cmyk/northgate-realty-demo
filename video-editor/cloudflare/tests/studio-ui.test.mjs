@@ -257,3 +257,18 @@ test("Selected video clip can use its private low-resolution proxy for source pr
   assert.match(html, /targetMediaId=window\.getStudioPreviewMediaId/);
   assert.match(html, /proxy_for_media_id===targetMediaId/);
 });
+
+
+test("Stage 2 Task 2.1 exposes selected-caption editing and SRT/VTT sidecar export", () => {
+  for (const id of [
+    "studio-text-content", "studio-text-family", "studio-text-size",
+    "studio-text-fgcolour", "studio-text-olcolour", "studio-text-outline",
+    "studio-text-halign", "studio-text-valign", "studio-text-x", "studio-text-y",
+    "studio-text-width", "studio-text-height", "studio-save-text",
+    "studio-subtitle-format", "studio-export-subtitles"
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.match(html, /caption_io\.js/);
+  assert.match(studioScript, /text\.update_clip/);
+  assert.match(studioScript, /captionIO\.exportSubtitleTrack/);
+  assert.match(studioScript, /studio-text-content/);
+});

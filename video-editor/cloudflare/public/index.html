@@ -199,6 +199,9 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
     <input id="studio-subtitle-file" type="file" accept=".srt,.vtt,text/plain,text/vtt">
     <label for="studio-subtitle-track" class="hint">Destination text track<select id="studio-subtitle-track"></select></label>
     <div class="edit-actions"><button class="btn secondary" id="studio-import-subtitles" type="button">Import subtitle cues</button></div>
+    <label for="studio-subtitle-format" class="hint">Export format<select id="studio-subtitle-format"><option value="srt">SubRip (.SRT)</option><option value="vtt">WebVTT (.VTT)</option></select></label>
+    <div class="edit-actions"><button class="btn secondary" id="studio-export-subtitles" type="button">Export selected text track</button></div>
+    <p class="hint">Sidecar files contain caption text and timing. Font styling remains in the editable project.</p>
     <p id="studio-subtitle-status" class="hint" aria-live="polite">No subtitle file selected.</p>
   </div>
   <label for="media-bin-search" class="hint">Search project media<input id="media-bin-search" type="search" placeholder="Search filename, type, folder or tag"></label>
@@ -213,6 +216,27 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
     <button class="btn secondary" id="studio-ungroup-clips" type="button" disabled>Unlink selected clips</button>
     <button class="btn secondary studio-refresh" id="studio-clear-selection" type="button">Clear selection</button>
   </div>
+</section>
+
+<section class="edit-panel" aria-label="Text and caption editing">
+  <h3>Text and caption editor</h3>
+  <p class="hint">Select a text or caption clip on the timeline. Changes use the existing revision-checked text editing operation.</p>
+  <label for="studio-text-content">Caption or title text<textarea id="studio-text-content" rows="3" maxlength="20000" placeholder="Select a text clip first."></textarea></label>
+  <div class="edit-grid">
+    <label for="studio-text-family">Font family<input id="studio-text-family" maxlength="80" value="Sans"></label>
+    <label for="studio-text-size">Font size<input id="studio-text-size" type="number" min="8" max="256" step="1" value="48"></label>
+    <label for="studio-text-fgcolour">Text colour<input id="studio-text-fgcolour" maxlength="16" value="#FFFFFF"></label>
+    <label for="studio-text-olcolour">Outline colour<input id="studio-text-olcolour" maxlength="16" value="#000000"></label>
+    <label for="studio-text-outline">Outline width<input id="studio-text-outline" type="number" min="0" max="3" step="1" value="1"></label>
+    <label for="studio-text-halign">Horizontal alignment<select id="studio-text-halign"><option value="left">Left</option><option value="center" selected>Center</option><option value="right">Right</option></select></label>
+    <label for="studio-text-valign">Vertical alignment<select id="studio-text-valign"><option value="top">Top</option><option value="middle" selected>Middle</option><option value="bottom">Bottom</option></select></label>
+    <label for="studio-text-x">Position X (%)<input id="studio-text-x" type="number" min="0" max="99" step="1" value="5"></label>
+    <label for="studio-text-y">Position Y (%)<input id="studio-text-y" type="number" min="0" max="99" step="1" value="68"></label>
+    <label for="studio-text-width">Box width (%)<input id="studio-text-width" type="number" min="1" max="100" step="1" value="90"></label>
+    <label for="studio-text-height">Box height (%)<input id="studio-text-height" type="number" min="1" max="100" step="1" value="25"></label>
+  </div>
+  <div class="edit-actions"><button class="btn secondary" id="studio-save-text" type="button" disabled>Save text and style</button></div>
+  <p id="studio-text-status" class="hint" aria-live="polite">Select a text clip to edit it.</p>
 </section>
 
 <section class="edit-panel" aria-label="Direct clip editing">
@@ -675,34 +699,9 @@ async function importStudioSubtitles(){
   const trackId=$("studio-subtitle-track").value;
   if(!trackId)return message("studio-subtitle-status","Add an unlocked text track first.","error");
   try{
-    const raw=(await file.text()).replace(/^\uFEFF/,"").replace(/\r/g,"");
-    const blocks=raw.split(/\n\s*\n/);
-    const parseTime=(value)=>{
-      const match=value.trim().match(/^(?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{1,3})$/);
-      if(!match)throw new Error("Unsupported subtitle timestamp: "+value);
-      const hours=Number(match[1]||0),minutes=Number(match[2]),seconds=Number(match[3]);
-      const millis=Number(String(match[4]).padEnd(3,"0"));
-      return (((hours*60+minutes)*60+seconds)*1000+millis)*1000;
-    };
-    const cues=[];
-    for(const block of blocks){
-      const lines=block.split("\n").map((line)=>line.trim()).filter(Boolean);
-      const timingIndex=lines.findIndex((line)=>line.includes("-->"));
-      if(timingIndex<0)continue;
-      const parts=lines[timingIndex].split("-->");
-      if(parts.length!==2)throw new Error("Subtitle timing line is malformed.");
-      const start_us=parseTime(parts[0]);
-      const endToken=parts[1].trim().split(/\s+/)[0];
-      const end_us=parseTime(endToken);
-      const text=lines.slice(timingIndex+1).join(" ").replace(/<[^>]*>/g,"").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").trim();
-      if(!text)continue;
-      cues.push({text,start_us,end_us});
-      if(cues.length>500)throw new Error("Import up to 500 subtitle cues at a time.");
-    }
-    if(!cues.length)throw new Error("No valid subtitle cues were found. Check the SRT/VTT timing format.");
-    if(cues.some((cue,index)=>cue.end_us<=cue.start_us||(index>0&&cue.start_us<cues[index-1].end_us))){
-      throw new Error("Subtitle cues must have positive durations and must not overlap.");
-    }
+    const captionIO=window.VideoEditorCaptionIO;
+    if(!captionIO)throw new Error("Subtitle import tools are not ready. Refresh the Studio and try again.");
+    const cues=captionIO.parseSubtitleFile(await file.text(),file.name);
     const button=$("studio-import-subtitles");button.disabled=true;
     await window.applyStudioOperations([{name:"captions.import_subtitles",arguments:{track_id:trackId,cues}}]);
     message("studio-subtitle-status",cues.length+" subtitle cue(s) added to the timeline.","success");
@@ -747,6 +746,7 @@ $("studio-safe-guides-toggle").addEventListener("change",event=>{
   $("studio-safe-guides").classList.toggle("hidden",!event.target.checked);
 });
 </script>
+<script src="/caption_io.js" defer></script>
 <script src="/studio.js" defer></script>
 </body>
 </html>

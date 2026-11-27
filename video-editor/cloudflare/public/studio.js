@@ -449,6 +449,15 @@
     }
 
     const selected = findSelectedClip();
+    const textControlIds = [
+      "studio-text-content", "studio-text-family", "studio-text-size",
+      "studio-text-fgcolour", "studio-text-olcolour", "studio-text-outline",
+      "studio-text-halign", "studio-text-valign", "studio-text-x", "studio-text-y",
+      "studio-text-width", "studio-text-height", "studio-save-text"
+    ];
+    textControlIds.forEach((id) => {
+      if (byId(id)) byId(id).disabled = !selected || selected.clip.kind !== "text";
+    });
     const clipControls = [
       "clip-start-seconds", "clip-speed", "clip-source-in", "clip-source-out", "clip-slip-offset",
       "studio-move-clip", "studio-trim-clip", "studio-slip-clip", "studio-apply-speed", "studio-split-clip",
@@ -538,6 +547,19 @@
     setValue("clip-opacity", Number(transform.opacity ?? 1));
     setValue("clip-anchor-x", Number(transform.anchor_x ?? 0.5) * 100);
     setValue("clip-anchor-y", Number(transform.anchor_y ?? 0.5) * 100);
+    const textData = clip.text || {};
+    setValue("studio-text-content", textData.content || "");
+    setValue("studio-text-family", textData.family || "Sans");
+    setValue("studio-text-size", textData.size ?? 48);
+    setValue("studio-text-fgcolour", textData.fgcolour || "#FFFFFF");
+    setValue("studio-text-olcolour", textData.olcolour || "#000000");
+    setValue("studio-text-outline", textData.outline ?? 1);
+    setValue("studio-text-halign", textData.halign || textData.align || "center");
+    setValue("studio-text-valign", textData.valign || "middle");
+    setValue("studio-text-x", textData.x_percent ?? 5);
+    setValue("studio-text-y", textData.y_percent ?? 68);
+    setValue("studio-text-width", textData.width_percent ?? 90);
+    setValue("studio-text-height", textData.height_percent ?? 25);
     if (byId("clip-flip-horizontal")) byId("clip-flip-horizontal").checked = Boolean(transform.flip_horizontal);
     if (byId("clip-flip-vertical")) byId("clip-flip-vertical").checked = Boolean(transform.flip_vertical);
     const keyframeTime = Math.max(0, playheadUs - Number(clip.start_us || 0));
@@ -1232,6 +1254,66 @@
       }
     });
   };
+
+  click("studio-save-text", () => {
+    const item = selected();
+    if (!item || item.clip.kind !== "text") throw new Error("Select a text or caption clip first.");
+    const content = byId("studio-text-content").value;
+    if (!content.trim()) throw new Error("Text or caption content cannot be empty.");
+    const textStyle = {
+      family: byId("studio-text-family").value.trim() || "Sans",
+      size: Math.round(numeric("studio-text-size")),
+      fgcolour: byId("studio-text-fgcolour").value.trim(),
+      olcolour: byId("studio-text-olcolour").value.trim(),
+      outline: Math.round(numeric("studio-text-outline")),
+      halign: byId("studio-text-halign").value,
+      valign: byId("studio-text-valign").value,
+      x_percent: numeric("studio-text-x"),
+      y_percent: numeric("studio-text-y"),
+      width_percent: numeric("studio-text-width"),
+      height_percent: numeric("studio-text-height")
+    };
+    const colourPattern = /^(#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?|0x[0-9a-fA-F]{8}|white|black|red|green|blue)$/i;
+    if (!colourPattern.test(textStyle.fgcolour) || !colourPattern.test(textStyle.olcolour)) {
+      throw new Error("Use a supported colour name or a hex colour such as #FFFFFF.");
+    }
+    if (textStyle.x_percent + textStyle.width_percent > 100 ||
+        textStyle.y_percent + textStyle.height_percent > 100) {
+      throw new Error("The text box must stay inside the video frame.");
+    }
+    return run([{
+      name: "text.update_clip",
+      arguments: {clip_id: item.clip.id, content, text_style: textStyle}
+    }]);
+  });
+
+  click("studio-export-subtitles", () => {
+    const trackId = byId("studio-subtitle-track")?.value;
+    const track = (currentProject?.tracks || []).find((item) => item.id === trackId);
+    if (!track) throw new Error("Choose an unlocked text track first.");
+    const captionIO = window.VideoEditorCaptionIO;
+    if (!captionIO) throw new Error("Subtitle export tools are not ready. Refresh the Studio and try again.");
+    const format = byId("studio-subtitle-format")?.value || "srt";
+    const content = captionIO.exportSubtitleTrack(track, format);
+    const blob = new Blob([content], {
+      type: format === "vtt" ? "text/vtt;charset=utf-8" : "application/x-subrip;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const safeName = String(currentProject?.name || "captions")
+      .toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "captions";
+    anchor.href = url;
+    anchor.download = safeName + "." + format;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const status = byId("studio-subtitle-status");
+    if (status) {
+      status.textContent = "Exported " + format.toUpperCase() + " from " + track.name + ".";
+      status.className = "status success";
+    }
+  });
 
   click("studio-group-clips", () => {
     const clipIds = [...selectedClipIds];
