@@ -152,6 +152,11 @@ _PARAMETER_SCHEMA = {
 
 TOOL_DEFINITIONS = (
     ToolDefinition(
+        "title_templates.list", "text",
+        "List the built-in, versioned and validated editable title templates.",
+        _schema(), read_only=True,
+    ),
+    ToolDefinition(
         "project.inspect", "project",
         "Read the current project revision, profile, tracks, clips and assets.",
         _schema(), read_only=True,
@@ -310,6 +315,7 @@ TOOL_DEFINITIONS = (
             "content": _field("string", max_length=20000),
             "start_us": _field("integer", minimum=0),
             "duration_us": _field("integer", minimum=1),
+            "template_id": _field("string", max_length=64),
             "text_style": _field("object", nested=_TEXT_STYLE_SCHEMA),
         }, ("track_id", "content", "start_us", "duration_us")),
     ),

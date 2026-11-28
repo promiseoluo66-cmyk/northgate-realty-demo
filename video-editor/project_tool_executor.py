@@ -1012,6 +1012,10 @@ class ProjectToolExecutor:
     def _apply(
         self, project: dict[str, Any], name: str, args: dict[str, Any]
     ) -> tuple[Any, bool]:
+        if name == "title_templates.list":
+            from title_templates import list_title_templates
+            return {"schema_version": 1, "templates": list_title_templates()}, False
+
         if name == "project.inspect":
             # This reports the candidate document, including earlier calls in
             # the same batch, without exposing server filesystem paths.
@@ -1612,6 +1616,17 @@ class ProjectToolExecutor:
                 "width_percent": 90,
                 "height_percent": 25,
             }
+            keyframes = []
+            template_id = args.get("template_id")
+            if template_id is not None:
+                try:
+                    from title_templates import resolve_title_template
+                    template_style, keyframes = resolve_title_template(
+                        template_id, args["duration_us"]
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise ProjectToolExecutionError(str(exc)) from exc
+                text.update(template_style)
             text.update(args.get("text_style", {}))
             clip = {
                 "id": _new_id("text"),
@@ -1620,10 +1635,10 @@ class ProjectToolExecutor:
                 "duration_us": args["duration_us"],
                 "text": text,
                 "effects": [],
-                "keyframes": [],
+                "keyframes": keyframes,
             }
             track["clips"].append(clip)
-            return {"clip_id": clip["id"], "track_id": track["id"]}, True
+            return {"clip_id": clip["id"], "track_id": track["id"], "template_id": template_id}, True
 
         if name == "transcript.import_words":
             asset = self._asset(project, args["media_id"])

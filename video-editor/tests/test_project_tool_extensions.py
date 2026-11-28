@@ -1970,3 +1970,106 @@ class ExpandedTextStyleTests(unittest.TestCase):
 
         self.assertEqual(result, output)
         advanced_renderer.assert_called_once()
+
+
+class EditableTitleTemplateTests(unittest.TestCase):
+    def test_template_catalogue_is_read_only_and_exposed_to_the_tool_catalogue(self):
+        names = {item["name"] for item in get_tool_catalog()}
+        self.assertIn("title_templates.list", names)
+        before_revision = self.executor.revision
+        before_project = self.executor.get_project()
+        result = self.run_tool("title_templates.list", {})
+        self.assertFalse(result["changed"])
+        self.assertEqual(result["revision"], before_revision)
+        self.assertEqual(result["project"], before_project)
+        templates = result["results"][0]["result"]["templates"]
+        self.assertEqual(len(templates), 4)
+        self.assertEqual({item["schema_version"] for item in templates}, {1})
+
+    def test_template_application_creates_a_normal_editable_text_clip(self):
+        result = self.run_tool("timeline.add_text_clip", {
+            "track_id": "title-track", "content": "My editable title",
+            "start_us": 500_000, "duration_us": 2_000_000,
+            "template_id": "animated-rise-v1",
+            "text_style": {"size": 72, "fgcolour": "#FFCC00"},
+        })
+        clip_id = result["results"][0]["result"]["clip_id"]
+        clip = next(
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(clip["kind"], "text")
+        self.assertEqual(clip["text"]["content"], "My editable title")
+        self.assertEqual(clip["text"]["size"], 72)
+        self.assertEqual(clip["text"]["fgcolour"], "#FFCC00")
+        self.assertEqual(
+            [(item["property"], item["time_us"]) for item in clip["keyframes"]],
+            [("opacity", 0), ("opacity", 600_000),
+             ("position_y", 0), ("position_y", 600_000)],
+        )
+        self.assertNotIn("template_id", clip)
+        reopened = ProjectToolExecutor(self.executor.get_project())
+        reopened_clip = next(
+            item for track in reopened.get_project()["tracks"]
+            for item in track["clips"] if item["id"] == clip_id
+        )
+        self.assertEqual(reopened_clip, clip)
+
+    def test_static_template_and_legacy_text_creation_remain_compatible(self):
+        styled = self.run_tool("timeline.add_text_clip", {
+            "track_id": "title-track", "content": "Static title",
+            "start_us": 0, "duration_us": 1_000_000,
+            "template_id": "clean-centre-v1",
+        })
+        legacy = self.run_tool("timeline.add_text_clip", {
+            "track_id": "title-track", "content": "Legacy title",
+            "start_us": 1_000_000, "duration_us": 1_000_000,
+        })
+        clips = [
+            item for track in self.executor.get_project()["tracks"]
+            for item in track["clips"]
+        ]
+        by_id = {item["id"]: item for item in clips}
+        static_clip = by_id[styled["results"][0]["result"]["clip_id"]]
+        legacy_clip = by_id[legacy["results"][0]["result"]["clip_id"]]
+        self.assertEqual(static_clip["text"]["halign"], "center")
+        self.assertEqual(static_clip["keyframes"], [])
+        self.assertEqual(legacy_clip["text"]["content"], "Legacy title")
+        self.assertEqual(legacy_clip["text"]["size"], 48)
+
+    def test_unknown_template_rolls_back_without_changing_revision_or_project(self):
+        before = self.executor.get_project()
+        revision = self.executor.revision
+        with self.assertRaises(ProjectToolExecutionError):
+            self.run_tool("timeline.add_text_clip", {
+                "track_id": "title-track", "content": "No template",
+                "start_us": 0, "duration_us": 1_000_000,
+                "template_id": "unknown-template",
+            })
+        self.assertEqual(self.executor.revision, revision)
+        self.assertEqual(self.executor.get_project(), before)
+
+    def test_template_clip_supports_undo_redo_and_revision_conflicts(self):
+        result = self.run_tool("timeline.add_text_clip", {
+            "track_id": "title-track", "content": "Undo me",
+            "start_us": 0, "duration_us": 1_000_000,
+            "template_id": "bold-section-v1",
+        })
+        clip_id = result["results"][0]["result"]["clip_id"]
+        current_revision = self.executor.revision
+        with self.assertRaises(ProjectRevisionConflict):
+            self.executor.execute(
+                "text.update_clip", {"clip_id": clip_id, "content": "Stale"},
+                expected_revision=current_revision - 1,
+            )
+        self.executor.execute("history.undo", {})
+        self.assertFalse(any(
+            clip["id"] == clip_id for track in self.executor.get_project()["tracks"]
+            for clip in track["clips"]
+        ))
+        self.executor.execute("history.redo", {})
+        restored = next(
+            clip for track in self.executor.get_project()["tracks"]
+            for clip in track["clips"] if clip["id"] == clip_id
+        )
+        self.assertEqual(restored["text"]["content"], "Undo me")
