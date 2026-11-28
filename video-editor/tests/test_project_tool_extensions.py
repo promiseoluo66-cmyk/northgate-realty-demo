@@ -1972,7 +1972,16 @@ class ExpandedTextStyleTests(unittest.TestCase):
         advanced_renderer.assert_called_once()
 
 
-class EditableTitleTemplateTests(EditorToolExpansionTests):
+class EditableTitleTemplateTests(unittest.TestCase):
+    def setUp(self):
+        self.executor = ProjectToolExecutor(make_project())
+
+    def run_tool(self, name, arguments, confirmed_tools=None):
+        return self.executor.execute_batch(
+            [{"name": name, "arguments": arguments}],
+            confirmed_tools=confirmed_tools,
+        )
+
     def test_template_catalogue_is_read_only_and_exposed_to_the_tool_catalogue(self):
         names = {item["name"] for item in get_tool_catalog()}
         self.assertIn("title_templates.list", names)
