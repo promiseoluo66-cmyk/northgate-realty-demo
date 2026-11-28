@@ -364,3 +364,16 @@ The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not star
 - MLT integration rendered static and animated templates, reopened the project and decoded frames to verify visibility, animation change and disappearance outside clip duration.
 - Added one read-only registered operation; current Stage 2 registry count is 59. No new dependencies or D1 migrations.
 - Hosted Worker/live-media and Android acceptance remain unperformed. No deployment or merge was made.
+
+
+## 21. Stage 2 Task 2.9 — design approved; implementation plan awaiting approval (2026-11-28)
+
+- User explicitly approved the Task 2.9 editable stickers and graphics design.
+- Reconfirmed repository identity and working branch. The lab branch compares as 262 commits ahead of main and 0 behind at this check; no changes were made to main.
+- Read the live project handoff, repository instructions, development workflow, specialist review checklist, Stage 2 ledger, project model, private media import route, renderer, Studio source/UI and existing tests.
+- Added implementation plan: docs/superpowers/plans/2026-11-28-stage-2-task-2.9-editable-stickers-graphics.md.
+- Plan commit: 799a2aa9ee0f0a2f67e9d6d4fbc11ed71be91421.
+- Scope: editable native rectangle, ellipse, arrow and frame overlays; static PNG/JPEG/WebP sticker import through the existing private media asset lifecycle; strict geometry/style and file validation; provenance declarations; mobile controls; MLT decoded-frame tests.
+- Explicit exclusions: SVG/HTML/scripts/vector content, animated GIF, AI sticker generation, new runtime dependencies, paid services, deployment, merge, Stage 3 and the unresolved Task 2.4 authorization conflict.
+- No application source or test files have been changed. No implementation tests have been run for Task 2.9.
+- **Current status: awaiting user approval of the exact implementation plan.** Do not modify application source/tests until that plan is approved.
