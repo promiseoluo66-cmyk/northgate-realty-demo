@@ -21,7 +21,7 @@ A feature is complete only after its data contract, permission and validation ru
 | 2.5 | `auto_captions` | Evaluate local/free speech-to-text runtimes, licences, model size/download, runner/mobile fit, compute and retention. Enable only after a genuinely $0 route passes real-footage timing tests; otherwise remain visibly gated. | **Feasibility evidence complete — gated_optional**; Whisper/whisper.cpp is a viable local candidate, but real-footage quality/runtime acceptance is still missing. |
 | 2.6 | `text_style` | Add validated typography, background, shadow and spacing settings; render generated frame fixtures for every supported control. | **Offline CI accepted** — run #166: 319 Python tests, 71 Node/Studio/Worker tests and all checked-in D1 migrations passed; generated RGBA/ASS render tests cover advanced routing, font weight, letter/line spacing, background alpha and shadow blur. |
 | 2.7 | `text_animation`, `caption_animations`, `karaoke_lyrics` | Canonical text keyframes, fade/loop presets, timed ASS karaoke highlighting and decoded-frame boundary tests. | Offline CI accepted |
-| 2.8 | `title_templates` | Save/load editable title recipes with schema version and compatibility checks; never flatten templates into video. | Planned |
+| 2.8 | `title_templates` | Four built-in, versioned editable title templates; strict schema validation; copied styles and clip-local animation; mobile insertion; actual MLT decoded-frame, save/reopen, undo/redo and compatibility tests. | **Offline CI accepted** — run #46122647203 (368 Python, 74 Node, 0 failures, D1 migrations and generated MLT title frames passed). |
 | 2.9 | `stickers_graphics` | Build editable shapes, arrows, frames and imported image overlays; validate dimensions and retain asset provenance/licence. | Planned |
 | 2.10 | `ai_stickers` | Research only after model licence, zero-cost quota, privacy and runtime are verified. | **Feasibility evidence complete — gated_optional**; the model licence is conditional and no dependable free GPU runtime is available. |
 | 2.11 | `bilingual_captions` | Support two manually supplied language tracks first; translation remains disabled until a free/licensed route is verified. | Planned / provider gated |
@@ -141,3 +141,18 @@ Sources:
 - Generated-media tests decode frames for fade-in, fade-out, position/scale/rotation animation, three pulse-loop cycles, karaoke word transitions and clip-boundary disappearance. Unsupported legacy text transforms fall back to static text with a privacy-safe diagnostic; malformed or out-of-range timing is rejected before mutation.
 - No new registered text-edit operation, Worker endpoint, D1 migration, runtime dependency, paid service or billing was introduced. Existing static text clips remain supported.
 - This is offline CI acceptance only. Hosted Worker, live private-media and Android device acceptance have not been performed; no deployment was made.
+
+
+## Task 2.8 — safe editable title templates
+
+**Status: Offline CI accepted.** Implementation commit b5e58d793c5859b3d70e0bf7a6e5bc1eec187492; GitHub Actions [run #46122647203](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46122647203) passed on video-editor-lab.
+
+- Added four original built-in templates: Clean Centre Title, Editorial Lower Third, Bold Section Title and Animated Rise Title.
+- video-editor/title_templates.py holds version-1 data-only definitions and strict closed-schema validation. It rejects unknown/missing fields, unsupported schema versions, malformed or duplicate IDs/names, invalid styles/colours/ranges, non-finite values, unsupported animation properties/interpolations, duplicate keyframes and invalid duration mappings. Returned definitions are independent copies.
+- Added read-only title_templates.list; extended the existing timeline.add_text_clip with an optional template_id. Template styles and duration-resolved animation keyframes are copied into ordinary editable text clips. The project does not retain a template dependency or template reference.
+- Explicit text-style overrides take precedence over template defaults. Legacy timeline.add_text_clip calls without a template ID remain compatible. Track locking, revision checks, atomic rollback, save/reopen and undo/redo are preserved.
+- Added mobile Studio selection for the four built-ins, an unlocked text-track selector, title wording and bounded duration controls. Insertions use the existing revision-checked text-clip operation; all further edits use the existing text inspector and text.update_clip.
+- Added actual MLT integration coverage: generated a base video, rendered static and animated template clips, decoded output frames and checked title visibility, animation change and clip-boundary disappearance. The reopened project contains ordinary text clips without template IDs.
+- CI evidence: 368 Python tests passed; 74 Studio/Worker Node tests passed; 0 Node failures; all checked-in D1 migrations passed. No new runtime dependencies or D1 migrations were added. One read-only registered operation was added, bringing the Stage 2 registry to 59 operations.
+- Hosted Worker/live-media and Android device acceptance were not performed. No deployment, merge, release or change to main was made.
+

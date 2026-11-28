@@ -122,20 +122,30 @@
 - [ ] Render actual clips and decode frames immediately before, at and after each animation boundary.
 - [ ] Verify save/reopen and undo/redo; commit.
 
+
 ## Task 2.8 — Editable title templates
 
+**Status: Complete — offline CI accepted.** Implementation commit b5e58d793c5859b3d70e0bf7a6e5bc1eec187492; GitHub Actions [run #46122647203](https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46122647203).
+
 **Files:**
-- Create: `video-editor/title_templates.py`
-- Create: `video-editor/tests/test_title_templates.py`
-- Modify: `video-editor/project_model.py`, `tool_registry.py`, `project_tool_executor.py`, `cloudflare/public/index.html`, `studio.js`, `cloudflare/tests/studio-ui.test.mjs`
+- Create: video-editor/title_templates.py
+- Create: video-editor/tests/test_title_templates.py
+- Create: video-editor/tests/test_title_templates_mlt_integration.py
+- Modify: video-editor/tool_registry.py, project_tool_executor.py, cloudflare/public/index.html, cloudflare/public/studio.js, cloudflare/tests/studio-ui.test.mjs
+- Modify: video-editor/tests/test_project_tool_extensions.py, test_capability_catalogue.py, test_operation_audit.py, architecture/STAGE_2_EXECUTION_PLAN.md, architecture/CAPCUT_PARITY_CAPABILITIES.json
 
-**Interfaces:** Template record: `id`, `name`, `schema_version`, and validated editable text/style/animation defaults. Templates create normal editable text clips; they are never rendered as a flattened image asset in the project.
+**Implemented:** Four original built-in version-1 templates. Strict data-only schema validation. Read-only title_templates.list. Optional template_id on existing timeline.add_text_clip; copied style and duration-resolved keyframes become an ordinary editable text clip. Legacy calls remain compatible. Mobile Studio insertion controls use existing revision-checked operations and text inspector.
 
-- [ ] Test template schema version, invalid fields, unsupported versions, duplicate IDs/names, size limits and project portability.
-- [ ] Implement deterministic template validation and apply-to-new-clip behaviour.
-- [ ] Add a small starter set of original templates with no third-party brand assets.
-- [ ] Add mobile template selection and allow every inserted clip to be edited normally.
-- [ ] Verify MLT output and project save/reopen; commit.
+**Acceptance evidence:**
+- [x] Test schema version, invalid fields, unsupported versions, duplicate IDs/names, size limits and project portability.
+- [x] Implement deterministic template validation and apply-to-new-clip behaviour.
+- [x] Add four original templates with no third-party brand assets.
+- [x] Add mobile template selection and preserve normal editing of inserted clips.
+- [x] Verify actual MLT-generated static and animated output frames, clip boundaries, save/reopen, undo/redo and revision conflicts.
+- [x] Full CI: 368 Python tests, 74 Node tests, 0 Node failures and all checked-in D1 migrations passed.
+- [x] No new runtime dependencies or D1 migrations; no deployment or merge.
+
+Hosted Worker/live-media and Android acceptance remain separate and were not performed.
 
 ## Task 2.9 — Editable stickers and graphics
 

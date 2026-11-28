@@ -1,6 +1,6 @@
 # Project State — New-Chat Handoff
 
-**Last reconciled:** 2026-11-27 (final audit and continuous-update instructions added)  
+**Last reconciled:** 2026-11-28 (final audit and continuous-update instructions added)  
 **Repository:** `promiseoluo66-cmyk/northgate-realty-demo`  
 **Working branch:** `video-editor-lab`  
 **Project status:** Stage 1 implementation/offline acceptance recorded; Stage 2 in progress; Stage 3 not started.
@@ -37,7 +37,7 @@ Build on the existing components; do not replace them without an approved design
 - `video-editor/cloudflare/` — Worker, D1 migrations, browser Studio UI and supporting JavaScript.
 - `video-editor/tests/` and `video-editor/cloudflare/tests/` — Python and Node/Worker acceptance tests.
 
-The latest Stage 1 status document records 52 registered editing operations. An older `video-editor/README.md` still mentions 49; use the newer audit/status records rather than that older count.
+The Stage 1 baseline had 52 registered editing operations. The current Stage 2 registry has 59 unique operations after adding the read-only title-template catalogue operation. The product capability catalogue remains a separate 118-entry inventory.
 
 ## 4. What is already recorded as done
 
@@ -58,9 +58,9 @@ The current `video-editor/architecture/STAGE_2_EXECUTION_PLAN.md` records:
 | 2.3 — Transcript-driven editing | Offline CI accepted | One selected source clip/track; unsupported mappings remain blocked |
 | 2.4 — Measured silence review and approved cuts | **Conflicting records — see Section 6** | Do not start, repeat, or modify until the user resolves the conflict |
 | 2.5 — Automatic speech-to-text | Feasibility evidence complete; `gated_optional` | Real-footage quality/runtime acceptance is still missing; do not enable by assumption |
-| 2.6 — Expanded text styling | **In progress** | Existing schema/model/Studio fields found; renderer routing defect and missing shadow blur identified. Test-first commit `cd649ad1da4d6b626ef5d8fa952b2d0b6d2bf80f`; test execution not yet independently observable. |
-| 2.7 — Text/caption/word-highlight animation | Planned | Not recorded as complete |
-| 2.8 — Editable title templates | Planned | Not recorded as complete |
+| 2.6 — Expanded text styling | Offline CI accepted | Recorded in the Stage 2 execution ledger; generated RGBA/ASS renderer tests cover advanced text styling. |
+| 2.7 — Text/caption/word-highlight animation | Offline CI accepted | Run #46078537336: 338 Python, 73 Node, generated-media and D1 migration checks passed. |
+| 2.8 — Editable title templates | Offline CI accepted | Run #46122647203: 368 Python, 74 Node, 0 failures, D1 migrations and decoded static/animated MLT title frames passed. |
 | 2.9 — Editable stickers and graphics | Planned | Not recorded as complete |
 | 2.10 — AI sticker feasibility | Feasibility evidence complete; `gated_optional` | Conditional model licence and no dependable free GPU runtime |
 | 2.11 — Bilingual captions | Planned / provider gated | Keep translation disabled until a free, licensed route is verified |
@@ -69,11 +69,11 @@ The current `video-editor/architecture/STAGE_2_EXECUTION_PLAN.md` records:
 | 2.14 — Cross-feature reliability and security audit | Planned | Not recorded as complete |
 | 2.15 — Final Stage 2 verification and closeout | Planned | Must be completed before Stage 3 |
 
-The saved `docs/superpowers/plans/2026-11-27-stage-2-completion.md` contains the detailed implementation steps for Tasks 2.4–2.15. At the time this handoff was checked, its 68 task checkboxes were still unchecked. Do not use the checkbox count alone as proof that implementation is missing or complete; reconcile it with source code, tests, CI evidence, and the capability ledger.
+The saved `docs/superpowers/plans/2026-11-27-stage-2-completion.md` contains the detailed implementation steps for Tasks 2.4–2.15. Reconcile plan checkboxes with source code, tests, CI evidence, and the capability ledger.
 
 ## 5. Current objective and stopping point
 
-Finish the remaining authorised Stage 2 work, verify it with the relevant automated and generated-media tests, update the capability/status records, and then **stop before Stage 3**.
+Task 2.8 is now accepted offline. The next planned implementation task is Stage 2 Task 2.9 (editable stickers and graphics), subject to its required design/plan approval. Continue remaining authorised Stage 2 work, then **stop before Stage 3**.
 
 Do not begin Stage 3 until Stage 2 closeout is supported by evidence and the user explicitly authorises Stage 3.
 
@@ -353,3 +353,14 @@ The branch remains `video-editor-lab`; `main` is untouched. Stage 3 has not star
 **Remaining Stage 2 work:** Task 2.8 editable title templates; 2.9 editable graphics; 2.11 bilingual manual caption tracks; 2.13 mobile transcript review; 2.14 cross-feature reliability/security audit; and 2.15 final Stage 2 verification. Tasks 2.5, 2.10 and 2.12 remain `gated_optional`. Task 2.4 and Task 2.6 remain accepted under their previously recorded evidence.
 
 **Next boundary:** Stop after Task 2.7. Do not start Task 2.8 or Stage 3 until the user requests the next task. Keep all work on `video-editor-lab`; `main` remains untouched.
+
+## 9. Task 2.8 — editable title templates (offline CI accepted)
+
+- Implementation and test commits culminated in b5e58d793c5859b3d70e0bf7a6e5bc1eec187492 on video-editor-lab.
+- GitHub Actions run #46122647203 passed: 368 Python tests, 74 Node/Studio/Worker tests, 0 Node failures and all checked-in D1 migrations.
+- Four built-in version-1 templates are available: Clean Centre Title, Editorial Lower Third, Bold Section Title and Animated Rise Title.
+- Template definitions are data-only and strictly validated. Application copies styles and duration-resolved keyframes into ordinary editable text clips; no template dependency is stored in the project.
+- The mobile Studio provides template, unlocked text-track, wording and duration controls. Existing text inspector/editing operations remain in use.
+- MLT integration rendered static and animated templates, reopened the project and decoded frames to verify visibility, animation change and disappearance outside clip duration.
+- Added one read-only registered operation; current Stage 2 registry count is 59. No new dependencies or D1 migrations.
+- Hosted Worker/live-media and Android acceptance remain unperformed. No deployment or merge was made.

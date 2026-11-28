@@ -12,7 +12,7 @@ This folder contains the independently implemented video editor prototype and it
 ## Stage 1 scope
 Mobile Studio and editing foundation: multi-track timeline, media bin, clip inspector, crop/framing, keyframes, track management, project history and editing operations.
 
-The implementation currently has 49 unique registered operations (the original 42 plus seven Stage 1 Task 2–3 operations). The separate product catalogue contains 118 capability entries; these numbers are not interchangeable.
+The implementation currently has 59 unique registered operations across the Stage 1 and Stage 2 work. The separate product catalogue contains 118 capability entries; these numbers are not interchangeable.
 
 ## Run tests locally
 From the video-editor folder:
@@ -81,9 +81,9 @@ Automated acceptance checks cover core ripple operations, locked-track rejection
 - Audio extraction, freeze-frame/hold sections and pitch-preserving speed changes.
 - Edited-composite preview, proxy media and low-resolution preview.
 - End-to-end acceptance against the actual Worker/renderer configuration.
-- Complete edge-case and editor-integration sign-off for all 49 registered operations.
+- Complete edge-case and editor-integration sign-off for all 59 registered operations.
 
-The original 42 registered Studio operations still require the separate full audit: implementation, individual tests, edge cases and editor integration. The current registry has 49 operations, but registration is not proof that every operation is complete.
+The original 42 registered Studio operations still require the separate full audit: implementation, individual tests, edge cases and editor integration. The current registry has 59 operations, but registration is not proof that every operation is complete.
 
 Optical-flow slow motion remains optional and gated. It must not introduce a paid dependency or hidden fallback. Do not merge into Stable or deploy a Worker as part of this lab setup.
 

@@ -269,8 +269,8 @@
         ],
         [
           "title_templates",
-          "Editable title templates and reusable brand styles",
-          "planned"
+          "Four original built-in, schema-versioned editable title templates with validated text styles and duration-resolved animation; inserted titles remain ordinary editable text clips. User-defined template saving/import/export is not included.",
+          "prototype_verified"
         ],
         [
           "stickers_graphics",
@@ -722,7 +722,7 @@
     "production_warning": "This catalogue is not evidence that all listed capabilities exist in the current app."
   },
   "audit": {
-    "audited_on": "2026-11-27",
+    "audited_on": "2026-11-28",
     "repository": "promiseoluo66-cmyk/northgate-realty-demo",
     "branch": "video-editor-lab",
     "base_branch": "main",
@@ -740,8 +740,8 @@
     "capability_entry_count": 118,
     "status_counts": {
       "partially_implemented": 23,
-      "planned": 44,
-      "prototype_verified": 19,
+      "planned": 43,
+      "prototype_verified": 20,
       "gated_optional": 31,
       "under_test": 1
     },
@@ -825,6 +825,23 @@
       "hosted_worker_and_android_acceptance": "not_performed",
       "new_registered_operations": 0,
       "new_d1_migrations": 0
+    },
+    "stage2_task_2_8": {
+      "status": "offline_ci_passed",
+      "workflow_run_id": 46122647203,
+      "workflow_url": "https://github.com/promiseoluo66-cmyk/northgate-realty-demo/actions/runs/46122647203",
+      "commit": "b5e58d793c5859b3d70e0bf7a6e5bc1eec187492",
+      "python_tests_passed": 368,
+      "node_tests_passed": 74,
+      "node_tests_failed": 0,
+      "d1_migrations": "passed",
+      "static_and_animated_title_mlt_render": "passed",
+      "decoded_frame_clip_boundary_checks": "passed",
+      "project_save_reopen": "passed",
+      "undo_redo_revision_checks": "passed",
+      "new_registered_operations": 1,
+      "new_d1_migrations": 0,
+      "hosted_worker_and_android_acceptance": "not_performed"
     }
   },
   "stage2_task_2_4": {
