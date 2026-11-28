@@ -232,6 +232,32 @@ main{width:min(760px,100%);margin:auto;padding:26px 16px 48px}.brand{display:fle
   <div id="studio-silence-candidates" class="media-bin" aria-live="polite" aria-label="Measured silence candidates"></div>
 </section>
 
+<section class="edit-panel" aria-label="Editable title templates">
+  <h3>Title templates</h3>
+  <p class="hint">Choose a built-in design, customise its wording and timing, then insert it as a normal editable text clip.</p>
+  <div class="edit-grid">
+    <label for="studio-title-template">Design
+      <select id="studio-title-template">
+        <option value="clean-centre-v1">Clean Centre Title</option>
+        <option value="editorial-lower-third-v1">Editorial Lower Third</option>
+        <option value="bold-section-v1">Bold Section Title</option>
+        <option value="animated-rise-v1">Animated Rise Title</option>
+      </select>
+    </label>
+    <label for="studio-title-track">Text track
+      <select id="studio-title-track"><option value="">Choose an unlocked text track</option></select>
+    </label>
+    <label for="studio-title-duration">Duration (seconds)
+      <input id="studio-title-duration" type="number" min="0.1" max="600" step="0.1" value="3">
+    </label>
+  </div>
+  <label for="studio-title-content">Title wording
+    <textarea id="studio-title-content" rows="2" maxlength="20000" placeholder="Type your title"></textarea>
+  </label>
+  <div class="edit-actions"><button class="btn secondary" id="studio-insert-title" type="button" disabled>Insert editable title</button></div>
+  <p id="studio-title-status" class="hint" aria-live="polite">Choose an unlocked text track to insert a title at the playhead.</p>
+</section>
+
 <section class="edit-panel" aria-label="Text and caption editing">
   <h3>Text and caption editor</h3>
   <p class="hint">Select a text or caption clip on the timeline. Changes use the existing revision-checked text editing operation.</p>

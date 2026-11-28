@@ -1164,10 +1164,41 @@
     if (mediaTab) mediaTab.setAttribute("aria-pressed", activeView === "media" ? "true" : "false");
   }
 
+  function refreshTitleTemplateTracks() {
+    const select = byId("studio-title-track");
+    const button = byId("studio-insert-title");
+    if (!select || !currentProject) {
+      if (button) button.disabled = true;
+      return;
+    }
+    const previous = select.value;
+    select.replaceChildren();
+    const placeholder = element("option", "", "Choose an unlocked text track");
+    placeholder.value = "";
+    select.append(placeholder);
+    (currentProject.tracks || [])
+      .filter((track) => track.type === "text" && track.locked !== true)
+      .slice().sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+      .forEach((track) => {
+        const option = element("option", "", track.name || "Text track");
+        option.value = track.id;
+        select.append(option);
+      });
+    if ((currentProject.tracks || []).some((track) =>
+      track.id === previous && track.type === "text" && track.locked !== true
+    )) select.value = previous;
+    if (button) button.disabled = !select.value;
+    const status = byId("studio-title-status");
+    if (status && select.options.length === 1) {
+      status.textContent = "Add an unlocked text track before inserting a title.";
+    }
+  }
+
   function renderProject(project, revision) {
     if (!project || typeof project !== "object" || !Array.isArray(project.tracks)) return;
     currentProject = project;
     currentRevision = revision || project.revision || 1;
+    refreshTitleTemplateTracks();
     const liveIds = new Set(flattenClips(project).map(({clip}) => clip.id));
     selectedClipIds = new Set([...selectedClipIds].filter((id) => liveIds.has(id)));
     if (!liveIds.has(selectedClipId)) selectedClipId = "";
@@ -1407,6 +1438,49 @@
       }
     });
   };
+
+  const titleTrackSelect = byId("studio-title-track");
+  if (titleTrackSelect) titleTrackSelect.addEventListener("change", () => {
+    const button = byId("studio-insert-title");
+    if (button) button.disabled = !titleTrackSelect.value;
+  });
+
+  click("studio-insert-title", async () => {
+    const status = byId("studio-title-status");
+    const trackId = byId("studio-title-track")?.value;
+    const track = (currentProject?.tracks || []).find((item) =>
+      item.id === trackId && item.type === "text" && item.locked !== true
+    );
+    if (!track) throw new Error("Choose an unlocked text track first.");
+    const templateId = byId("studio-title-template")?.value;
+    const content = byId("studio-title-content")?.value.trim() || "";
+    if (!content) throw new Error("Enter title wording before inserting the template.");
+    if (content.length > 20000) throw new Error("Title wording is too long.");
+    const durationSeconds = numeric("studio-title-duration");
+    if (durationSeconds < 0.1 || durationSeconds > 600) {
+      throw new Error("Title duration must be between 0.1 and 600 seconds.");
+    }
+    const durationUs = Math.round(durationSeconds * 1000000);
+    const startUs = Math.max(0, Math.round(playheadUs));
+    if (status) {
+      status.textContent = "Inserting editable title at " + formatTime(startUs) + "…";
+      status.className = "hint";
+    }
+    await submitOperations([{
+      name: "timeline.add_text_clip",
+      arguments: {
+        track_id: track.id,
+        content,
+        start_us: startUs,
+        duration_us: durationUs,
+        template_id: templateId
+      }
+    }]);
+    if (status) {
+      status.textContent = "Title insertion queued. Once the project refreshes, select the new text clip to edit its wording, styling and animation.";
+      status.className = "status success";
+    }
+  });
 
   click("studio-review-silence", async () => {
     const item = selected();

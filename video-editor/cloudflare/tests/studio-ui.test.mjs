@@ -332,3 +332,21 @@ test("Expanded text shadow blur is loaded and saved through the existing text up
   assert.match(studioScript, /shadow_blur: numeric\("studio-text-shadow-blur"\)/);
   assert.match(studioScript, /name: "text\.update_clip"/);
 });
+
+
+test("Task 2.8 exposes safe built-in title-template insertion controls", () => {
+  for (const id of [
+    "studio-title-template", "studio-title-track", "studio-title-duration",
+    "studio-title-content", "studio-insert-title", "studio-title-status"
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  for (const templateId of [
+    "clean-centre-v1", "editorial-lower-third-v1",
+    "bold-section-v1", "animated-rise-v1"
+  ]) assert.ok(html.includes(templateId), "Missing template option " + templateId);
+  assert.match(studioScript, /function refreshTitleTemplateTracks\(\)/);
+  assert.match(studioScript, /track\.type === "text" && track\.locked !== true/);
+  assert.match(studioScript, /name: "timeline\.add_text_clip"/);
+  assert.match(studioScript, /template_id: templateId/);
+  assert.match(studioScript, /durationSeconds < 0\.1 \|\| durationSeconds > 600/);
+  assert.match(studioScript, /Title wording before inserting the template/);
+});
