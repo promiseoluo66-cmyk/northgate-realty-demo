@@ -1972,7 +1972,7 @@ class ExpandedTextStyleTests(unittest.TestCase):
         advanced_renderer.assert_called_once()
 
 
-class EditableTitleTemplateTests(unittest.TestCase):
+class EditableTitleTemplateTests(EditorToolExpansionTests):
     def test_template_catalogue_is_read_only_and_exposed_to_the_tool_catalogue(self):
         names = {item["name"] for item in get_tool_catalog()}
         self.assertIn("title_templates.list", names)

@@ -110,7 +110,7 @@ class EditableTitleTemplateMltIntegrationTests(unittest.TestCase):
             before = _read_rgb_frame(output, 0.25)
             static = _read_rgb_frame(output, 0.8)
             gap = _read_rgb_frame(output, 1.8)
-            animated_early = _read_rgb_frame(output, 2.1)
+            animated_early = _read_rgb_frame(output, 2.3)
             animated_late = _read_rgb_frame(output, 2.6)
             after = _read_rgb_frame(output, 3.8)
 

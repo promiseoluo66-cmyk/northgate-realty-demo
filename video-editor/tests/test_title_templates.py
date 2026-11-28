@@ -34,6 +34,7 @@ def test_template_catalogue_returns_independent_copies():
 
 @pytest.mark.parametrize("mutate", [
     lambda t: t.update(schema_version=99),
+    lambda t: t.update(schema_version=1.0),
     lambda t: t.update(extra="not allowed"),
     lambda t: t.pop("name"),
     lambda t: t.update(id="BAD ID"),

@@ -178,7 +178,7 @@ def validate_template_catalogue(catalogue: Any) -> list[dict[str, Any]]:
             raise TitleTemplateValidationError(f"{path}.name must be trimmed text of at most 80 characters.")
         if name.casefold() in seen_names:
             raise TitleTemplateValidationError("Template names must be unique, ignoring case.")
-        if isinstance(version, bool) or version != TEMPLATE_SCHEMA_VERSION:
+        if isinstance(version, bool) or not isinstance(version, int) or version != TEMPLATE_SCHEMA_VERSION:
             raise TitleTemplateValidationError(f"{path}.schema_version is unsupported.")
         seen_ids.add(identifier)
         seen_names.add(name.casefold())
@@ -192,13 +192,13 @@ def validate_template_catalogue(catalogue: Any) -> list[dict[str, Any]]:
             if not isinstance(frame, dict) or set(frame) != {"property", "time_ratio", "value", "interpolation"}:
                 raise TitleTemplateValidationError(f"{frame_path} has unsupported or missing fields.")
             prop = frame["property"]
-            if prop not in _ALLOWED_PROPERTIES:
+            if not isinstance(prop, str) or prop not in _ALLOWED_PROPERTIES:
                 raise TitleTemplateValidationError(f"{frame_path}.property is unsupported.")
             ratio = _finite_number(frame["time_ratio"], f"{frame_path}.time_ratio")
             if not 0 <= ratio <= 1:
                 raise TitleTemplateValidationError(f"{frame_path}.time_ratio must be from 0 to 1.")
             interpolation = frame["interpolation"]
-            if interpolation not in _ALLOWED_INTERPOLATIONS:
+            if not isinstance(interpolation, str) or interpolation not in _ALLOWED_INTERPOLATIONS:
                 raise TitleTemplateValidationError(f"{frame_path}.interpolation is unsupported.")
             value = _finite_number(frame["value"], f"{frame_path}.value")
             low, high = {
