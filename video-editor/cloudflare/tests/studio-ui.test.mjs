@@ -348,5 +348,5 @@ test("Task 2.8 exposes safe built-in title-template insertion controls", () => {
   assert.match(studioScript, /name: "timeline\.add_text_clip"/);
   assert.match(studioScript, /template_id: templateId/);
   assert.match(studioScript, /durationSeconds < 0\.1 \|\| durationSeconds > 600/);
-  assert.match(studioScript, /Title wording before inserting the template/);
+  assert.match(studioScript, /Enter title wording before inserting the template/);
 });
